@@ -4,6 +4,7 @@ import DrugSection from './DrugSection'
 import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import { store } from '../lib/store'
+import { suggestDiagnosis } from '../lib/openrouter'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -20,8 +21,25 @@ export default function VisitBuilder({ template }) {
     return init
   })
   const [saved, setSaved] = useState(false)
+  const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false)
+  const [diagnosisError, setDiagnosisError] = useState('')
 
   const complaints = sectionValues.complaints || []
+
+  async function runDiagnosisSuggestion() {
+    setDiagnosisLoading(true)
+    setDiagnosisError('')
+    setDiagnosisSuggestion('')
+    try {
+      const result = await suggestDiagnosis(complaints, sectionValues.anamnesis_vitae || sectionValues.dynamics || '')
+      setDiagnosisSuggestion(result)
+    } catch (e) {
+      setDiagnosisError(e.message)
+    } finally {
+      setDiagnosisLoading(false)
+    }
+  }
 
   function updateSection(id, value) {
     setSectionValues((prev) => ({ ...prev, [id]: value }))
@@ -63,13 +81,29 @@ export default function VisitBuilder({ template }) {
                 />
               )}
               {section.type === 'freeform' && (
-                <textarea
-                  className="freeform-textarea"
-                  value={sectionValues[section.id] || ''}
-                  onChange={(e) => updateSection(section.id, e.target.value)}
-                  rows={4}
-                  placeholder="Свободный текст…"
-                />
+                <>
+                  <textarea
+                    className="freeform-textarea"
+                    value={sectionValues[section.id] || ''}
+                    onChange={(e) => updateSection(section.id, e.target.value)}
+                    rows={4}
+                    placeholder="Свободный текст…"
+                  />
+                  {section.id === 'diagnosis' && (
+                    <div className="ai-check-block">
+                      <button type="button" className="btn-ai" onClick={runDiagnosisSuggestion} disabled={diagnosisLoading}>
+                        {diagnosisLoading ? 'Думаю…' : '🤖 Подсказка по диагнозу (AI)'}
+                      </button>
+                      {diagnosisError && <div className="ai-error">{diagnosisError}</div>}
+                      {diagnosisSuggestion && (
+                        <div className="ai-result">
+                          <div className="ai-result-badge">AI · Gemini, не окончательное решение</div>
+                          <div className="ai-result-text">{diagnosisSuggestion}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               {section.type === 'drugs' && (
                 <DrugSection

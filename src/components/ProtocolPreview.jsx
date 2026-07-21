@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { polishNarrative } from '../lib/openrouter'
 
 function sectionToText(section, value) {
   if (section.type === 'drugs') {
@@ -27,9 +28,13 @@ function calcAge(dob) {
   return years
 }
 
-export default function ProtocolPreview({ template, sectionValues, patient, visitDate, onEditFreeform }) {
+export default function ProtocolPreview({ template, sectionValues, patient, visitDate }) {
   const [mode, setMode] = useState('fields') // 'fields' | 'canvas'
   const [copied, setCopied] = useState(false)
+  const [canvasOverride, setCanvasOverride] = useState(null) // null = автосборка, иначе — ручная правка
+  const [polishing, setPolishing] = useState(false)
+  const [polishError, setPolishError] = useState('')
+  const [fieldOverrides, setFieldOverrides] = useState({}) // sectionId -> отредактированный текст
 
   const headerText = useMemo(() => {
     const lines = []
@@ -42,23 +47,44 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
     return lines.join('\n')
   }, [patient, visitDate])
 
-  const fullText = useMemo(() => {
+  const generatedText = useMemo(() => {
     const body = template.sections
       .map((s) => {
-        const text = sectionToText(s, sectionValues[s.id])
+        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id])
         if (!text) return null
         return `${s.title}:\n${text}`
       })
       .filter(Boolean)
       .join('\n\n')
     return headerText ? `${headerText}\n\n${body}` : body
-  }, [template, sectionValues, headerText])
+  }, [template, sectionValues, headerText, fieldOverrides])
+
+  // при изменении данных сбрасываем ручную правку полотна, если её не трогали заново
+  useEffect(() => {
+    setCanvasOverride(null)
+  }, [template.id])
+
+  const fullText = canvasOverride !== null ? canvasOverride : generatedText
 
   function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })
+  }
+
+  async function handlePolish() {
+    setPolishing(true)
+    setPolishError('')
+    try {
+      const result = await polishNarrative(generatedText)
+      setCanvasOverride(result)
+      setMode('canvas')
+    } catch (e) {
+      setPolishError(e.message)
+    } finally {
+      setPolishing(false)
+    }
   }
 
   return (
@@ -72,17 +98,33 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
             Единым текстом
           </button>
         </div>
-        <button type="button" className="btn-secondary" onClick={() => copyToClipboard(fullText)}>
-          {copied ? 'Скопировано ✓' : 'Копировать всё'}
-        </button>
+        <div className="preview-actions">
+          <button type="button" className="btn-ai btn-small" onClick={handlePolish} disabled={polishing}>
+            {polishing ? 'Причёсываю…' : '🤖 Причесать текст (AI)'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => copyToClipboard(fullText)}>
+            {copied ? 'Скопировано ✓' : 'Копировать всё'}
+          </button>
+        </div>
       </div>
+
+      {polishError && <div className="ai-error">{polishError}</div>}
+
+      {canvasOverride !== null && (
+        <div className="override-banner">
+          Текст отредактирован вручную / причёсан AI — больше не пересобирается автоматически.{' '}
+          <button type="button" onClick={() => setCanvasOverride(null)}>
+            Вернуть автосборку
+          </button>
+        </div>
+      )}
 
       {mode === 'canvas' ? (
         <textarea
           className="canvas-textarea"
           value={fullText}
-          readOnly
-          rows={16}
+          onChange={(e) => setCanvasOverride(e.target.value)}
+          rows={18}
           placeholder="Протокол соберётся здесь по мере заполнения секций…"
         />
       ) : (
@@ -93,16 +135,41 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
             </div>
           )}
           {template.sections.map((s) => {
-            const text = sectionToText(s, sectionValues[s.id])
+            const generated = sectionToText(s, sectionValues[s.id])
+            const text = fieldOverrides[s.id] ?? generated
             return (
               <div key={s.id} className="field-preview-block">
                 <div className="field-preview-header">
                   <span>{s.title}</span>
-                  <button type="button" className="copy-icon-btn" onClick={() => copyToClipboard(text)} title="Копировать секцию">
-                    ⧉
-                  </button>
+                  <div className="field-preview-header-actions">
+                    {fieldOverrides[s.id] !== undefined && (
+                      <button
+                        type="button"
+                        className="copy-icon-btn"
+                        title="Вернуть автосборку секции"
+                        onClick={() =>
+                          setFieldOverrides((prev) => {
+                            const next = { ...prev }
+                            delete next[s.id]
+                            return next
+                          })
+                        }
+                      >
+                        ↺
+                      </button>
+                    )}
+                    <button type="button" className="copy-icon-btn" onClick={() => copyToClipboard(text)} title="Копировать секцию">
+                      ⧉
+                    </button>
+                  </div>
                 </div>
-                <div className="field-preview-body">{text || <span className="empty-hint">пусто</span>}</div>
+                <textarea
+                  className="field-preview-editable"
+                  value={text}
+                  placeholder="пусто"
+                  onChange={(e) => setFieldOverrides((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  rows={Math.max(2, text.split('\n').length)}
+                />
               </div>
             )
           })}

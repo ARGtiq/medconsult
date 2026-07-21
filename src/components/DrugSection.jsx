@@ -1,10 +1,28 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import { checkAllergyLocal, getAlternatives } from '../data/drugSafety'
+import { checkDrugInteractions } from '../lib/openrouter'
 
 export default function DrugSection({ complaints, patientAllergies, values, onChange }) {
   const [manualDrug, setManualDrug] = useState('')
   const [altOpenFor, setAltOpenFor] = useState(null)
+  const [interactionResult, setInteractionResult] = useState('')
+  const [checkingInteractions, setCheckingInteractions] = useState(false)
+  const [interactionError, setInteractionError] = useState('')
+
+  async function runInteractionCheck() {
+    setCheckingInteractions(true)
+    setInteractionError('')
+    setInteractionResult('')
+    try {
+      const result = await checkDrugInteractions(values.map((d) => d.name))
+      setInteractionResult(result)
+    } catch (e) {
+      setInteractionError(e.message)
+    } finally {
+      setCheckingInteractions(false)
+    }
+  }
 
   const suggested = useMemo(
     () => store.getDrugsForComplaints(complaints || []),
@@ -69,6 +87,21 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
           Добавить
         </button>
       </form>
+
+      {values.length > 1 && (
+        <div className="ai-check-block">
+          <button type="button" className="btn-ai" onClick={runInteractionCheck} disabled={checkingInteractions}>
+            {checkingInteractions ? 'Проверяю…' : '🤖 Проверить взаимодействия (AI)'}
+          </button>
+          {interactionError && <div className="ai-error">{interactionError}</div>}
+          {interactionResult && (
+            <div className="ai-result">
+              <div className="ai-result-badge">AI · Gemini</div>
+              <div className="ai-result-text">{interactionResult}</div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="drug-list">
         {values.map((drug, idx) => {
