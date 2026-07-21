@@ -69,11 +69,15 @@ function findGroupByDrug(drugName, customGroups = {}) {
  * customGroups и groupMeta приходят из store (getCustomGroups / getGroupMeta для каждой встроенной группы).
  * Возвращает массив предупреждений (пустой массив = чисто).
  */
-export function checkAllergyLocal(drugName, patientAllergies = [], customGroups = {}, groupMeta = {}) {
+export function checkAllergyLocal(drugName, patientAllergies = [], customGroups = {}, groupMeta = {}, customCrossReactivity = []) {
   const warnings = []
   const drugNorm = normalize(drugName)
   const groups = allGroups(customGroups)
   const drugGroup = findGroupByDrug(drugName, customGroups)
+  const allCrossPairs = [
+    ...CROSS_REACTIVITY.map((c) => ({ groups: c.groups, note: c.note })),
+    ...customCrossReactivity.map((c) => ({ groups: [c.groupA, c.groupB], note: c.note })),
+  ]
 
   for (const allergy of patientAllergies) {
     const allergyNorm = normalize(allergy)
@@ -95,13 +99,17 @@ export function checkAllergyLocal(drugName, patientAllergies = [], customGroups 
       continue
     }
 
-    // перекрёстная реактивность между встроенными группами
+    // перекрёстная реактивность между группами (встроенная + пользовательская)
     if (allergyGroup && drugGroup) {
-      const cross = CROSS_REACTIVITY.find(
+      const cross = allCrossPairs.find(
         (c) => c.groups.includes(allergyGroup) && c.groups.includes(drugGroup) && allergyGroup !== drugGroup
       )
       if (cross) {
-        warnings.push({ level: 'cross', message: `Возможна перекрёстная реакция с "${allergy}": ${cross.note}` })
+        const drugGroupLabel = groups[drugGroup]?.label || drugGroup
+        warnings.push({
+          level: 'cross',
+          message: `Возможна перекрёстная реакция с "${allergy}" (${drugGroupLabel}): ${cross.note}`,
+        })
       }
     }
   }

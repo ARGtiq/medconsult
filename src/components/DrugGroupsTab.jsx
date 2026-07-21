@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { DRUG_GROUPS } from '../data/drugSafety'
+import { DRUG_GROUPS, CROSS_REACTIVITY } from '../data/drugSafety'
 
 function blankGroupForm() {
   return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '' }
@@ -10,6 +10,34 @@ export default function DrugGroupsTab() {
   const [customGroups, setCustomGroups] = useState(store.getCustomGroups())
   const [form, setForm] = useState(blankGroupForm())
   const [editingStaticKey, setEditingStaticKey] = useState(null)
+  const [crossList, setCrossList] = useState(store.getCrossReactivity())
+  const [crossForm, setCrossForm] = useState({ groupA: '', groupB: '', note: '' })
+
+  const allGroupOptions = [
+    ...Object.entries(DRUG_GROUPS).map(([key, g]) => ({ key, label: g.label })),
+    ...Object.entries(customGroups).map(([key, g]) => ({ key, label: g.label })),
+  ]
+
+  function refreshCross() {
+    setCrossList(store.getCrossReactivity())
+  }
+
+  function saveCross(e) {
+    e.preventDefault()
+    if (!crossForm.groupA || !crossForm.groupB || crossForm.groupA === crossForm.groupB || !crossForm.note.trim()) return
+    store.addCrossReactivity(crossForm)
+    setCrossForm({ groupA: '', groupB: '', note: '' })
+    refreshCross()
+  }
+
+  function removeCross(id) {
+    store.removeCrossReactivity(id)
+    refreshCross()
+  }
+
+  function groupLabel(key) {
+    return allGroupOptions.find((g) => g.key === key)?.label || key
+  }
 
   function refresh() {
     setCustomGroups({ ...store.getCustomGroups() })
@@ -176,6 +204,61 @@ export default function DrugGroupsTab() {
           </div>
         ))}
         {customEntries.length === 0 && <p className="empty-hint">Пока нет своих групп.</p>}
+      </div>
+
+      <div className="cross-reactivity-block">
+        <h4>Перекрёстная реактивность между группами</h4>
+        <p className="settings-note-inline">
+          Работает как полноценная проверка на приёме: если у пациента аллергия на препарат из группы A,
+          а назначается препарат из группы B, и здесь есть связка A↔B — появится предупреждение при добавлении препарата.
+        </p>
+
+        <div className="drug-db-list">
+          <h4>Встроенная (нередактируемая)</h4>
+          {CROSS_REACTIVITY.map((c, i) => (
+            <div key={i} className="cross-pair-card">
+              <strong>{groupLabel(c.groups[0])} ↔ {groupLabel(c.groups[1])}</strong>
+              <div className="drug-db-line">{c.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <form className="cross-form" onSubmit={saveCross}>
+          <div className="drug-form-row">
+            <select value={crossForm.groupA} onChange={(e) => setCrossForm({ ...crossForm, groupA: e.target.value })}>
+              <option value="">Группа A</option>
+              {allGroupOptions.map((g) => (
+                <option key={g.key} value={g.key}>{g.label}</option>
+              ))}
+            </select>
+            <select value={crossForm.groupB} onChange={(e) => setCrossForm({ ...crossForm, groupB: e.target.value })}>
+              <option value="">Группа B</option>
+              {allGroupOptions.map((g) => (
+                <option key={g.key} value={g.key}>{g.label}</option>
+              ))}
+            </select>
+          </div>
+          <input
+            placeholder="Заметка: суть перекрёстной реакции, частота, источник"
+            value={crossForm.note}
+            onChange={(e) => setCrossForm({ ...crossForm, note: e.target.value })}
+          />
+          <button type="submit" className="btn-primary btn-small">+ Добавить связку</button>
+        </form>
+
+        <div className="drug-db-list">
+          <h4>Свои связки ({crossList.length})</h4>
+          {crossList.map((c) => (
+            <div key={c.id} className="cross-pair-card">
+              <div className="drug-db-card-top">
+                <strong>{groupLabel(c.groupA)} ↔ {groupLabel(c.groupB)}</strong>
+                <button type="button" className="remove-btn" onClick={() => removeCross(c.id)}>×</button>
+              </div>
+              <div className="drug-db-line">{c.note}</div>
+            </div>
+          ))}
+          {crossList.length === 0 && <p className="empty-hint">Пока нет своих связок.</p>}
+        </div>
       </div>
     </div>
   )

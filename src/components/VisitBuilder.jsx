@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ChipSection from './ChipSection'
 import DrugSection from './DrugSection'
+import InvestigationSection from './InvestigationSection'
 import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import Mkb10Picker from './Mkb10Picker'
+import VoiceInputButton from './VoiceInputButton'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 
@@ -11,23 +13,72 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function VisitBuilder({ template }) {
-  const [patient, setPatient] = useState(null)
-  const [visitDate, setVisitDate] = useState(todayISO())
-  const [sectionValues, setSectionValues] = useState(() => {
-    const init = {}
-    const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
-    template.sections.forEach((s) => {
-      init[s.id] = arrayTypes.includes(s.type) ? [] : ''
-    })
-    return init
+function blankSectionValues(template) {
+  const init = {}
+  const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
+  template.sections.forEach((s) => {
+    init[s.id] = arrayTypes.includes(s.type) ? [] : ''
   })
+  return init
+}
+
+export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
+  const draft = !initialVisit ? store.getDraft(template.id) : null
+
+  const [patient, setPatient] = useState(() => {
+    const patientId = initialVisit?.patientId || draft?.patientId
+    return patientId ? store.getPatients().find((p) => p.id === patientId) || null : null
+  })
+  const [visitDate, setVisitDate] = useState(initialVisit?.visitDate || draft?.visitDate || todayISO())
+  const [sectionValues, setSectionValues] = useState(
+    () => initialVisit?.sectionValues || draft?.sectionValues || blankSectionValues(template)
+  )
+  const [draftBannerVisible, setDraftBannerVisible] = useState(!!draft && !initialVisit)
+  const [presets, setPresets] = useState(store.getPresets(template.id))
   const [saved, setSaved] = useState(false)
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
+  const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
+
+  // Автосохранение черновика — debounce на 800мс, чтобы не писать в localStorage
+  // на каждое нажатие клавиши
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false
+      return
+    }
+    const timer = setTimeout(() => {
+      store.saveDraft(template.id, { patientId: patient?.id || null, visitDate, sectionValues })
+    }, 800)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient, visitDate, sectionValues])
+
+  function discardDraft() {
+    store.clearDraft(template.id)
+    setDraftBannerVisible(false)
+    setPatient(null)
+    setVisitDate(todayISO())
+    setSectionValues(blankSectionValues(template))
+  }
+
+  function applyPreset(preset) {
+    setSectionValues((prev) => ({ ...prev, ...JSON.parse(JSON.stringify(preset.sectionValues)) }))
+  }
+
+  function saveCurrentAsPreset() {
+    const name = window.prompt('Название пресета (напр. «Цистит первичный»):')
+    if (!name?.trim()) return
+    const saved = store.savePreset(template.id, name.trim(), sectionValues)
+    setPresets(saved)
+  }
+
+  function removePreset(id) {
+    setPresets(store.deletePreset(template.id, id))
+  }
 
   async function runDiagnosisSuggestion() {
     setDiagnosisLoading(true)
@@ -60,14 +111,39 @@ export default function VisitBuilder({ template }) {
       visitDate,
       sectionValues,
     })
+    store.clearDraft(template.id)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
 
   return (
     <div className="visit-builder">
+      {draftBannerVisible && (
+        <div className="draft-banner">
+          Восстановлен несохранённый черновик этого шаблона.
+          <button type="button" onClick={() => setDraftBannerVisible(false)}>Продолжить с ним</button>
+          <button type="button" onClick={discardDraft}>Начать заново</button>
+        </div>
+      )}
+
+      {presets.length > 0 && (
+        <div className="preset-bar">
+          <span className="preset-bar-label">⚡ Пресеты:</span>
+          {presets.map((p) => (
+            <span key={p.id} className="preset-pill-wrap">
+              <button type="button" className="preset-pill" onClick={() => applyPreset(p)}>
+                {p.name}
+              </button>
+              <button type="button" className="preset-remove" onClick={() => removePreset(p.id)} aria-label="Удалить пресет">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="visit-top-row">
-        <PatientPanel patient={patient} onChange={setPatient} />
+        <PatientPanel patient={patient} onChange={setPatient} onLoadVisit={onLoadVisit} />
         <label className="visit-date-label">
           Дата консультации
           <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
@@ -79,8 +155,15 @@ export default function VisitBuilder({ template }) {
           {template.sections.map((section) => (
             <section key={section.id} className="section-block">
               <h3>{section.title}</h3>
-              {(section.type === 'chips' || section.type === 'investigations') && (
+              {section.type === 'chips' && (
                 <ChipSection
+                  section={section}
+                  values={sectionValues[section.id] || []}
+                  onChange={(v) => updateSection(section.id, v)}
+                />
+              )}
+              {section.type === 'investigations' && (
+                <InvestigationSection
                   section={section}
                   values={sectionValues[section.id] || []}
                   onChange={(v) => updateSection(section.id, v)}
@@ -135,13 +218,20 @@ export default function VisitBuilder({ template }) {
               {section.type === 'freeform' && (
                 <>
                   {section.id === 'diagnosis' && <Mkb10Picker onInsert={insertIntoDiagnosis} />}
-                  <textarea
-                    className="freeform-textarea"
-                    value={sectionValues[section.id] || ''}
-                    onChange={(e) => updateSection(section.id, e.target.value)}
-                    rows={4}
-                    placeholder="Свободный текст…"
-                  />
+                  <div className="textarea-with-voice">
+                    <textarea
+                      className="freeform-textarea"
+                      value={sectionValues[section.id] || ''}
+                      onChange={(e) => updateSection(section.id, e.target.value)}
+                      rows={4}
+                      placeholder="Свободный текст…"
+                    />
+                    <VoiceInputButton
+                      onResult={(text) =>
+                        updateSection(section.id, sectionValues[section.id] ? `${sectionValues[section.id]} ${text}` : text)
+                      }
+                    />
+                  </div>
                   {section.id === 'diagnosis' && (
                     <div className="ai-check-block">
                       <button type="button" className="btn-ai" onClick={runDiagnosisSuggestion} disabled={diagnosisLoading}>
@@ -170,9 +260,14 @@ export default function VisitBuilder({ template }) {
             </section>
           ))}
 
-          <button type="button" className="btn-primary" onClick={saveVisit}>
-            {saved ? 'Сохранено ✓' : 'Сохранить визит'}
-          </button>
+          <div className="visit-actions-row">
+            <button type="button" className="btn-primary" onClick={saveVisit}>
+              {saved ? 'Сохранено ✓' : 'Сохранить визит'}
+            </button>
+            <button type="button" className="btn-secondary" onClick={saveCurrentAsPreset}>
+              Сохранить как пресет
+            </button>
+          </div>
         </div>
 
         <div className="visit-preview-col">

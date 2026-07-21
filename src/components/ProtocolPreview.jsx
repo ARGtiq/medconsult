@@ -14,7 +14,8 @@ function sectionToText(section, value, patient) {
   }
 
   let text = ''
-  if (Array.isArray(value)) text = value.join(', ')
+  if (section.type === 'investigations' && Array.isArray(value)) text = value.join('\n')
+  else if (Array.isArray(value)) text = value.join(', ')
   else text = value || ''
 
   if (section.id === 'anamnesis_vitae' && patient?.currentMedications?.length) {

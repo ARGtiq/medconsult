@@ -1,6 +1,15 @@
-import { useState } from 'react'
-import { isSupabaseConfigured } from '../lib/supabaseClient'
-import { testSupabaseConnection, pushToSupabase, pullFromSupabase, getLastSync } from '../lib/supabaseSync'
+import { useState, useEffect } from 'react'
+import { getSupabaseConfig, setSupabaseConfig, isSupabaseConfigured } from '../lib/supabaseClient'
+import {
+  testSupabaseConnection,
+  pushToSupabase,
+  pullFromSupabase,
+  getLastSync,
+  sendMagicLink,
+  getCurrentUser,
+  signOut,
+  onAuthChange,
+} from '../lib/supabaseSync'
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -8,17 +17,30 @@ function formatTime(ts) {
 }
 
 export default function SupabaseSettings() {
-  const [syncCode, setSyncCode] = useState(localStorage.getItem('medconsult_sync_code') || '')
+  const [config, setConfig] = useState(getSupabaseConfig())
+  const [configSaved, setConfigSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
+  const [email, setEmail] = useState('')
+  const [magicSent, setMagicSent] = useState(false)
+  const [magicError, setMagicError] = useState('')
+  const [user, setUser] = useState(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionOk, setActionOk] = useState('')
   const lastSync = getLastSync()
 
-  function persistCode(code) {
-    setSyncCode(code)
-    localStorage.setItem('medconsult_sync_code', code)
+  useEffect(() => {
+    getCurrentUser().then(setUser)
+    const unsubscribe = onAuthChange(setUser)
+    return unsubscribe
+  }, [config])
+
+  function saveConfig(e) {
+    e.preventDefault()
+    setSupabaseConfig(config.url, config.anonKey)
+    setConfigSaved(true)
+    setTimeout(() => setConfigSaved(false), 1200)
   }
 
   async function runTest() {
@@ -29,12 +51,29 @@ export default function SupabaseSettings() {
     setTesting(false)
   }
 
+  async function sendLink(e) {
+    e.preventDefault()
+    setMagicError('')
+    setMagicSent(false)
+    try {
+      await sendMagicLink(email)
+      setMagicSent(true)
+    } catch (e) {
+      setMagicError(e.message)
+    }
+  }
+
+  async function doSignOut() {
+    await signOut()
+    setUser(null)
+  }
+
   async function doPush() {
     setBusy(true)
     setActionError('')
     setActionOk('')
     try {
-      await pushToSupabase(syncCode)
+      await pushToSupabase()
       setActionOk('Данные отправлены в Supabase.')
     } catch (e) {
       setActionError(e.message)
@@ -49,7 +88,7 @@ export default function SupabaseSettings() {
     setActionError('')
     setActionOk('')
     try {
-      await pullFromSupabase(syncCode)
+      await pullFromSupabase()
       setActionOk('Данные загружены из Supabase. Перезагрузи страницу, чтобы увидеть изменения.')
     } catch (e) {
       setActionError(e.message)
@@ -60,8 +99,24 @@ export default function SupabaseSettings() {
 
   return (
     <div className="supabase-settings">
+      <form className="supabase-config-form" onSubmit={saveConfig}>
+        <input
+          placeholder="Project URL (https://xxxx.supabase.co)"
+          value={config.url}
+          onChange={(e) => setConfig({ ...config, url: e.target.value })}
+        />
+        <input
+          placeholder="anon public key"
+          value={config.anonKey}
+          onChange={(e) => setConfig({ ...config, anonKey: e.target.value })}
+        />
+        <button type="submit" className="btn-secondary btn-small">
+          {configSaved ? 'Сохранено ✓' : 'Сохранить подключение'}
+        </button>
+      </form>
+
       <div className={isSupabaseConfigured() ? 'supabase-status ok' : 'supabase-status off'}>
-        {isSupabaseConfigured() ? '✓ Supabase настроен (.env найден)' : '✗ Supabase не настроен — нужен .env с VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY'}
+        {isSupabaseConfigured() ? '✓ Подключение настроено' : '✗ Не настроено — вставь URL и anon key выше'}
       </div>
 
       <button type="button" className="btn-secondary btn-small" onClick={runTest} disabled={testing}>
@@ -73,20 +128,35 @@ export default function SupabaseSettings() {
         </div>
       )}
 
-      <div className="supabase-sync-row">
-        <input
-          type="text"
-          placeholder="Код синхронизации (придумай свой, напр. albert-uro-2026)"
-          value={syncCode}
-          onChange={(e) => persistCode(e.target.value)}
-        />
+      <div className="supabase-auth-block">
+        {user ? (
+          <div className="supabase-auth-status">
+            <span>Вошли как {user.email}</span>
+            <button type="button" className="btn-secondary btn-small" onClick={doSignOut}>Выйти</button>
+          </div>
+        ) : (
+          <form className="supabase-magic-form" onSubmit={sendLink}>
+            <input
+              type="email"
+              placeholder="Твой email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button type="submit" className="btn-secondary btn-small" disabled={!isSupabaseConfigured()}>
+              Отправить magic link
+            </button>
+          </form>
+        )}
+        {magicSent && <div className="ai-diagnostic ok">Письмо отправлено — перейди по ссылке из письма на этом же устройстве.</div>}
+        {magicError && <div className="ai-error">{magicError}</div>}
       </div>
+
       <div className="supabase-sync-actions">
         <button type="button" className="btn-secondary" onClick={doPush} disabled={busy || !isSupabaseConfigured()}>
-          Отправить в облако
+          Отправить данные в облако
         </button>
         <button type="button" className="btn-secondary" onClick={doPull} disabled={busy || !isSupabaseConfigured()}>
-          Загрузить из облака
+          Загрузить данные из облака
         </button>
       </div>
       {actionError && <div className="ai-error">{actionError}</div>}
@@ -97,8 +167,8 @@ export default function SupabaseSettings() {
         </p>
       )}
       <p className="settings-note-inline">
-        Требуется таблица <code>medconsult_sync</code> (id text primary key, payload jsonb, updated_at timestamptz) в твоём проекте Supabase.
-        Код синхронизации — просто общий "пароль" между устройствами, без полноценной аутентификации.
+        Без входа по magic link данные пишутся по твоему auth id — войди на каждом устройстве под тем же email,
+        чтобы видеть одни и те же данные. SQL для создания таблиц — ниже в подсказке к этому разделу настроек.
       </p>
     </div>
   )

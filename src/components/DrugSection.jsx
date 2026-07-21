@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import { checkAllergyLocal, getAlternatives, DRUG_GROUPS } from '../data/drugSafety'
 import { checkDrugInteractions, checkAllergyAI, suggestAnalogsAI } from '../lib/openrouter'
+import AddDrugToDbModal from './AddDrugToDbModal'
+import VoiceInputButton from './VoiceInputButton'
 
 export default function DrugSection({ complaints, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
@@ -14,6 +16,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   const [interactionResult, setInteractionResult] = useState('')
   const [checkingInteractions, setCheckingInteractions] = useState(false)
   const [interactionError, setInteractionError] = useState('')
+  const [addToDbFor, setAddToDbFor] = useState(null)
 
   const safeValues = Array.isArray(values) ? values : []
 
@@ -39,6 +42,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
 
   const drugDbNames = useMemo(() => Object.values(store.getDrugInfoAll()), [])
   const customGroups = useMemo(() => store.getCustomGroups(), [])
+  const crossReactivity = useMemo(() => store.getCrossReactivity(), [])
   const groupMeta = useMemo(() => {
     const meta = {}
     Object.keys(DRUG_GROUPS).forEach((key) => {
@@ -155,6 +159,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
           <button type="submit" className="btn-secondary">
             Добавить
           </button>
+          <VoiceInputButton onResult={(text) => setManualDrug(text)} />
         </form>
         {manualSuggestions.length > 0 && (
           <div className="drug-autocomplete">
@@ -185,7 +190,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
 
       <div className="drug-list">
         {safeValues.map((drug, idx) => {
-          const warnings = checkAllergyLocal(drug.name, patientAllergies || [], customGroups, groupMeta)
+          const warnings = checkAllergyLocal(drug.name, patientAllergies || [], customGroups, groupMeta, crossReactivity)
           const alternatives = getAlternatives(drug.name, customGroups)
           const dbInfo = store.getDrugInfo(drug.name)
           return (
@@ -220,6 +225,12 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                     </button>
                   ))}
                 </div>
+              )}
+
+              {!dbInfo && (
+                <button type="button" className="add-to-db-btn" onClick={() => setAddToDbFor(drug.name)}>
+                  + Добавить в базу
+                </button>
               )}
 
               {warnings.length > 0 && (
@@ -328,6 +339,14 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
           )
         })}
       </div>
+
+      {addToDbFor && (
+        <AddDrugToDbModal
+          drugName={addToDbFor}
+          onClose={() => setAddToDbFor(null)}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   )
 }

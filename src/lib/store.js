@@ -51,8 +51,15 @@ function defaultState() {
     drugGroupMeta: {},
     // пользовательские группы лекарств: key -> { label, drugs: [], crossAllergyNote, sideEffects, contraindications, mkb10Codes }
     customDrugGroups: {},
+    // перекрёстная реактивность между ЛЮБЫМИ группами (встроенными и своими),
+    // заданная пользователем: [{ id, groupA, groupB, note }]
+    crossReactivityCustom: [],
     // репорты об ошибках
     bugReports: [],
+    // пресеты: templateId -> [{id, name, sectionValues}]
+    templatePresets: {},
+    // id шаблона, который открывается по умолчанию на вкладке "Приём"
+    defaultTemplateId: null,
     templatesSeedVersion: TEMPLATES_SEED_VERSION,
   }
 }
@@ -362,6 +369,26 @@ export const store = {
     return state.customDrugGroups
   },
 
+  // --- перекрёстная реактивность между группами (полностью пользовательская) ---
+  getCrossReactivity() {
+    return readAll().crossReactivityCustom || []
+  },
+
+  addCrossReactivity({ groupA, groupB, note }) {
+    const state = readAll()
+    state.crossReactivityCustom = state.crossReactivityCustom || []
+    state.crossReactivityCustom.push({ id: crypto.randomUUID(), groupA, groupB, note })
+    writeAll(state)
+    return state.crossReactivityCustom
+  },
+
+  removeCrossReactivity(id) {
+    const state = readAll()
+    state.crossReactivityCustom = (state.crossReactivityCustom || []).filter((r) => r.id !== id)
+    writeAll(state)
+    return state.crossReactivityCustom
+  },
+
   // --- визиты конкретного пациента (для окна истории при выборе) ---
   getVisitsForPatient(patientId) {
     if (!patientId) return []
@@ -385,5 +412,53 @@ export const store = {
 
   getBugReports() {
     return readAll().bugReports || []
+  },
+
+  // --- пресеты визита (типовые сценарии в один клик) ---
+  getPresets(templateId) {
+    return readAll().templatePresets[templateId] || []
+  },
+
+  savePreset(templateId, name, sectionValues) {
+    const state = readAll()
+    if (!state.templatePresets[templateId]) state.templatePresets[templateId] = []
+    state.templatePresets[templateId].push({ id: crypto.randomUUID(), name, sectionValues })
+    writeAll(state)
+    return state.templatePresets[templateId]
+  },
+
+  deletePreset(templateId, presetId) {
+    const state = readAll()
+    state.templatePresets[templateId] = (state.templatePresets[templateId] || []).filter((p) => p.id !== presetId)
+    writeAll(state)
+    return state.templatePresets[templateId]
+  },
+
+  // --- шаблон по умолчанию ---
+  getDefaultTemplateId() {
+    return readAll().defaultTemplateId
+  },
+
+  setDefaultTemplateId(id) {
+    const state = readAll()
+    state.defaultTemplateId = id
+    writeAll(state)
+  },
+
+  // --- автосохранение черновика визита ---
+  saveDraft(templateId, draft) {
+    localStorage.setItem(`medconsult_draft_${templateId}`, JSON.stringify({ ...draft, savedAt: Date.now() }))
+  },
+
+  getDraft(templateId) {
+    try {
+      return JSON.parse(localStorage.getItem(`medconsult_draft_${templateId}`) || 'null')
+    } catch {
+      return null
+    }
+  },
+
+  clearDraft(templateId) {
+    localStorage.removeItem(`medconsult_draft_${templateId}`)
   },
 }

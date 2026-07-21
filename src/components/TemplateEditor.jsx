@@ -201,6 +201,12 @@ export default function TemplateEditor() {
   const [savedFlag, setSavedFlag] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
+  const [defaultTemplateId, setDefaultTemplateIdState] = useState(store.getDefaultTemplateId())
+
+  function makeDefault(id) {
+    store.setDefaultTemplateId(id)
+    setDefaultTemplateIdState(id)
+  }
 
   function refreshTemplates() {
     setTemplates(store.getTemplates())
@@ -307,14 +313,23 @@ export default function TemplateEditor() {
     <div className="template-editor">
       <div className="template-editor-sidebar">
         {templates.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={t.id === selectedId ? 'template-editor-list-item active' : 'template-editor-list-item'}
-            onClick={() => selectTemplate(t)}
-          >
-            {t.name}
-          </button>
+          <div key={t.id} className="template-editor-sidebar-row">
+            <button
+              type="button"
+              className={t.id === selectedId ? 'template-editor-list-item active' : 'template-editor-list-item'}
+              onClick={() => selectTemplate(t)}
+            >
+              {t.name}
+            </button>
+            <button
+              type="button"
+              className={t.id === defaultTemplateId ? 'template-default-star active' : 'template-default-star'}
+              title={t.id === defaultTemplateId ? 'Шаблон по умолчанию' : 'Сделать шаблоном по умолчанию'}
+              onClick={() => makeDefault(t.id)}
+            >
+              ★
+            </button>
+          </div>
         ))}
         <button type="button" className="template-editor-list-item template-editor-new" onClick={startNew}>
           + Новый шаблон

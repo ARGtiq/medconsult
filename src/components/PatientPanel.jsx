@@ -15,7 +15,7 @@ function formatDate(iso) {
   return `${d}.${m}.${y}`
 }
 
-export default function PatientPanel({ patient, onChange }) {
+export default function PatientPanel({ patient, onChange, onLoadVisit }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [allergyInput, setAllergyInput] = useState('')
   const [medicationInput, setMedicationInput] = useState('')
@@ -125,7 +125,12 @@ export default function PatientPanel({ patient, onChange }) {
           {store.getVisitsForPatient(patient.id).map((v) => {
             const { complaintsText, drugsText } = summarizeVisit(v)
             return (
-              <div key={v.id} className="visit-history-card">
+              <div
+                key={v.id}
+                className={onLoadVisit ? 'visit-history-card clickable' : 'visit-history-card'}
+                onClick={() => onLoadVisit && onLoadVisit(v)}
+                title={onLoadVisit ? 'Открыть этот визит' : undefined}
+              >
                 <div className="visit-history-date">
                   {formatDate(v.visitDate)} · {v.templateName}
                 </div>

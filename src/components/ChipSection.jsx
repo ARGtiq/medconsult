@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
+import VoiceInputButton from './VoiceInputButton'
 
 // Режим "конструктора" жалобы: клик по базовой карточке (боль и т.п.)
 // подменяет ряд чипов на карточки текущей группы уточнений (локализация,
@@ -214,6 +215,7 @@ export default function ChipSection({ section, values, onChange }) {
         <button type="submit" className="btn-secondary">
           Добавить
         </button>
+        <VoiceInputButton onResult={(text) => setFreeInput((prev) => (prev ? `${prev}, ${text}` : text))} />
       </form>
 
       {suggestions.length > 0 && (

@@ -1,16 +1,24 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import VisitBuilder from './components/VisitBuilder'
-import SettingsPage from './components/SettingsPage'
 import Footer from './components/Footer'
 import { store } from './lib/store'
 import { isSupabaseConfigured } from './lib/supabaseClient'
 import './App.css'
 
+// Настройки тянут за собой Supabase, редактор шаблонов и AI-клиент —
+// незачем грузить это на первом экране "Приём", когда открывают само приложение
+const SettingsPage = lazy(() => import('./components/SettingsPage'))
+
 export default function App() {
   const [templates, setTemplates] = useState(store.getTemplates())
-  const [activeTemplateId, setActiveTemplateId] = useState(templates[0]?.id)
+  const [activeTemplateId, setActiveTemplateId] = useState(
+    store.getDefaultTemplateId() && templates.find((t) => t.id === store.getDefaultTemplateId())
+      ? store.getDefaultTemplateId()
+      : templates[0]?.id
+  )
   const [navOpen, setNavOpen] = useState(false)
   const [page, setPage] = useState('visit') // 'visit' | 'settings'
+  const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
 
   function goToVisit() {
     const fresh = store.getTemplates()
@@ -22,7 +30,21 @@ export default function App() {
     setNavOpen(false)
   }
 
+  function loadVisit(visit) {
+    const fresh = store.getTemplates()
+    setTemplates(fresh)
+    if (fresh.find((t) => t.id === visit.templateId)) {
+      setActiveTemplateId(visit.templateId)
+    }
+    setPendingVisit(visit)
+    setPage('visit')
+    setNavOpen(false)
+  }
+
   const activeTemplate = templates.find((t) => t.id === activeTemplateId)
+  // ключ включает id визита, чтобы форсировать пересоздание VisitBuilder при загрузке
+  // другого визита того же шаблона (иначе React переиспользует уже смонтированный компонент)
+  const builderKey = `${activeTemplate?.id}-${pendingVisit?.id || 'draft'}`
 
   return (
     <div className="app-shell">
@@ -47,6 +69,7 @@ export default function App() {
                 className={t.id === activeTemplateId ? 'tab active' : 'tab'}
                 onClick={() => {
                   setActiveTemplateId(t.id)
+                  setPendingVisit(null)
                   setNavOpen(false)
                 }}
               >
@@ -65,9 +88,11 @@ export default function App() {
 
       <main className="app-main">
         {page === 'settings' ? (
-          <SettingsPage />
+          <Suspense fallback={<p className="settings-loading">Загрузка настроек…</p>}>
+            <SettingsPage />
+          </Suspense>
         ) : activeTemplate ? (
-          <VisitBuilder key={activeTemplate.id} template={activeTemplate} />
+          <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />
         ) : (
           <p>Нет шаблонов</p>
         )}
