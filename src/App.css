@@ -320,56 +320,66 @@ body {
 
 .chip-caret { margin-left: 6px; opacity: 0.5; font-size: 11px; }
 
-.chip-modifiers {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(20, 32, 43, 0.12);
-  padding: 6px;
+.chip.chip-active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: white;
+}
+
+.chip-builder {
+  background: var(--paper);
+  border: 1px dashed var(--teal);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.chip-builder-breadcrumb {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  z-index: 15;
-  min-width: 180px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  align-items: center;
 }
 
-.chip-modifier { text-align: left; border: none; background: none; padding: 6px 8px; }
-.chip-modifier:hover { background: var(--teal-soft); border-radius: 6px; }
-.chip-modifier.active { background: var(--teal); color: white; border-color: var(--teal); }
-
-.chip-modifiers-wide {
-  min-width: 260px;
-  max-width: 320px;
+.chip-builder-base {
+  font-weight: 600;
+  font-size: 13.5px;
 }
 
-.modifier-group + .modifier-group {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+.chip-builder-crumb {
+  background: var(--teal-soft);
+  color: var(--teal);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
 }
 
-.modifier-group-label {
+.chip-builder-group-label {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.modifier-group-options {
+.chip-builder-controls {
   display: flex;
+  gap: 8px;
+  margin-top: 12px;
   flex-wrap: wrap;
-  gap: 5px;
 }
 
-.modifier-confirm-row {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+.btn-insert { margin-left: auto; }
+
+.selected-chip { cursor: pointer; }
+
+.selected-chip-edit input {
+  padding: 5px 10px;
+  border: 1px solid var(--teal);
+  border-radius: 999px;
+  font-size: 13px;
+  min-width: 160px;
 }
 
 .free-input-row {
