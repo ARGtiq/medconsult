@@ -5,8 +5,13 @@ import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import { store } from '../lib/store'
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function VisitBuilder({ template }) {
   const [patient, setPatient] = useState(null)
+  const [visitDate, setVisitDate] = useState(todayISO())
   const [sectionValues, setSectionValues] = useState(() => {
     const init = {}
     template.sections.forEach((s) => {
@@ -28,6 +33,7 @@ export default function VisitBuilder({ template }) {
       templateName: template.name,
       patientId: patient?.id || null,
       patientName: patient?.name || 'Без пациента',
+      visitDate,
       sectionValues,
     })
     setSaved(true)
@@ -36,7 +42,13 @@ export default function VisitBuilder({ template }) {
 
   return (
     <div className="visit-builder">
-      <PatientPanel patient={patient} onChange={setPatient} />
+      <div className="visit-top-row">
+        <PatientPanel patient={patient} onChange={setPatient} />
+        <label className="visit-date-label">
+          Дата консультации
+          <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+        </label>
+      </div>
 
       <div className="visit-layout">
         <div className="visit-sections">
@@ -76,7 +88,7 @@ export default function VisitBuilder({ template }) {
         </div>
 
         <div className="visit-preview-col">
-          <ProtocolPreview template={template} sectionValues={sectionValues} />
+          <ProtocolPreview template={template} sectionValues={sectionValues} patient={patient} visitDate={visitDate} />
         </div>
       </div>
     </div>

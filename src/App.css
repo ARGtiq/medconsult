@@ -176,6 +176,75 @@ body {
   border-radius: 6px;
 }
 
+.visit-top-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.visit-top-row .patient-panel { flex: 1; min-width: 260px; margin-bottom: 0; }
+
+.visit-date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.visit-date-label input {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.dob-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dob-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.dob-label input {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.dob-age {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  padding: 4px 8px;
+  border-radius: 999px;
+  margin-top: 14px;
+}
+
+.header-block {
+  background: var(--teal-soft);
+  border-radius: 6px;
+  padding: 8px 10px;
+  border-bottom: none !important;
+}
+
+.header-block .field-preview-body { white-space: pre-line; font-size: 13.5px; }
+
 .allergy-block { margin-top: 12px; }
 
 .allergy-block-label {
@@ -270,6 +339,38 @@ body {
 
 .chip-modifier { text-align: left; border: none; background: none; padding: 6px 8px; }
 .chip-modifier:hover { background: var(--teal-soft); border-radius: 6px; }
+.chip-modifier.active { background: var(--teal); color: white; border-color: var(--teal); }
+
+.chip-modifiers-wide {
+  min-width: 260px;
+  max-width: 320px;
+}
+
+.modifier-group + .modifier-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.modifier-group-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.modifier-group-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.modifier-confirm-row {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
 
 .free-input-row {
   display: flex;

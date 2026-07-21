@@ -10,12 +10,40 @@ function sectionToText(section, value) {
   return value || ''
 }
 
-export default function ProtocolPreview({ template, sectionValues, onEditFreeform }) {
+function formatDate(iso) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+function calcAge(dob) {
+  if (!dob) return null
+  const birth = new Date(dob)
+  if (Number.isNaN(birth.getTime())) return null
+  const today = new Date()
+  let years = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--
+  return years
+}
+
+export default function ProtocolPreview({ template, sectionValues, patient, visitDate, onEditFreeform }) {
   const [mode, setMode] = useState('fields') // 'fields' | 'canvas'
   const [copied, setCopied] = useState(false)
 
+  const headerText = useMemo(() => {
+    const lines = []
+    if (patient?.name) {
+      const age = calcAge(patient.dob)
+      const dobPart = patient.dob ? `, ДР ${formatDate(patient.dob)}${age !== null ? ` (${age} лет)` : ''}` : ''
+      lines.push(`Пациент: ${patient.name}${dobPart}`)
+    }
+    if (visitDate) lines.push(`Дата консультации: ${formatDate(visitDate)}`)
+    return lines.join('\n')
+  }, [patient, visitDate])
+
   const fullText = useMemo(() => {
-    return template.sections
+    const body = template.sections
       .map((s) => {
         const text = sectionToText(s, sectionValues[s.id])
         if (!text) return null
@@ -23,7 +51,8 @@ export default function ProtocolPreview({ template, sectionValues, onEditFreefor
       })
       .filter(Boolean)
       .join('\n\n')
-  }, [template, sectionValues])
+    return headerText ? `${headerText}\n\n${body}` : body
+  }, [template, sectionValues, headerText])
 
   function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
@@ -58,6 +87,11 @@ export default function ProtocolPreview({ template, sectionValues, onEditFreefor
         />
       ) : (
         <div className="fields-preview">
+          {headerText && (
+            <div className="field-preview-block header-block">
+              <div className="field-preview-body">{headerText}</div>
+            </div>
+          )}
           {template.sections.map((s) => {
             const text = sectionToText(s, sectionValues[s.id])
             return (

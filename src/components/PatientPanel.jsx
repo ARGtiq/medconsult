@@ -12,9 +12,27 @@ export default function PatientPanel({ patient, onChange }) {
   }
 
   function createNew(name) {
-    const p = store.savePatient({ name, allergies: [] })
+    const p = store.savePatient({ name, allergies: [], dob: '' })
     setPatients(p)
     onChange(p[p.length - 1])
+  }
+
+  function updateDob(dob) {
+    if (!patient) return
+    const updated = { ...patient, dob }
+    store.savePatient(updated)
+    onChange(updated)
+  }
+
+  function age(dob) {
+    if (!dob) return null
+    const birth = new Date(dob)
+    if (Number.isNaN(birth.getTime())) return null
+    const today = new Date()
+    let years = today.getFullYear() - birth.getFullYear()
+    const m = today.getMonth() - birth.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--
+    return years
   }
 
   function addAllergy() {
@@ -59,6 +77,16 @@ export default function PatientPanel({ patient, onChange }) {
           </div>
         )}
       </div>
+
+      {patient && (
+        <div className="dob-block">
+          <label className="dob-label">
+            Дата рождения
+            <input type="date" value={patient.dob || ''} onChange={(e) => updateDob(e.target.value)} />
+          </label>
+          {patient.dob && age(patient.dob) !== null && <span className="dob-age">{age(patient.dob)} лет</span>}
+        </div>
+      )}
 
       {patient && (
         <div className="allergy-block">
