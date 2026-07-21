@@ -499,6 +499,37 @@ body {
   resize: vertical;
 }
 
+.section-text-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.section-select-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+}
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.checkbox-item input { width: 16px; height: 16px; }
+
 /* Drug section */
 .drug-list {
   display: flex;
@@ -954,6 +985,10 @@ body {
 }
 .drug-db-card-top { display: flex; align-items: center; gap: 8px; }
 .drug-db-group { font-size: 11px; color: var(--teal); background: var(--teal-soft); padding: 2px 8px; border-radius: 999px; }
+.drug-db-evidence { font-size: 11px; color: var(--amber); background: var(--amber-soft); padding: 2px 8px; border-radius: 999px; }
+.drug-db-card-name { cursor: pointer; }
+.drug-db-card-name:hover { text-decoration: underline; color: var(--teal); }
+.drug-form-actions { display: flex; gap: 8px; }
 .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
 
 .template-card {
@@ -1179,8 +1214,27 @@ body {
 .chip-editor-text { flex: 1; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 13.5px; }
 
 .modifier-group-editor { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-left: 10px; }
+.modifier-group-move { display: flex; gap: 2px; }
+.modifier-group-move button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+}
 .modifier-group-label-input { width: 160px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
 .modifier-group-options-input { flex: 1; min-width: 200px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
+
+.options-editor { padding-left: 8px; }
+.section-options-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
 
 .manual-drug-wrap { position: relative; }
 .drug-autocomplete {

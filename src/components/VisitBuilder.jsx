@@ -16,8 +16,9 @@ export default function VisitBuilder({ template }) {
   const [visitDate, setVisitDate] = useState(todayISO())
   const [sectionValues, setSectionValues] = useState(() => {
     const init = {}
+    const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
     template.sections.forEach((s) => {
-      init[s.id] = s.type === 'drugs' ? [] : s.type === 'chips' ? [] : ''
+      init[s.id] = arrayTypes.includes(s.type) ? [] : ''
     })
     return init
   })
@@ -74,12 +75,58 @@ export default function VisitBuilder({ template }) {
           {template.sections.map((section) => (
             <section key={section.id} className="section-block">
               <h3>{section.title}</h3>
-              {section.type === 'chips' && (
+              {(section.type === 'chips' || section.type === 'investigations') && (
                 <ChipSection
                   section={section}
                   values={sectionValues[section.id] || []}
                   onChange={(v) => updateSection(section.id, v)}
                 />
+              )}
+              {section.type === 'text' && (
+                <input
+                  type="text"
+                  className="section-text-input"
+                  value={sectionValues[section.id] || ''}
+                  onChange={(e) => updateSection(section.id, e.target.value)}
+                  placeholder="Текст…"
+                />
+              )}
+              {section.type === 'checkbox' && (
+                <div className="checkbox-list">
+                  {(section.options || []).map((opt) => {
+                    const checked = (sectionValues[section.id] || []).includes(opt)
+                    return (
+                      <label key={opt} className="checkbox-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const current = sectionValues[section.id] || []
+                            updateSection(
+                              section.id,
+                              e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                            )
+                          }}
+                        />
+                        {opt}
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+              {section.type === 'select' && (
+                <select
+                  className="section-select-input"
+                  value={sectionValues[section.id] || ''}
+                  onChange={(e) => updateSection(section.id, e.target.value)}
+                >
+                  <option value="">— не выбрано —</option>
+                  {(section.options || []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               )}
               {section.type === 'freeform' && (
                 <>

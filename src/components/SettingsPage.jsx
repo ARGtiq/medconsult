@@ -4,10 +4,33 @@ import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import TemplateEditor from './TemplateEditor'
 import AiSettings from './AiSettings'
 import DataExport from './DataExport'
+import DrugGroupsTab from './DrugGroupsTab'
+
+const EVIDENCE_OPTIONS = [
+  { value: '', label: '— не указано —' },
+  { value: 'guideline', label: 'По гайдлайну' },
+  { value: 'self_verified', label: 'Проверено мной' },
+  { value: 'off_label', label: 'Off-label' },
+]
+
+function blankForm() {
+  return {
+    name: '',
+    dosage: '',
+    frequency: '',
+    sideEffects: '',
+    group: '',
+    brandNames: '',
+    interactions: '',
+    contraindications: '',
+    mkb10Codes: '',
+    evidenceLevel: '',
+  }
+}
 
 function DrugsTab() {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
-  const [form, setForm] = useState({ name: '', dosage: '', frequency: '', sideEffects: '', group: '', brandNames: '' })
+  const [form, setForm] = useState(blankForm())
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -22,8 +45,12 @@ function DrugsTab() {
     e.preventDefault()
     if (!form.name.trim()) return
     store.saveDrugInfo(form)
-    setForm({ name: '', dosage: '', frequency: '', sideEffects: '', group: '', brandNames: '' })
+    setForm(blankForm())
     refresh()
+  }
+
+  function editExisting(d) {
+    setForm({ ...blankForm(), ...d })
   }
 
   async function runBrandNames() {
@@ -103,12 +130,39 @@ function DrugsTab() {
           </button>
         </div>
         {brandError && <div className="ai-error">{brandError}</div>}
+
         <textarea
           placeholder="Основные побочные эффекты"
           value={form.sideEffects}
           onChange={(e) => setForm({ ...form, sideEffects: e.target.value })}
           rows={2}
         />
+        <textarea
+          placeholder="Взаимодействия с другими препаратами"
+          value={form.interactions}
+          onChange={(e) => setForm({ ...form, interactions: e.target.value })}
+          rows={2}
+        />
+        <textarea
+          placeholder="Противопоказания"
+          value={form.contraindications}
+          onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
+          rows={2}
+        />
+        <div className="drug-form-row">
+          <input
+            placeholder="Коды МКБ-10 через запятую (напр. N40, N41.1)"
+            value={form.mkb10Codes}
+            onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
+          />
+          <select value={form.evidenceLevel} onChange={(e) => setForm({ ...form, evidenceLevel: e.target.value })}>
+            {EVIDENCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="extract-block">
           <div className="extract-label">Или вставь текст инструкции (например, с ГРЛС grls.rosminzdrav.ru) — AI заполнит поля выше</div>
@@ -125,7 +179,10 @@ function DrugsTab() {
           {extractError && <div className="ai-error">{extractError}</div>}
         </div>
 
-        <button type="submit" className="btn-primary">Сохранить препарат</button>
+        <div className="drug-form-actions">
+          <button type="submit" className="btn-primary">Сохранить препарат</button>
+          {form.name && <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>}
+        </div>
       </form>
 
       <div className="drug-db-list">
@@ -135,13 +192,19 @@ function DrugsTab() {
           .map((d) => (
             <div key={d.name} className="drug-db-card">
               <div className="drug-db-card-top">
-                <strong>{d.name}</strong>
+                <strong className="drug-db-card-name" onClick={() => editExisting(d)} title="Нажми, чтобы редактировать">
+                  {d.name}
+                </strong>
                 {d.group && <span className="drug-db-group">{d.group}</span>}
+                {d.evidenceLevel && <span className="drug-db-evidence">{EVIDENCE_OPTIONS.find((o) => o.value === d.evidenceLevel)?.label}</span>}
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
               {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
               {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
+              {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
+              {d.interactions && <div className="drug-db-line">Взаимодействия: {d.interactions}</div>}
+              {d.contraindications && <div className="drug-db-line">Противопоказания: {d.contraindications}</div>}
               {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}
             </div>
           ))}
@@ -181,6 +244,9 @@ export default function SettingsPage() {
         <button type="button" className={tab === 'drugs' ? 'active' : ''} onClick={() => setTab('drugs')}>
           Лекарства
         </button>
+        <button type="button" className={tab === 'groups' ? 'active' : ''} onClick={() => setTab('groups')}>
+          Группы лекарств
+        </button>
         <button type="button" className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>
           Шаблоны
         </button>
@@ -189,6 +255,7 @@ export default function SettingsPage() {
         </button>
       </div>
       {tab === 'drugs' && <DrugsTab />}
+      {tab === 'groups' && <DrugGroupsTab />}
       {tab === 'templates' && <TemplatesTab />}
       {tab === 'general' && <GeneralTab />}
     </div>

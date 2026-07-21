@@ -15,7 +15,7 @@ function blankTemplate() {
 }
 
 function blankSection() {
-  return { id: crypto.randomUUID(), title: '', type: 'chips', chips: [] }
+  return { id: crypto.randomUUID(), title: '', type: 'chips', chips: [], options: [] }
 }
 
 function blankChip() {
@@ -24,8 +24,19 @@ function blankChip() {
 
 const TYPE_LABELS = {
   chips: 'Чипы (жалобы/анамнез/осмотр)',
-  freeform: 'Свободный текст',
+  freeform: 'Свободный текст (многострочный)',
+  text: 'Текстовое поле (одна строка)',
+  checkbox: 'Список с чекбоксами',
+  select: 'Выпадающий список (один вариант)',
   drugs: 'Назначения (препараты)',
+  investigations: 'Обследования (чипы)',
+}
+
+// Группы уточнений редактируются через "черновой" текст (optionsText), а не
+// напрямую через массив options — иначе при вводе запятой/пробела поле
+// пересобирается из массива на каждое нажатие и теряет то, что печатается.
+function groupToEditable(g) {
+  return { label: g.label || '', optionsText: (g.options || []).join(', ') }
 }
 
 function ChipEditor({ chip, onChange, onDelete }) {
@@ -34,7 +45,7 @@ function ChipEditor({ chip, onChange, onDelete }) {
   }
 
   function addGroup() {
-    onChange({ ...chip, modifierGroups: [...(chip.modifierGroups || []), { label: '', options: [] }] })
+    onChange({ ...chip, modifierGroups: [...(chip.modifierGroups || []), groupToEditable({})] })
   }
 
   function updateGroup(gIdx, patch) {
@@ -45,6 +56,16 @@ function ChipEditor({ chip, onChange, onDelete }) {
   function removeGroup(gIdx) {
     onChange({ ...chip, modifierGroups: (chip.modifierGroups || []).filter((_, i) => i !== gIdx) })
   }
+
+  function moveGroup(gIdx, dir) {
+    const groups = [...(chip.modifierGroups || [])]
+    const target = gIdx + dir
+    if (target < 0 || target >= groups.length) return
+    ;[groups[gIdx], groups[target]] = [groups[target], groups[gIdx]]
+    onChange({ ...chip, modifierGroups: groups })
+  }
+
+  const groups = chip.modifierGroups || []
 
   return (
     <div className="chip-editor-card">
@@ -58,8 +79,12 @@ function ChipEditor({ chip, onChange, onDelete }) {
         <button type="button" className="remove-btn" onClick={onDelete}>×</button>
       </div>
 
-      {(chip.modifierGroups || []).map((g, gIdx) => (
+      {groups.map((g, gIdx) => (
         <div key={gIdx} className="modifier-group-editor">
+          <div className="modifier-group-move">
+            <button type="button" onClick={() => moveGroup(gIdx, -1)} title="Выше">↑</button>
+            <button type="button" onClick={() => moveGroup(gIdx, 1)} title="Ниже">↓</button>
+          </div>
           <input
             className="modifier-group-label-input"
             placeholder="Название группы, напр. «Локализация»"
@@ -69,10 +94,8 @@ function ChipEditor({ chip, onChange, onDelete }) {
           <input
             className="modifier-group-options-input"
             placeholder="Варианты через запятую: острая, тупая, ноющая"
-            value={(g.options || []).join(', ')}
-            onChange={(e) =>
-              updateGroup(gIdx, { options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
-            }
+            value={g.optionsText ?? (g.options || []).join(', ')}
+            onChange={(e) => updateGroup(gIdx, { optionsText: e.target.value })}
           />
           <button type="button" className="remove-btn" onClick={() => removeGroup(gIdx)}>×</button>
         </div>
@@ -81,6 +104,17 @@ function ChipEditor({ chip, onChange, onDelete }) {
         + Группа уточнений
       </button>
     </div>
+  )
+}
+
+function OptionsListEditor({ optionsText, onChange }) {
+  return (
+    <input
+      className="section-options-input"
+      placeholder="Варианты через запятую: вариант 1, вариант 2, вариант 3"
+      value={optionsText}
+      onChange={(e) => onChange(e.target.value)}
+    />
   )
 }
 
@@ -101,6 +135,10 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
     update({ chips: (section.chips || []).filter((_, i) => i !== idx) })
   }
 
+  const usesChips = section.type === 'chips' || section.type === 'investigations'
+  const usesOptions = section.type === 'checkbox' || section.type === 'select'
+  const optionsText = section.optionsText ?? (section.options || []).join(', ')
+
   return (
     <div className="section-editor-card">
       <div className="section-editor-top">
@@ -110,7 +148,7 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
           value={section.title}
           onChange={(e) => update({ title: e.target.value })}
         />
-        <select value={section.type} onChange={(e) => update({ type: e.target.value, chips: e.target.value === 'chips' ? section.chips || [] : undefined })}>
+        <select value={section.type} onChange={(e) => update({ type: e.target.value })}>
           {Object.entries(TYPE_LABELS).map(([val, label]) => (
             <option key={val} value={val}>
               {label}
@@ -124,7 +162,7 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
         <button type="button" className="remove-btn" onClick={onDelete}>×</button>
       </div>
 
-      {section.type === 'chips' && (
+      {usesChips && (
         <div className="chip-editor-list">
           {(section.chips || []).map((chip, idx) => (
             <ChipEditor
@@ -139,7 +177,18 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
           </button>
         </div>
       )}
-      {section.type === 'freeform' && <p className="settings-note-inline">Свободное текстовое поле, без настройки.</p>}
+
+      {usesOptions && (
+        <div className="options-editor">
+          <OptionsListEditor optionsText={optionsText} onChange={(t) => update({ optionsText: t })} />
+          <p className="settings-note-inline">
+            {section.type === 'checkbox' ? 'Каждый вариант — отдельный чекбокс, можно отметить несколько.' : 'Врач выбирает один вариант из списка.'}
+          </p>
+        </div>
+      )}
+
+      {section.type === 'freeform' && <p className="settings-note-inline">Многострочное свободное текстовое поле.</p>}
+      {section.type === 'text' && <p className="settings-note-inline">Однострочное текстовое поле.</p>}
       {section.type === 'drugs' && <p className="settings-note-inline">Секция назначений: автоподсказки, аллергии, взаимодействия — без доп. настройки.</p>}
     </div>
   )
@@ -165,6 +214,14 @@ export default function TemplateEditor() {
     setDraft(blankTemplate())
   }
 
+  function duplicateCurrent() {
+    const copy = JSON.parse(JSON.stringify(draft))
+    copy.id = null
+    copy.name = `${draft.name || 'Без названия'} (копия)`
+    setSelectedId(null)
+    setDraft(copy)
+  }
+
   function updateSection(idx, section) {
     setDraft({ ...draft, sections: draft.sections.map((s, i) => (i === idx ? section : s)) })
   }
@@ -188,10 +245,35 @@ export default function TemplateEditor() {
   function save() {
     if (!draft.name.trim()) return
     const idBase = draft.id || slugify(draft.name, `template_${Date.now()}`)
-    const sections = draft.sections.map((s) => ({
-      ...s,
-      id: s.id && !/^[0-9a-f-]{20,}$/i.test(s.id) ? s.id : slugify(s.title, s.id),
-    }))
+    const sections = draft.sections.map((s) => {
+      const cleanId = s.id && !/^[0-9a-f-]{20,}$/i.test(s.id) ? s.id : slugify(s.title, s.id)
+      const base = { ...s, id: cleanId }
+
+      if (s.type === 'chips' || s.type === 'investigations') {
+        base.chips = (s.chips || []).map((chip) => ({
+          text: chip.text,
+          modifierGroups: (chip.modifierGroups || [])
+            .map((g) => ({
+              label: g.label,
+              options: (g.optionsText ?? (g.options || []).join(', '))
+                .split(',')
+                .map((o) => o.trim())
+                .filter(Boolean),
+            }))
+            .filter((g) => g.label || g.options.length),
+        }))
+      }
+
+      if (s.type === 'checkbox' || s.type === 'select') {
+        base.options = (s.optionsText ?? (s.options || []).join(', '))
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean)
+        delete base.optionsText
+      }
+
+      return base
+    })
     const toSave = { ...draft, id: idBase, sections }
     store.saveTemplate(toSave)
     refreshTemplates()
@@ -238,6 +320,11 @@ export default function TemplateEditor() {
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
           <div className="template-editor-header-actions">
+            {selectedId && (
+              <button type="button" className="btn-secondary" onClick={duplicateCurrent}>
+                Создать на основе этого
+              </button>
+            )}
             <button type="button" className="btn-primary" onClick={save}>
               {savedFlag ? 'Сохранено ✓' : 'Сохранить шаблон'}
             </button>

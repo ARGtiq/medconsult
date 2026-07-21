@@ -5,7 +5,7 @@ const KEY = 'medconsult_v1'
 // Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
 // (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
 // свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 2
+const TEMPLATES_SEED_VERSION = 3
 
 function readAll() {
   try {
@@ -45,12 +45,26 @@ function defaultState() {
     visits: [],
     // пользовательские шаблоны секций
     templates: seedTemplates(),
-    // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, brandNames, group, source }
+    // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, brandNames, interactions, contraindications, mkb10Codes, evidenceLevel, group, source }
     drugDatabase: {},
+    // ключ статичной группы (из data/drugSafety.js) -> { crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    drugGroupMeta: {},
+    // пользовательские группы лекарств: key -> { label, drugs: [], crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    customDrugGroups: {},
     // репорты об ошибках
     bugReports: [],
     templatesSeedVersion: TEMPLATES_SEED_VERSION,
   }
+}
+
+function slugifyGroupKey(label) {
+  return (
+    (label || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9]+/gi, '_')
+      .replace(/^_+|_+$/g, '') || `group_${Date.now()}`
+  )
 }
 
 function seedTemplates() {
@@ -103,9 +117,12 @@ function seedTemplates() {
           title: 'Анамнез заболевания',
           type: 'chips',
           chips: [
-            { text: 'считает себя больным впервые', modifiers: [] },
-            { text: 'хронический процесс', modifiers: ['>6 мес', '>1 года', '>3 лет'] },
-            { text: 'рецидив после лечения', modifiers: [] },
+            { text: 'считает себя больным впервые', modifierGroups: [] },
+            {
+              text: 'хронический процесс',
+              modifierGroups: [{ label: 'Длительность', options: ['>6 мес', '>1 года', '>3 лет'] }],
+            },
+            { text: 'рецидив после лечения', modifierGroups: [] },
           ],
         },
         {
@@ -118,14 +135,29 @@ function seedTemplates() {
           title: 'Объективный осмотр / Status localis',
           type: 'chips',
           chips: [
-            { text: 'наружные половые органы развиты правильно', modifiers: [] },
-            { text: 'per rectum: простата не увеличена, безболезненна', modifiers: [] },
+            { text: 'наружные половые органы развиты правильно', modifierGroups: [] },
+            { text: 'per rectum: простата не увеличена, безболезненна', modifierGroups: [] },
           ],
         },
         {
           id: 'diagnosis',
           title: 'Диагноз',
           type: 'freeform',
+        },
+        {
+          id: 'investigations',
+          title: 'Обследования',
+          type: 'investigations',
+          chips: [
+            { text: 'ОАМ', modifierGroups: [] },
+            { text: 'ОАК', modifierGroups: [] },
+            { text: 'ПСА общий', modifierGroups: [] },
+            { text: 'Посев мочи с чувствительностью к антибиотикам', modifierGroups: [] },
+            { text: 'УЗИ почек, мочевого пузыря, простаты', modifierGroups: [{ label: 'С определением', options: ['остаточной мочи', 'объёма простаты'] }] },
+            { text: 'Урофлоуметрия', modifierGroups: [] },
+            { text: 'Спермограмма', modifierGroups: [] },
+            { text: 'Мазок на ИППП (ПЦР)', modifierGroups: [] },
+          ],
         },
         {
           id: 'recommendations',
@@ -140,6 +172,16 @@ function seedTemplates() {
       sections: [
         { id: 'dynamics', title: 'Динамика на фоне лечения', type: 'freeform' },
         { id: 'complaints', title: 'Жалобы', type: 'chips', chips: [] },
+        {
+          id: 'investigations',
+          title: 'Обследования',
+          type: 'investigations',
+          chips: [
+            { text: 'ОАМ', modifierGroups: [] },
+            { text: 'Контроль ПСА', modifierGroups: [] },
+            { text: 'УЗИ-контроль', modifierGroups: [] },
+          ],
+        },
         { id: 'recommendations', title: 'Коррекция назначений', type: 'drugs' },
       ],
     },
@@ -286,6 +328,38 @@ export const store = {
     delete state.drugDatabase[name.trim().toLowerCase()]
     writeAll(state)
     return state.drugDatabase
+  },
+
+  // --- метаданные статичных групп лекарств (перекрёстная аллергия/побочки/противопоказания/МКБ) ---
+  getGroupMeta(key) {
+    return readAll().drugGroupMeta[key] || null
+  },
+
+  saveGroupMeta(key, meta) {
+    const state = readAll()
+    state.drugGroupMeta[key] = { ...(state.drugGroupMeta[key] || {}), ...meta }
+    writeAll(state)
+    return state.drugGroupMeta
+  },
+
+  // --- пользовательские группы лекарств ---
+  getCustomGroups() {
+    return readAll().customDrugGroups
+  },
+
+  saveCustomGroup(key, group) {
+    const state = readAll()
+    const groupKey = key || slugifyGroupKey(group.label)
+    state.customDrugGroups[groupKey] = { ...(state.customDrugGroups[groupKey] || {}), ...group }
+    writeAll(state)
+    return state.customDrugGroups
+  },
+
+  deleteCustomGroup(key) {
+    const state = readAll()
+    delete state.customDrugGroups[key]
+    writeAll(state)
+    return state.customDrugGroups
   },
 
   // --- визиты конкретного пациента (для окна истории при выборе) ---
