@@ -29,6 +29,8 @@ function defaultState() {
     visits: [],
     // пользовательские шаблоны секций
     templates: seedTemplates(),
+    // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, group, source }
+    drugDatabase: {},
   }
 }
 
@@ -233,5 +235,30 @@ export const store = {
   importAll(json) {
     const parsed = JSON.parse(json)
     writeAll({ ...defaultState(), ...parsed })
+  },
+
+  // --- база лекарств (дозировка/кратность/побочки) ---
+  getDrugInfoAll() {
+    return readAll().drugDatabase
+  },
+
+  getDrugInfo(name) {
+    const state = readAll()
+    return state.drugDatabase[name.trim().toLowerCase()] || null
+  },
+
+  saveDrugInfo(info) {
+    const state = readAll()
+    const key = info.name.trim().toLowerCase()
+    state.drugDatabase[key] = { ...info, updatedAt: Date.now() }
+    writeAll(state)
+    return state.drugDatabase
+  },
+
+  deleteDrugInfo(name) {
+    const state = readAll()
+    delete state.drugDatabase[name.trim().toLowerCase()]
+    writeAll(state)
+    return state.drugDatabase
   },
 }

@@ -69,3 +69,16 @@ export async function suggestDiagnosis(complaints, anamnesis) {
     `Жалобы: ${complaints.join(', ') || 'не указаны'}\nАнамнез: ${anamnesis || 'не указан'}`
   )
 }
+
+export async function extractDrugInfo(instructionText) {
+  const raw = await callOpenRouter(
+    'Ты извлекаешь структурированные данные из текста инструкции по медицинскому применению препарата. Отвечай СТРОГО валидным JSON без markdown-разметки, без ```, без преамбулы. Формат: {"dosage": "стандартная разовая/суточная доза кратко", "frequency": "кратность приёма кратко", "sideEffects": "3-5 главных побочных эффектов через запятую", "group": "фармакологическая группа кратко"}. Если что-то не найдено в тексте — пустая строка.',
+    instructionText.slice(0, 12000)
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    throw new Error('Не удалось разобрать ответ AI как JSON. Попробуй ещё раз или заполни вручную.')
+  }
+}

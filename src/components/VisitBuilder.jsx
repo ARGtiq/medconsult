@@ -3,6 +3,7 @@ import ChipSection from './ChipSection'
 import DrugSection from './DrugSection'
 import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
+import Mkb10Picker from './Mkb10Picker'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 
@@ -82,6 +83,16 @@ export default function VisitBuilder({ template }) {
               )}
               {section.type === 'freeform' && (
                 <>
+                  {section.id === 'diagnosis' && (
+                    <Mkb10Picker
+                      onInsert={(text) =>
+                        updateSection(
+                          section.id,
+                          sectionValues[section.id] ? `${sectionValues[section.id]}, ${text}` : text
+                        )
+                      }
+                    />
+                  )}
                   <textarea
                     className="freeform-textarea"
                     value={sectionValues[section.id] || ''}

@@ -816,6 +816,118 @@ body {
   outline: none;
 }
 
+.tab-page {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.tab-page.active { background: var(--teal); border-color: var(--teal); }
+
+/* MKB-10 */
+.mkb-picker { position: relative; margin-bottom: 10px; }
+.mkb-picker input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.mkb-results {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.mkb-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--line);
+}
+.mkb-results button:last-child { border-bottom: none; }
+.mkb-results button:hover { background: var(--teal-soft); }
+.mkb-code { font-weight: 600; color: var(--teal); margin-right: 6px; }
+.mkb-empty { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; }
+.mkb-add-link { border: none; background: none; color: var(--teal); text-decoration: underline; cursor: pointer; font-size: 12.5px; padding: 0; }
+.mkb-new-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.mkb-new-form input { flex: 1; min-width: 140px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; }
+
+/* Settings page */
+.settings-page { display: flex; flex-direction: column; gap: 16px; }
+.settings-tabs { display: flex; gap: 8px; }
+.settings-tabs button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.settings-tabs button.active { background: var(--teal); border-color: var(--teal); color: white; }
+
+.settings-tab { display: flex; flex-direction: column; gap: 18px; }
+.settings-note { font-size: 13px; color: var(--ink-soft); background: var(--teal-soft); padding: 10px 14px; border-radius: 8px; line-height: 1.5; }
+.settings-note code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+.drug-form {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.drug-form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.drug-form-row input, .drug-form textarea {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--font-body);
+}
+
+.extract-block {
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.extract-label { font-size: 12.5px; color: var(--ink-soft); }
+.instruction-textarea { font-family: var(--font-body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+
+.drug-db-list { display: flex; flex-direction: column; gap: 10px; }
+.drug-db-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.drug-db-card-top { display: flex; align-items: center; gap: 8px; }
+.drug-db-group { font-size: 11px; color: var(--teal); background: var(--teal-soft); padding: 2px 8px; border-radius: 999px; }
+.drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+
+.template-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.template-card-title { font-family: var(--font-display); font-size: 15px; margin-bottom: 8px; }
+.template-card-sections { display: flex; flex-wrap: wrap; gap: 6px; }
+.template-section-pill { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; }
+.template-section-pill em { color: var(--ink-soft); font-style: normal; }
+
 /* Responsive */
 @media (max-width: 980px) {
   .visit-layout {
