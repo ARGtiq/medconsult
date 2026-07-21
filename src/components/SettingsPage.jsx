@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { extractDrugInfo } from '../lib/openrouter'
+import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 
 function DrugsTab() {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
-  const [form, setForm] = useState({ name: '', dosage: '', frequency: '', sideEffects: '', group: '' })
+  const [form, setForm] = useState({ name: '', dosage: '', frequency: '', sideEffects: '', group: '', brandNames: '' })
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
+  const [brandLoading, setBrandLoading] = useState(false)
+  const [brandError, setBrandError] = useState('')
 
   function refresh() {
     setDrugs({ ...store.getDrugInfoAll() })
@@ -17,8 +19,25 @@ function DrugsTab() {
     e.preventDefault()
     if (!form.name.trim()) return
     store.saveDrugInfo(form)
-    setForm({ name: '', dosage: '', frequency: '', sideEffects: '', group: '' })
+    setForm({ name: '', dosage: '', frequency: '', sideEffects: '', group: '', brandNames: '' })
     refresh()
+  }
+
+  async function runBrandNames() {
+    if (!form.name.trim()) {
+      setBrandError('Сначала укажи МНН в поле "Название"')
+      return
+    }
+    setBrandLoading(true)
+    setBrandError('')
+    try {
+      const brandNames = await suggestBrandNames(form.name)
+      setForm((prev) => ({ ...prev, brandNames }))
+    } catch (e) {
+      setBrandError(e.message)
+    } finally {
+      setBrandLoading(false)
+    }
   }
 
   function remove(name) {
@@ -70,6 +89,17 @@ function DrugsTab() {
             onChange={(e) => setForm({ ...form, frequency: e.target.value })}
           />
         </div>
+        <div className="drug-form-row drug-form-row-brand">
+          <input
+            placeholder="Торговые названия через запятую"
+            value={form.brandNames}
+            onChange={(e) => setForm({ ...form, brandNames: e.target.value })}
+          />
+          <button type="button" className="btn-secondary btn-small" onClick={runBrandNames} disabled={brandLoading}>
+            {brandLoading ? 'Подбираю…' : '🤖 Подобрать (AI)'}
+          </button>
+        </div>
+        {brandError && <div className="ai-error">{brandError}</div>}
         <textarea
           placeholder="Основные побочные эффекты"
           value={form.sideEffects}
@@ -108,6 +138,7 @@ function DrugsTab() {
               </div>
               {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
               {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
+              {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
               {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}
             </div>
           ))}

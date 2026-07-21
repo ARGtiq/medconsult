@@ -3,6 +3,7 @@ import VisitBuilder from './components/VisitBuilder'
 import DataExport from './components/DataExport'
 import AiSettings from './components/AiSettings'
 import SettingsPage from './components/SettingsPage'
+import Footer from './components/Footer'
 import { store } from './lib/store'
 import { isSupabaseConfigured } from './lib/supabaseClient'
 import './App.css'
@@ -65,6 +66,8 @@ export default function App() {
           <p>Нет шаблонов</p>
         )}
       </main>
+
+      <Footer />
     </div>
   )
 }

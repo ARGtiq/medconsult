@@ -10,12 +10,14 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   const [checkingInteractions, setCheckingInteractions] = useState(false)
   const [interactionError, setInteractionError] = useState('')
 
+  const safeValues = Array.isArray(values) ? values : []
+
   async function runInteractionCheck() {
     setCheckingInteractions(true)
     setInteractionError('')
     setInteractionResult('')
     try {
-      const result = await checkDrugInteractions(values.map((d) => d.name))
+      const result = await checkDrugInteractions(safeValues.map((d) => d.name))
       setInteractionResult(result)
     } catch (e) {
       setInteractionError(e.message)
@@ -31,23 +33,43 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   )
 
   function addDrug(name) {
-    const clean = name.trim()
+    const clean = (name || '').trim()
     if (!clean) return
-    onChange([...values, { name: clean, evidence: 'self_verified' }])
+    const dbInfo = store.getDrugInfo(clean)
+    onChange([
+      ...safeValues,
+      {
+        name: clean,
+        evidence: 'self_verified',
+        dosage: dbInfo?.dosage || '',
+        frequency: dbInfo?.frequency || '',
+      },
+    ])
     ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, clean))
   }
 
   function removeDrug(idx) {
-    onChange(values.filter((_, i) => i !== idx))
+    onChange(safeValues.filter((_, i) => i !== idx))
   }
 
   function setEvidence(idx, evidence) {
-    onChange(values.map((d, i) => (i === idx ? { ...d, evidence } : d)))
+    onChange(safeValues.map((d, i) => (i === idx ? { ...d, evidence } : d)))
   }
 
   function replaceDrug(idx, newName) {
-    onChange(values.map((d, i) => (i === idx ? { ...d, name: newName } : d)))
+    const dbInfo = store.getDrugInfo(newName)
+    onChange(
+      safeValues.map((d, i) =>
+        i === idx ? { ...d, name: newName, dosage: dbInfo?.dosage || d.dosage, frequency: dbInfo?.frequency || d.frequency } : d
+      )
+    )
     setAltOpenFor(null)
+  }
+
+  function handleManualSubmit(e) {
+    e.preventDefault()
+    addDrug(manualDrug)
+    setManualDrug('')
   }
 
   return (
@@ -69,14 +91,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
         </div>
       )}
 
-      <form
-        className="free-input-row"
-        onSubmit={(e) => {
-          e.preventDefault()
-          addDrug(manualDrug)
-          setManualDrug('')
-        }}
-      >
+      <form className="free-input-row" onSubmit={handleManualSubmit}>
         <input
           type="text"
           value={manualDrug}
@@ -88,7 +103,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
         </button>
       </form>
 
-      {values.length > 1 && (
+      {safeValues.length > 1 && (
         <div className="ai-check-block">
           <button type="button" className="btn-ai" onClick={runInteractionCheck} disabled={checkingInteractions}>
             {checkingInteractions ? 'Проверяю…' : '🤖 Проверить взаимодействия (AI)'}
@@ -104,9 +119,10 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
       )}
 
       <div className="drug-list">
-        {values.map((drug, idx) => {
+        {safeValues.map((drug, idx) => {
           const warnings = checkAllergyLocal(drug.name, patientAllergies || [])
           const alternatives = getAlternatives(drug.name)
+          const dbInfo = store.getDrugInfo(drug.name)
           return (
             <div key={`${drug.name}-${idx}`} className={`drug-card evidence-${drug.evidence}`}>
               <div className="drug-card-top">
@@ -115,6 +131,14 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                   ×
                 </button>
               </div>
+
+              {(drug.dosage || drug.frequency || dbInfo?.brandNames) && (
+                <div className="drug-db-hint">
+                  {drug.dosage && <span>{drug.dosage}</span>}
+                  {drug.frequency && <span> · {drug.frequency}</span>}
+                  {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
+                </div>
+              )}
 
               {warnings.length > 0 && (
                 <div className="allergy-warning">

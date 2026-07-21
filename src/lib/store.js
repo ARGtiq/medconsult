@@ -2,19 +2,35 @@
 // Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
 
 const KEY = 'medconsult_v1'
+// Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
+// (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
+// свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
+const TEMPLATES_SEED_VERSION = 2
 
 function readAll() {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return defaultState()
-    return { ...defaultState(), ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw)
+    const merged = { ...defaultState(), ...parsed }
+
+    if (parsed.templatesSeedVersion !== TEMPLATES_SEED_VERSION) {
+      const freshSeed = seedTemplates()
+      const seedIds = new Set(freshSeed.map((t) => t.id))
+      const customTemplates = (parsed.templates || []).filter((t) => !seedIds.has(t.id))
+      merged.templates = [...freshSeed, ...customTemplates]
+      merged.templatesSeedVersion = TEMPLATES_SEED_VERSION
+      writeAll(merged)
+    }
+
+    return merged
   } catch {
     return defaultState()
   }
 }
 
 function writeAll(state) {
-  localStorage.setItem(KEY, JSON.stringify(state))
+  localStorage.setItem(KEY, JSON.stringify({ ...state, templatesSeedVersion: TEMPLATES_SEED_VERSION }))
 }
 
 function defaultState() {
@@ -29,8 +45,11 @@ function defaultState() {
     visits: [],
     // пользовательские шаблоны секций
     templates: seedTemplates(),
-    // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, group, source }
+    // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, brandNames, group, source }
     drugDatabase: {},
+    // репорты об ошибках
+    bugReports: [],
+    templatesSeedVersion: TEMPLATES_SEED_VERSION,
   }
 }
 
@@ -260,5 +279,30 @@ export const store = {
     delete state.drugDatabase[name.trim().toLowerCase()]
     writeAll(state)
     return state.drugDatabase
+  },
+
+  // --- визиты конкретного пациента (для окна истории при выборе) ---
+  getVisitsForPatient(patientId) {
+    if (!patientId) return []
+    return readAll()
+      .visits.filter((v) => v.patientId === patientId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  },
+
+  // --- багрепорты ---
+  saveBugReport(report) {
+    const state = readAll()
+    state.bugReports.push({
+      ...report,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      userAgent: navigator.userAgent,
+    })
+    writeAll(state)
+    return state.bugReports
+  },
+
+  getBugReports() {
+    return readAll().bugReports || []
   },
 }

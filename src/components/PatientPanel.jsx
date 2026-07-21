@@ -1,20 +1,38 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 
+function summarizeVisit(v) {
+  const complaints = v.sectionValues?.complaints
+  const drugs = v.sectionValues?.recommendations || v.sectionValues?.drugs
+  const complaintsText = Array.isArray(complaints) && complaints.length ? complaints.join(', ') : null
+  const drugsText = Array.isArray(drugs) && drugs.length ? drugs.map((d) => d.name).join(', ') : null
+  return { complaintsText, drugsText }
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 export default function PatientPanel({ patient, onChange }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [allergyInput, setAllergyInput] = useState('')
   const [showList, setShowList] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   function selectPatient(p) {
     onChange(p)
     setShowList(false)
+    const visits = store.getVisitsForPatient(p.id)
+    setShowHistory(visits.length > 0)
   }
 
   function createNew(name) {
     const p = store.savePatient({ name, allergies: [], dob: '' })
     setPatients(p)
     onChange(p[p.length - 1])
+    setShowHistory(false)
   }
 
   function updateDob(dob) {
@@ -76,7 +94,41 @@ export default function PatientPanel({ patient, onChange }) {
             </form>
           </div>
         )}
+        {patient && (
+          <button type="button" className="patient-history-toggle" onClick={() => setShowHistory((v) => !v)}>
+            {showHistory ? 'Скрыть приёмы' : `Приёмы пациента (${store.getVisitsForPatient(patient.id).length})`}
+          </button>
+        )}
       </div>
+
+      {patient && showHistory && (
+        <div className="visit-history-list">
+          {store.getVisitsForPatient(patient.id).length === 0 && (
+            <p className="empty-hint">Прошлых визитов не найдено.</p>
+          )}
+          {store.getVisitsForPatient(patient.id).map((v) => {
+            const { complaintsText, drugsText } = summarizeVisit(v)
+            return (
+              <div key={v.id} className="visit-history-card">
+                <div className="visit-history-date">
+                  {formatDate(v.visitDate)} · {v.templateName}
+                </div>
+                {complaintsText && (
+                  <div className="visit-history-line">
+                    <strong>Жалобы:</strong> {complaintsText}
+                  </div>
+                )}
+                {drugsText && (
+                  <div className="visit-history-line">
+                    <strong>Назначено:</strong> {drugsText}
+                  </div>
+                )}
+                {!complaintsText && !drugsText && <div className="visit-history-line empty-hint">Без деталей</div>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {patient && (
         <div className="dob-block">

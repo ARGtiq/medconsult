@@ -5,7 +5,12 @@ function sectionToText(section, value) {
   if (section.type === 'drugs') {
     const drugs = value || []
     if (!drugs.length) return ''
-    return drugs.map((d) => `— ${d.name}`).join('\n')
+    return drugs
+      .map((d) => {
+        const extra = [d.dosage, d.frequency].filter(Boolean).join(', ')
+        return `— ${d.name}${extra ? ` (${extra})` : ''}`
+      })
+      .join('\n')
   }
   if (Array.isArray(value)) return value.join(', ')
   return value || ''
