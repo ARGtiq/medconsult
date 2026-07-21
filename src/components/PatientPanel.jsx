@@ -1,0 +1,97 @@
+import { useState } from 'react'
+import { store } from '../lib/store'
+
+export default function PatientPanel({ patient, onChange }) {
+  const [patients, setPatients] = useState(store.getPatients())
+  const [allergyInput, setAllergyInput] = useState('')
+  const [showList, setShowList] = useState(false)
+
+  function selectPatient(p) {
+    onChange(p)
+    setShowList(false)
+  }
+
+  function createNew(name) {
+    const p = store.savePatient({ name, allergies: [] })
+    setPatients(p)
+    onChange(p[p.length - 1])
+  }
+
+  function addAllergy() {
+    const clean = allergyInput.trim()
+    if (!clean || !patient) return
+    const updated = { ...patient, allergies: [...(patient.allergies || []), clean] }
+    store.savePatient(updated)
+    onChange(updated)
+    setAllergyInput('')
+  }
+
+  function removeAllergy(idx) {
+    const updated = { ...patient, allergies: patient.allergies.filter((_, i) => i !== idx) }
+    store.savePatient(updated)
+    onChange(updated)
+  }
+
+  return (
+    <div className="patient-panel">
+      <div className="patient-select-row">
+        <button type="button" className="btn-secondary" onClick={() => setShowList((v) => !v)}>
+          {patient ? patient.name : 'Выбрать пациента'}
+        </button>
+        {showList && (
+          <div className="patient-dropdown">
+            {patients.map((p) => (
+              <button type="button" key={p.id} onClick={() => selectPatient(p)}>
+                {p.name}
+              </button>
+            ))}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const name = e.target.elements.newPatient.value.trim()
+                if (name) createNew(name)
+                e.target.reset()
+              }}
+            >
+              <input name="newPatient" placeholder="Новый пациент — ФИО" />
+              <button type="submit">+</button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {patient && (
+        <div className="allergy-block">
+          <div className="allergy-block-label">Аллергии пациента</div>
+          <div className="allergy-chips">
+            {(patient.allergies || []).map((a, idx) => (
+              <span key={a} className="selected-chip allergy-chip">
+                {a}
+                <button type="button" onClick={() => removeAllergy(idx)}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <form
+            className="free-input-row"
+            onSubmit={(e) => {
+              e.preventDefault()
+              addAllergy()
+            }}
+          >
+            <input
+              type="text"
+              value={allergyInput}
+              placeholder="Добавить аллергию (МНН или группа)…"
+              onChange={(e) => setAllergyInput(e.target.value)}
+            />
+            <button type="submit" className="btn-secondary">
+              Добавить
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
