@@ -247,6 +247,13 @@ export const store = {
     return state.templates
   },
 
+  deleteTemplate(id) {
+    const state = readAll()
+    state.templates = state.templates.filter((t) => t.id !== id)
+    writeAll(state)
+    return state.templates
+  },
+
   exportAll() {
     return JSON.stringify(readAll(), null, 2)
   },

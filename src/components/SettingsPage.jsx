@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
+import TemplateEditor from './TemplateEditor'
 
 function DrugsTab() {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
@@ -149,29 +150,7 @@ function DrugsTab() {
 }
 
 function TemplatesTab() {
-  const [templates, setTemplates] = useState(store.getTemplates())
-
-  return (
-    <div className="settings-tab">
-      <p className="settings-note">
-        Просмотр текущих шаблонов и их секций. Полный визуальный редактор секций — следующий шаг;
-        пока структуру шаблонов проще всего править напрямую в <code>src/lib/store.js</code> →
-        функция <code>seedTemplates()</code>, либо через экспорт/импорт JSON в шапке приложения.
-      </p>
-      {templates.map((t) => (
-        <div key={t.id} className="template-card">
-          <div className="template-card-title">{t.name}</div>
-          <div className="template-card-sections">
-            {t.sections.map((s) => (
-              <span key={s.id} className="template-section-pill">
-                {s.title} <em>({s.type})</em>
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
+  return <TemplateEditor />
 }
 
 export default function SettingsPage() {

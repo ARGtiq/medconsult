@@ -9,10 +9,20 @@ import { isSupabaseConfigured } from './lib/supabaseClient'
 import './App.css'
 
 export default function App() {
-  const [templates] = useState(store.getTemplates())
+  const [templates, setTemplates] = useState(store.getTemplates())
   const [activeTemplateId, setActiveTemplateId] = useState(templates[0]?.id)
   const [navOpen, setNavOpen] = useState(false)
   const [page, setPage] = useState('visit') // 'visit' | 'settings'
+
+  function goToVisit() {
+    const fresh = store.getTemplates()
+    setTemplates(fresh)
+    if (!fresh.find((t) => t.id === activeTemplateId)) {
+      setActiveTemplateId(fresh[0]?.id)
+    }
+    setPage('visit')
+    setNavOpen(false)
+  }
 
   const activeTemplate = templates.find((t) => t.id === activeTemplateId)
 
@@ -29,7 +39,7 @@ export default function App() {
         </button>
 
         <nav className={navOpen ? 'template-tabs open' : 'template-tabs'}>
-          <button className={page === 'visit' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('visit'); setNavOpen(false) }}>
+          <button className={page === 'visit' ? 'tab tab-page active' : 'tab tab-page'} onClick={goToVisit}>
             Приём
           </button>
           {page === 'visit' &&
