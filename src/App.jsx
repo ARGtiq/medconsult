@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import VisitBuilder from './components/VisitBuilder'
-import DataExport from './components/DataExport'
-import AiSettings from './components/AiSettings'
 import SettingsPage from './components/SettingsPage'
 import Footer from './components/Footer'
 import { store } from './lib/store'
@@ -62,8 +60,6 @@ export default function App() {
 
         <div className="header-right">
           {!isSupabaseConfigured() && <span className="sync-badge">офлайн · только на этом устройстве</span>}
-          <AiSettings />
-          <DataExport />
         </div>
       </header>
 

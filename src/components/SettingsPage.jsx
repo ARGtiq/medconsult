@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import TemplateEditor from './TemplateEditor'
+import AiSettings from './AiSettings'
+import DataExport from './DataExport'
 
 function DrugsTab() {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
@@ -153,6 +155,23 @@ function TemplatesTab() {
   return <TemplateEditor />
 }
 
+function GeneralTab() {
+  return (
+    <div className="settings-tab">
+      <div className="general-settings-block">
+        <h4>AI-провайдер</h4>
+        <p className="settings-note-inline">Выбор модели и ключ для проверки взаимодействий, аллергий, аналогов, подсказок диагноза.</p>
+        <AiSettings inline />
+      </div>
+      <div className="general-settings-block">
+        <h4>Данные приложения</h4>
+        <p className="settings-note-inline">Полный бэкап (пациенты, визиты, шаблоны, база лекарств) или перенос на другое устройство.</p>
+        <DataExport />
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [tab, setTab] = useState('drugs')
 
@@ -165,8 +184,13 @@ export default function SettingsPage() {
         <button type="button" className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>
           Шаблоны
         </button>
+        <button type="button" className={tab === 'general' ? 'active' : ''} onClick={() => setTab('general')}>
+          Общие
+        </button>
       </div>
-      {tab === 'drugs' ? <DrugsTab /> : <TemplatesTab />}
+      {tab === 'drugs' && <DrugsTab />}
+      {tab === 'templates' && <TemplatesTab />}
+      {tab === 'general' && <GeneralTab />}
     </div>
   )
 }

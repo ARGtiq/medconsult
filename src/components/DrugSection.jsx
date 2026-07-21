@@ -1,11 +1,16 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import { checkAllergyLocal, getAlternatives } from '../data/drugSafety'
-import { checkDrugInteractions } from '../lib/openrouter'
+import { checkDrugInteractions, checkAllergyAI, suggestAnalogsAI } from '../lib/openrouter'
 
 export default function DrugSection({ complaints, patientAllergies, values, onChange }) {
   const [manualDrug, setManualDrug] = useState('')
   const [altOpenFor, setAltOpenFor] = useState(null)
+  const [aiAnalogsFor, setAiAnalogsFor] = useState(null)
+  const [aiAnalogsResult, setAiAnalogsResult] = useState({})
+  const [aiAnalogsLoading, setAiAnalogsLoading] = useState(null)
+  const [aiAllergyResult, setAiAllergyResult] = useState({})
+  const [aiAllergyLoading, setAiAllergyLoading] = useState(null)
   const [interactionResult, setInteractionResult] = useState('')
   const [checkingInteractions, setCheckingInteractions] = useState(false)
   const [interactionError, setInteractionError] = useState('')
@@ -32,6 +37,18 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
     [JSON.stringify(complaints)]
   )
 
+  const drugDbNames = useMemo(() => Object.values(store.getDrugInfoAll()), [])
+
+  const manualSuggestions = useMemo(() => {
+    const q = manualDrug.trim().toLowerCase()
+    if (!q) return []
+    const already = new Set(safeValues.map((d) => d.name.toLowerCase()))
+    return drugDbNames
+      .filter((d) => d.name.toLowerCase().includes(q) && !already.has(d.name.toLowerCase()))
+      .slice(0, 6)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualDrug, drugDbNames])
+
   function addDrug(name) {
     const clean = (name || '').trim()
     if (!clean) return
@@ -46,6 +63,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
       },
     ])
     ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, clean))
+    setManualDrug('')
   }
 
   function removeDrug(idx) {
@@ -64,12 +82,38 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
       )
     )
     setAltOpenFor(null)
+    setAiAnalogsFor(null)
   }
 
   function handleManualSubmit(e) {
     e.preventDefault()
     addDrug(manualDrug)
-    setManualDrug('')
+  }
+
+  async function runAiAnalogs(idx, drugName) {
+    setAiAnalogsLoading(idx)
+    try {
+      const analogs = await suggestAnalogsAI(drugName)
+      setAiAnalogsResult((prev) => ({ ...prev, [idx]: analogs }))
+      setAiAnalogsFor(idx)
+    } catch (e) {
+      setAiAnalogsResult((prev) => ({ ...prev, [idx]: { error: e.message } }))
+      setAiAnalogsFor(idx)
+    } finally {
+      setAiAnalogsLoading(null)
+    }
+  }
+
+  async function runAiAllergy(idx, drugName) {
+    setAiAllergyLoading(idx)
+    try {
+      const result = await checkAllergyAI(drugName, patientAllergies || [])
+      setAiAllergyResult((prev) => ({ ...prev, [idx]: result }))
+    } catch (e) {
+      setAiAllergyResult((prev) => ({ ...prev, [idx]: `Ошибка: ${e.message}` }))
+    } finally {
+      setAiAllergyLoading(null)
+    }
   }
 
   return (
@@ -91,22 +135,34 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
         </div>
       )}
 
-      <form className="free-input-row" onSubmit={handleManualSubmit}>
-        <input
-          type="text"
-          value={manualDrug}
-          placeholder="Добавить препарат вручную…"
-          onChange={(e) => setManualDrug(e.target.value)}
-        />
-        <button type="submit" className="btn-secondary">
-          Добавить
-        </button>
-      </form>
+      <div className="manual-drug-wrap">
+        <form className="free-input-row" onSubmit={handleManualSubmit}>
+          <input
+            type="text"
+            value={manualDrug}
+            placeholder="Добавить препарат вручную…"
+            onChange={(e) => setManualDrug(e.target.value)}
+          />
+          <button type="submit" className="btn-secondary">
+            Добавить
+          </button>
+        </form>
+        {manualSuggestions.length > 0 && (
+          <div className="drug-autocomplete">
+            {manualSuggestions.map((d) => (
+              <button type="button" key={d.name} onClick={() => addDrug(d.name)}>
+                <strong>{d.name}</strong>
+                {d.dosage ? <span> · {d.dosage}</span> : null}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {safeValues.length > 1 && (
         <div className="ai-check-block">
           <button type="button" className="btn-ai" onClick={runInteractionCheck} disabled={checkingInteractions}>
-            {checkingInteractions ? 'Проверяю…' : '🤖 Проверить взаимодействия (AI)'}
+            {checkingInteractions ? 'Проверяю…' : '🤖 Проверить несовместимость (AI)'}
           </button>
           {interactionError && <div className="ai-error">{interactionError}</div>}
           {interactionResult && (
@@ -150,6 +206,25 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                 </div>
               )}
 
+              {patientAllergies?.length > 0 && (
+                <div className="ai-inline-check">
+                  <button
+                    type="button"
+                    className="btn-ai btn-small"
+                    onClick={() => runAiAllergy(idx, drug.name)}
+                    disabled={aiAllergyLoading === idx}
+                  >
+                    {aiAllergyLoading === idx ? 'Проверяю…' : '🤖 Перекрёстная аллергия (AI)'}
+                  </button>
+                  {aiAllergyResult[idx] && (
+                    <div className="ai-result ai-result-compact">
+                      <div className="ai-result-badge">AI</div>
+                      <div className="ai-result-text">{aiAllergyResult[idx]}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="drug-card-controls">
                 <div className="evidence-toggle">
                   <button
@@ -178,8 +253,8 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                   </button>
                 </div>
 
-                {alternatives.length > 0 && (
-                  <div className="alt-wrap">
+                <div className="alt-wrap">
+                  {alternatives.length > 0 ? (
                     <button
                       type="button"
                       className="btn-secondary btn-small"
@@ -187,17 +262,41 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                     >
                       Заменить на аналог
                     </button>
-                    {altOpenFor === idx && (
-                      <div className="alt-dropdown">
-                        {alternatives.map((alt) => (
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-ai btn-small"
+                      onClick={() => runAiAnalogs(idx, drug.name)}
+                      disabled={aiAnalogsLoading === idx}
+                    >
+                      {aiAnalogsLoading === idx ? 'Подбираю…' : '🤖 Аналоги (AI)'}
+                    </button>
+                  )}
+                  {altOpenFor === idx && alternatives.length > 0 && (
+                    <div className="alt-dropdown">
+                      {alternatives.map((alt) => (
+                        <button type="button" key={alt} onClick={() => replaceDrug(idx, alt)}>
+                          {alt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {aiAnalogsFor === idx && aiAnalogsResult[idx] && (
+                    <div className="alt-dropdown">
+                      {aiAnalogsResult[idx].error ? (
+                        <div className="ai-error">{aiAnalogsResult[idx].error}</div>
+                      ) : aiAnalogsResult[idx].length ? (
+                        aiAnalogsResult[idx].map((alt) => (
                           <button type="button" key={alt} onClick={() => replaceDrug(idx, alt)}>
                             {alt}
                           </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                        ))
+                      ) : (
+                        <div className="empty-hint">AI не нашёл аналогов</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )

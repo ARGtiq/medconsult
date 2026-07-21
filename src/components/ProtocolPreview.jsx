@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { polishNarrative } from '../lib/openrouter'
 
-function sectionToText(section, value) {
+function sectionToText(section, value, patient) {
   if (section.type === 'drugs') {
     const drugs = value || []
     if (!drugs.length) return ''
@@ -12,8 +12,17 @@ function sectionToText(section, value) {
       })
       .join('\n')
   }
-  if (Array.isArray(value)) return value.join(', ')
-  return value || ''
+
+  let text = ''
+  if (Array.isArray(value)) text = value.join(', ')
+  else text = value || ''
+
+  if (section.id === 'anamnesis_vitae' && patient?.currentMedications?.length) {
+    const medsLine = `Принимает в настоящее время: ${patient.currentMedications.join(', ')}.`
+    text = text ? `${medsLine}\n${text}` : medsLine
+  }
+
+  return text
 }
 
 function formatDate(iso) {
@@ -55,14 +64,14 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
   const generatedText = useMemo(() => {
     const body = template.sections
       .map((s) => {
-        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id])
+        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient)
         if (!text) return null
         return `${s.title}:\n${text}`
       })
       .filter(Boolean)
       .join('\n\n')
     return headerText ? `${headerText}\n\n${body}` : body
-  }, [template, sectionValues, headerText, fieldOverrides])
+  }, [template, sectionValues, headerText, fieldOverrides, patient])
 
   // при изменении данных сбрасываем ручную правку полотна, если её не трогали заново
   useEffect(() => {
@@ -140,7 +149,7 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
             </div>
           )}
           {template.sections.map((s) => {
-            const generated = sectionToText(s, sectionValues[s.id])
+            const generated = sectionToText(s, sectionValues[s.id], patient)
             const text = fieldOverrides[s.id] ?? generated
             return (
               <div key={s.id} className="field-preview-block">

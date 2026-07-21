@@ -138,3 +138,25 @@ export async function suggestBrandNames(mnn) {
     return raw
   }
 }
+
+export async function checkAllergyAI(drugName, patientAllergies) {
+  if (!patientAllergies?.length) return 'У пациента не указаны аллергии.'
+  return callAI(
+    'Ты — ассистент врача-уролога по проверке перекрёстной лекарственной аллергии. По препарату и списку известных аллергий пациента оцени риск перекрёстной реакции (химическая близость, общий класс, известные case-report данные). Отвечай кратко по-русски. Если риска нет — одна строка об этом.',
+    `Назначаемый препарат: ${drugName}\nАллергии пациента: ${patientAllergies.join(', ')}`
+  )
+}
+
+export async function suggestAnalogsAI(drugName) {
+  const raw = await callAI(
+    'Ты — ассистент врача по подбору терапевтических аналогов и препаратов той же фармакологической группы. Отвечай СТРОГО валидным JSON без markdown: {"analogs": "Аналог1, Аналог2, Аналог3"}. Указывай МНН, не выдумывай несуществующие препараты.',
+    `Подбери аналоги (тот же класс/механизм действия) для препарата: ${drugName}`
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    const parsed = JSON.parse(cleaned)
+    return (parsed.analogs || '').split(',').map((s) => s.trim()).filter(Boolean)
+  } catch {
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+}

@@ -268,6 +268,13 @@ body {
   border: 1px solid rgba(178, 58, 58, 0.25);
 }
 
+.medication-chip {
+  background: var(--teal-soft);
+  color: var(--teal);
+  border: 1px solid rgba(15, 110, 95, 0.25);
+}
+.medication-block { margin-top: 12px; }
+
 /* Layout: sections + preview */
 .visit-layout {
   display: grid;
@@ -706,21 +713,28 @@ body {
 /* AI */
 .ai-settings-wrap { position: relative; }
 
-.ai-settings-dropdown {
-  position: absolute;
-  top: 40px;
-  right: 0;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(20, 32, 43, 0.12);
-  padding: 12px;
-  min-width: 240px;
-  z-index: 20;
+.ai-settings-dropdown, .ai-settings-inline {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
+.ai-settings-inline {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  max-width: 360px;
+}
+
+.general-settings-block {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.general-settings-block h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: 15px; }
+.general-settings-block .ai-settings-inline { border: none; padding: 0; margin-top: 10px; }
 
 .ai-settings-label { font-size: 12px; color: var(--ink-soft); }
 .ai-provider-toggle {
@@ -1167,6 +1181,35 @@ body {
 .modifier-group-editor { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-left: 10px; }
 .modifier-group-label-input { width: 160px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
 .modifier-group-options-input { flex: 1; min-width: 200px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
+
+.manual-drug-wrap { position: relative; }
+.drug-autocomplete {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: -4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.drug-autocomplete button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+.drug-autocomplete button:last-child { border-bottom: none; }
+.drug-autocomplete button:hover { background: var(--teal-soft); }
+.drug-autocomplete button span { color: var(--ink-soft); font-size: 12px; }
+
+.ai-inline-check { margin-top: 8px; }
+.ai-result-compact { padding: 7px 10px; }
+.ai-result-compact .ai-result-text { font-size: 12.5px; }
 
 /* Responsive */
 @media (max-width: 980px) {

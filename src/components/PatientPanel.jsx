@@ -18,6 +18,7 @@ function formatDate(iso) {
 export default function PatientPanel({ patient, onChange }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [allergyInput, setAllergyInput] = useState('')
+  const [medicationInput, setMedicationInput] = useState('')
   const [showList, setShowList] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -64,6 +65,21 @@ export default function PatientPanel({ patient, onChange }) {
 
   function removeAllergy(idx) {
     const updated = { ...patient, allergies: patient.allergies.filter((_, i) => i !== idx) }
+    store.savePatient(updated)
+    onChange(updated)
+  }
+
+  function addMedication() {
+    const clean = medicationInput.trim()
+    if (!clean || !patient) return
+    const updated = { ...patient, currentMedications: [...(patient.currentMedications || []), clean] }
+    store.savePatient(updated)
+    onChange(updated)
+    setMedicationInput('')
+  }
+
+  function removeMedication(idx) {
+    const updated = { ...patient, currentMedications: patient.currentMedications.filter((_, i) => i !== idx) }
     store.savePatient(updated)
     onChange(updated)
   }
@@ -170,6 +186,40 @@ export default function PatientPanel({ patient, onChange }) {
               Добавить
             </button>
           </form>
+        </div>
+      )}
+
+      {patient && (
+        <div className="allergy-block medication-block">
+          <div className="allergy-block-label">Принимает в данный момент</div>
+          <div className="allergy-chips">
+            {(patient.currentMedications || []).map((m) => (
+              <span key={m} className="selected-chip medication-chip">
+                {m}
+                <button type="button" onClick={() => removeMedication(patient.currentMedications.indexOf(m))}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <form
+            className="free-input-row"
+            onSubmit={(e) => {
+              e.preventDefault()
+              addMedication()
+            }}
+          >
+            <input
+              type="text"
+              value={medicationInput}
+              placeholder="Добавить препарат…"
+              onChange={(e) => setMedicationInput(e.target.value)}
+            />
+            <button type="submit" className="btn-secondary">
+              Добавить
+            </button>
+          </form>
+          <div className="settings-note-inline">Автоматически попадёт в «Анамнез жизни» финального протокола.</div>
         </div>
       )}
     </div>
