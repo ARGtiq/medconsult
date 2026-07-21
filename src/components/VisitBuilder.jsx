@@ -47,6 +47,10 @@ export default function VisitBuilder({ template }) {
     setSectionValues((prev) => ({ ...prev, [id]: value }))
   }
 
+  function insertIntoDiagnosis(text) {
+    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}, ${text}` : text)
+  }
+
   function saveVisit() {
     store.saveVisit({
       templateId: template.id,
@@ -130,16 +134,7 @@ export default function VisitBuilder({ template }) {
               )}
               {section.type === 'freeform' && (
                 <>
-                  {section.id === 'diagnosis' && (
-                    <Mkb10Picker
-                      onInsert={(text) =>
-                        updateSection(
-                          section.id,
-                          sectionValues[section.id] ? `${sectionValues[section.id]}, ${text}` : text
-                        )
-                      }
-                    />
-                  )}
+                  {section.id === 'diagnosis' && <Mkb10Picker onInsert={insertIntoDiagnosis} />}
                   <textarea
                     className="freeform-textarea"
                     value={sectionValues[section.id] || ''}
@@ -169,6 +164,7 @@ export default function VisitBuilder({ template }) {
                   patientAllergies={patient?.allergies || []}
                   values={sectionValues[section.id] || []}
                   onChange={(v) => updateSection(section.id, v)}
+                  onInsertMkb={insertIntoDiagnosis}
                 />
               )}
             </section>

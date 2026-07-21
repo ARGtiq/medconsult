@@ -199,6 +199,8 @@ export default function TemplateEditor() {
   const [selectedId, setSelectedId] = useState(templates[0]?.id || null)
   const [draft, setDraft] = useState(() => templates[0] || blankTemplate())
   const [savedFlag, setSavedFlag] = useState(false)
+  const [dragIdx, setDragIdx] = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
 
   function refreshTemplates() {
     setTemplates(store.getTemplates())
@@ -239,6 +241,14 @@ export default function TemplateEditor() {
     if (target < 0 || target >= draft.sections.length) return
     const sections = [...draft.sections]
     ;[sections[idx], sections[target]] = [sections[target], sections[idx]]
+    setDraft({ ...draft, sections })
+  }
+
+  function reorderSections(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return
+    const sections = [...draft.sections]
+    const [moved] = sections.splice(fromIdx, 1)
+    sections.splice(toIdx, 0, moved)
     setDraft({ ...draft, sections })
   }
 
@@ -338,14 +348,36 @@ export default function TemplateEditor() {
 
         <div className="section-editor-list">
           {draft.sections.map((s, idx) => (
-            <SectionEditor
+            <div
               key={s.id || idx}
-              section={s}
-              onChange={(sec) => updateSection(idx, sec)}
-              onDelete={() => removeSection(idx)}
-              onMoveUp={() => moveSection(idx, -1)}
-              onMoveDown={() => moveSection(idx, 1)}
-            />
+              className={idx === dragOverIdx ? 'section-drag-wrap drag-over' : 'section-drag-wrap'}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => {
+                e.preventDefault()
+                if (dragOverIdx !== idx) setDragOverIdx(idx)
+              }}
+              onDragLeave={() => setDragOverIdx((prev) => (prev === idx ? null : prev))}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (dragIdx !== null) reorderSections(dragIdx, idx)
+                setDragIdx(null)
+                setDragOverIdx(null)
+              }}
+              onDragEnd={() => {
+                setDragIdx(null)
+                setDragOverIdx(null)
+              }}
+            >
+              <span className="section-drag-handle" title="Перетащи, чтобы изменить порядок">⠿</span>
+              <SectionEditor
+                section={s}
+                onChange={(sec) => updateSection(idx, sec)}
+                onDelete={() => removeSection(idx)}
+                onMoveUp={() => moveSection(idx, -1)}
+                onMoveDown={() => moveSection(idx, 1)}
+              />
+            </div>
           ))}
         </div>
 

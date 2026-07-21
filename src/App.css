@@ -565,6 +565,68 @@ body {
 }
 .drug-db-hint-brands { color: var(--teal); }
 
+.drug-mkb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.drug-mkb-label { font-size: 11.5px; color: var(--ink-soft); }
+.drug-mkb-pill {
+  border: 1px dashed var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* Theme */
+.theme-settings { display: flex; flex-direction: column; gap: 12px; }
+.theme-accent-row { display: flex; gap: 8px; }
+.theme-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.theme-swatch.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel); }
+.theme-dark-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+
+.theme-dark {
+  --ink: #e7edf1;
+  --ink-soft: #9fb0ba;
+  --paper: #121c24;
+  --panel: #1a2630;
+  --line: #2c3945;
+  --red-soft: #3a2323;
+  --amber-soft: #3a2f1c;
+}
+
+.theme-dark .brand-mark { color: var(--teal); }
+.theme-dark .chip, .theme-dark .tab, .theme-dark .btn-secondary { color: var(--ink); }
+.theme-dark .selected-chip, .theme-dark .drug-card { background: var(--paper); }
+
+.app-version-link {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.changelog-list { display: flex; flex-direction: column; gap: 16px; }
+.changelog-entry-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.changelog-version { font-weight: 700; color: var(--teal); font-family: var(--font-display); }
+.changelog-date { font-size: 12px; color: var(--ink-soft); }
+.changelog-entry ul { margin: 0; padding-left: 18px; }
+.changelog-entry li { font-size: 13.5px; margin-bottom: 4px; line-height: 1.4; }
+
 .remove-btn {
   border: none;
   background: none;
@@ -584,6 +646,7 @@ body {
   font-size: 12.5px;
   color: var(--red);
 }
+.allergy-warning-line.level-group_note { color: var(--amber); }
 
 .drug-card-controls {
   display: flex;
@@ -793,6 +856,31 @@ body {
   font-size: 13px;
 }
 .ai-settings-hint { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
+
+.ai-settings-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ai-diagnostic {
+  font-size: 12px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+.ai-diagnostic.ok { background: var(--teal-soft); color: var(--teal); }
+.ai-diagnostic.fail { background: var(--red-soft); color: var(--red); }
+
+.supabase-settings { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+.supabase-status { font-size: 12.5px; padding: 6px 9px; border-radius: 6px; }
+.supabase-status.ok { background: var(--teal-soft); color: var(--teal); }
+.supabase-status.off { background: var(--amber-soft); color: var(--amber); }
+.supabase-sync-row input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.supabase-sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.supabase-settings code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
 
 .btn-ai {
   border: 1px solid #6b5fa8;
@@ -1152,6 +1240,22 @@ body {
 .btn-danger:hover { background: var(--red-soft); }
 
 .section-editor-list { display: flex; flex-direction: column; gap: 12px; }
+
+.section-drag-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.section-drag-wrap.drag-over { outline: 2px dashed var(--teal); border-radius: var(--radius); }
+.section-drag-wrap .section-editor-card { flex: 1; }
+.section-drag-handle {
+  cursor: grab;
+  color: var(--ink-soft);
+  font-size: 16px;
+  padding: 14px 4px;
+  user-select: none;
+}
+.section-drag-handle:active { cursor: grabbing; }
 
 .section-editor-card {
   background: var(--panel);

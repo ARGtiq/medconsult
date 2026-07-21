@@ -90,6 +90,18 @@ async function callAI(systemPrompt, userPrompt) {
   return provider === 'google' ? callGoogleProvider(systemPrompt, userPrompt) : callOpenRouterProvider(systemPrompt, userPrompt)
 }
 
+export async function testAiConnection() {
+  const start = performance.now()
+  try {
+    const result = await callAI('Ответь одним словом.', 'Скажи "ок".')
+    const latency = Math.round(performance.now() - start)
+    return { ok: true, latency, provider: getProvider(), sample: result.slice(0, 60) }
+  } catch (e) {
+    const latency = Math.round(performance.now() - start)
+    return { ok: false, latency, provider: getProvider(), error: e.message }
+  }
+}
+
 export async function checkDrugInteractions(drugNames) {
   if (!drugNames.length) return 'Нет назначений для проверки.'
   return callAI(

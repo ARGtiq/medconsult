@@ -5,6 +5,9 @@ import TemplateEditor from './TemplateEditor'
 import AiSettings from './AiSettings'
 import DataExport from './DataExport'
 import DrugGroupsTab from './DrugGroupsTab'
+import ThemeSettings from './ThemeSettings'
+import ChangelogModal from './ChangelogModal'
+import SupabaseSettings from './SupabaseSettings'
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -219,8 +222,14 @@ function TemplatesTab() {
 }
 
 function GeneralTab() {
+  const [changelogOpen, setChangelogOpen] = useState(false)
   return (
     <div className="settings-tab">
+      <div className="general-settings-block">
+        <h4>Оформление</h4>
+        <p className="settings-note-inline">Акцентный цвет интерфейса и тёмная тема.</p>
+        <ThemeSettings />
+      </div>
       <div className="general-settings-block">
         <h4>AI-провайдер</h4>
         <p className="settings-note-inline">Выбор модели и ключ для проверки взаимодействий, аллергий, аналогов, подсказок диагноза.</p>
@@ -230,6 +239,17 @@ function GeneralTab() {
         <h4>Данные приложения</h4>
         <p className="settings-note-inline">Полный бэкап (пациенты, визиты, шаблоны, база лекарств) или перенос на другое устройство.</p>
         <DataExport />
+      </div>
+      <div className="general-settings-block">
+        <h4>Supabase (синхронизация между устройствами)</h4>
+        <SupabaseSettings />
+      </div>
+      <div className="general-settings-block">
+        <h4>История версий</h4>
+        <button type="button" className="btn-secondary" onClick={() => setChangelogOpen(true)}>
+          Что нового
+        </button>
+        {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
       </div>
     </div>
   )

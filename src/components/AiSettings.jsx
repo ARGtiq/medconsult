@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { getProvider, setProvider, getApiKey, setApiKey, hasApiKey } from '../lib/openrouter'
+import { getProvider, setProvider, getApiKey, setApiKey, hasApiKey, testAiConnection } from '../lib/openrouter'
 
 export default function AiSettings({ inline = false }) {
   const [open, setOpen] = useState(inline)
   const [provider, setProviderState] = useState(getProvider())
   const [key, setKey] = useState(getApiKey(getProvider()))
   const [savedFlag, setSavedFlag] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null)
 
   function switchProvider(p) {
     setProviderState(p)
     setKey(getApiKey(p))
+    setTestResult(null)
   }
 
   function save() {
@@ -17,6 +20,15 @@ export default function AiSettings({ inline = false }) {
     setApiKey(provider, key)
     setSavedFlag(true)
     setTimeout(() => setSavedFlag(false), 1200)
+  }
+
+  async function runTest() {
+    save()
+    setTesting(true)
+    setTestResult(null)
+    const result = await testAiConnection()
+    setTestResult(result)
+    setTesting(false)
   }
 
   const body = (
@@ -38,9 +50,23 @@ export default function AiSettings({ inline = false }) {
         onChange={(e) => setKey(e.target.value)}
         placeholder={provider === 'google' ? 'AIza…' : 'sk-or-v1-…'}
       />
-      <button type="button" className="btn-secondary btn-small" onClick={save}>
-        {savedFlag ? 'Сохранено ✓' : 'Сохранить'}
-      </button>
+      <div className="ai-settings-actions">
+        <button type="button" className="btn-secondary btn-small" onClick={save}>
+          {savedFlag ? 'Сохранено ✓' : 'Сохранить'}
+        </button>
+        <button type="button" className="btn-secondary btn-small" onClick={runTest} disabled={testing}>
+          {testing ? 'Проверяю…' : 'Проверить соединение'}
+        </button>
+      </div>
+      {testResult && (
+        <div className={testResult.ok ? 'ai-diagnostic ok' : 'ai-diagnostic fail'}>
+          {testResult.ok ? (
+            <>✓ Соединение работает · {testResult.latency} мс · ответ: «{testResult.sample}»</>
+          ) : (
+            <>✗ Ошибка · {testResult.latency} мс · {testResult.error}</>
+          )}
+        </div>
+      )}
       <div className="ai-settings-hint">
         Хранится только в этом браузере. Модель — Gemini 2.5 Flash в обоих случаях; Google AI Studio даёт бесплатный лимит запросов.
       </div>

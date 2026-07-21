@@ -1,6 +1,8 @@
 // Локальная (не-AI) база для мгновенной проверки перекрёстной аллергии
 // и подбора аналогов внутри фарм. группы.
-// Это стартовый набор — расширяй под свою практику, структура рассчитана на рост.
+// Функции принимают customGroups/groupMeta из store — так пользовательские
+// группы (Настройки → Группы лекарств) реально участвуют в проверке на приёме,
+// а не остаются просто справочником.
 
 export const DRUG_GROUPS = {
   fluoroquinolones: {
@@ -33,8 +35,8 @@ export const DRUG_GROUPS = {
   },
 }
 
-// Известные перекрёстные реакции между группами (упрощённо, для sanity-check —
-// не заменяет клиническое суждение).
+// Известные перекрёстные реакции между встроенными группами (упрощённо, для
+// sanity-check — не заменяет клиническое суждение).
 export const CROSS_REACTIVITY = [
   { groups: ['penicillins', 'cephalosporins'], note: 'Частичная перекрёстная аллергия (до ~10%), особенно для цефалоспоринов 1-го поколения' },
 ]
@@ -43,23 +45,35 @@ function normalize(s) {
   return (s || '').trim().toLowerCase()
 }
 
-function findGroupByDrug(drugName) {
+function allGroups(customGroups = {}) {
+  const merged = { ...DRUG_GROUPS }
+  Object.entries(customGroups).forEach(([key, g]) => {
+    merged[key] = { label: g.label, drugs: g.drugs || [] }
+  })
+  return merged
+}
+
+function findGroupByDrug(drugName, customGroups = {}) {
   const n = normalize(drugName)
-  for (const [key, group] of Object.entries(DRUG_GROUPS)) {
-    if (group.drugs.some((d) => n.includes(d) || d.includes(n))) return key
+  const groups = allGroups(customGroups)
+  for (const [key, group] of Object.entries(groups)) {
+    if (group.drugs.some((d) => n.includes(normalize(d)) || normalize(d).includes(n))) return key
   }
   return null
 }
 
 /**
  * Мгновенная локальная проверка: есть ли у пациента аллергия,
- * которая совпадает с препаратом напрямую или через группу/перекрёстную реакцию.
+ * которая совпадает с препаратом напрямую, через группу/перекрёстную реакцию,
+ * либо подпадает под заметку "перекрёстная аллергия" собственной группы.
+ * customGroups и groupMeta приходят из store (getCustomGroups / getGroupMeta для каждой встроенной группы).
  * Возвращает массив предупреждений (пустой массив = чисто).
  */
-export function checkAllergyLocal(drugName, patientAllergies = []) {
+export function checkAllergyLocal(drugName, patientAllergies = [], customGroups = {}, groupMeta = {}) {
   const warnings = []
   const drugNorm = normalize(drugName)
-  const drugGroup = findGroupByDrug(drugName)
+  const groups = allGroups(customGroups)
+  const drugGroup = findGroupByDrug(drugName, customGroups)
 
   for (const allergy of patientAllergies) {
     const allergyNorm = normalize(allergy)
@@ -72,16 +86,16 @@ export function checkAllergyLocal(drugName, patientAllergies = []) {
     }
 
     // совпадение внутри одной группы
-    const allergyGroup = findGroupByDrug(allergy)
+    const allergyGroup = findGroupByDrug(allergy, customGroups)
     if (allergyGroup && drugGroup && allergyGroup === drugGroup) {
       warnings.push({
         level: 'group',
-        message: `Аллергия на "${allergy}" — тот же класс (${DRUG_GROUPS[drugGroup].label})`,
+        message: `Аллергия на "${allergy}" — тот же класс (${groups[drugGroup].label})`,
       })
       continue
     }
 
-    // перекрёстная реактивность между группами
+    // перекрёстная реактивность между встроенными группами
     if (allergyGroup && drugGroup) {
       const cross = CROSS_REACTIVITY.find(
         (c) => c.groups.includes(allergyGroup) && c.groups.includes(drugGroup) && allergyGroup !== drugGroup
@@ -92,11 +106,24 @@ export function checkAllergyLocal(drugName, patientAllergies = []) {
     }
   }
 
+  // заметка о перекрёстной аллергии внутри группы самого препарата (Настройки → Группы лекарств)
+  if (drugGroup) {
+    const meta = drugGroup in DRUG_GROUPS ? groupMeta[drugGroup] : customGroups[drugGroup]
+    if (meta?.crossAllergyNote) {
+      warnings.push({ level: 'group_note', message: `Заметка по группе «${groups[drugGroup].label}»: ${meta.crossAllergyNote}` })
+    }
+  }
+
   return warnings
 }
 
-export function getAlternatives(drugName) {
-  const group = findGroupByDrug(drugName)
+export function getAlternatives(drugName, customGroups = {}) {
+  const group = findGroupByDrug(drugName, customGroups)
   if (!group) return []
-  return DRUG_GROUPS[group].drugs.filter((d) => d !== normalize(drugName))
+  const groups = allGroups(customGroups)
+  return groups[group].drugs.filter((d) => normalize(d) !== normalize(drugName))
+}
+
+export function getGroupKeyForDrug(drugName, customGroups = {}) {
+  return findGroupByDrug(drugName, customGroups)
 }

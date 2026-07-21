@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
-import { checkAllergyLocal, getAlternatives } from '../data/drugSafety'
+import { checkAllergyLocal, getAlternatives, DRUG_GROUPS } from '../data/drugSafety'
 import { checkDrugInteractions, checkAllergyAI, suggestAnalogsAI } from '../lib/openrouter'
 
-export default function DrugSection({ complaints, patientAllergies, values, onChange }) {
+export default function DrugSection({ complaints, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
   const [altOpenFor, setAltOpenFor] = useState(null)
   const [aiAnalogsFor, setAiAnalogsFor] = useState(null)
@@ -38,6 +38,15 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   )
 
   const drugDbNames = useMemo(() => Object.values(store.getDrugInfoAll()), [])
+  const customGroups = useMemo(() => store.getCustomGroups(), [])
+  const groupMeta = useMemo(() => {
+    const meta = {}
+    Object.keys(DRUG_GROUPS).forEach((key) => {
+      const m = store.getGroupMeta(key)
+      if (m) meta[key] = m
+    })
+    return meta
+  }, [])
 
   const manualSuggestions = useMemo(() => {
     const q = manualDrug.trim().toLowerCase()
@@ -176,8 +185,8 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
 
       <div className="drug-list">
         {safeValues.map((drug, idx) => {
-          const warnings = checkAllergyLocal(drug.name, patientAllergies || [])
-          const alternatives = getAlternatives(drug.name)
+          const warnings = checkAllergyLocal(drug.name, patientAllergies || [], customGroups, groupMeta)
+          const alternatives = getAlternatives(drug.name, customGroups)
           const dbInfo = store.getDrugInfo(drug.name)
           return (
             <div key={`${drug.name}-${idx}`} className={`drug-card evidence-${drug.evidence}`}>
@@ -193,6 +202,23 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                   {drug.dosage && <span>{drug.dosage}</span>}
                   {drug.frequency && <span> · {drug.frequency}</span>}
                   {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
+                </div>
+              )}
+
+              {dbInfo?.mkb10Codes && (
+                <div className="drug-mkb-row">
+                  <span className="drug-mkb-label">Обычно при:</span>
+                  {dbInfo.mkb10Codes.split(',').map((c) => c.trim()).filter(Boolean).map((code) => (
+                    <button
+                      type="button"
+                      key={code}
+                      className="drug-mkb-pill"
+                      title="Вставить в диагноз"
+                      onClick={() => onInsertMkb && onInsertMkb(code)}
+                    >
+                      {code}
+                    </button>
+                  ))}
                 </div>
               )}
 
