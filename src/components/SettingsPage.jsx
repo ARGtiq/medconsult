@@ -5,6 +5,7 @@ import TemplateEditor from './TemplateEditor'
 import AiSettings from './AiSettings'
 import DataExport from './DataExport'
 import DrugGroupsTab from './DrugGroupsTab'
+import EvidenceCheckButton from './EvidenceCheckButton'
 import ThemeSettings from './ThemeSettings'
 import ChangelogModal from './ChangelogModal'
 import SupabaseSettings from './SupabaseSettings'
@@ -174,6 +175,7 @@ function DrugsTab() {
             ))}
           </select>
         </div>
+        {form.name && <EvidenceCheckButton drugName={form.name} compact />}
 
         <div className="extract-block">
           <div className="extract-label">Или вставь текст инструкции (например, с ГРЛС grls.rosminzdrav.ru) — AI заполнит поля выше</div>

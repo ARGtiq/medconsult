@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
+import EvidenceCheckButton from './EvidenceCheckButton'
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -140,6 +141,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               ))}
             </select>
           </div>
+          <EvidenceCheckButton drugName={form.name} compact />
 
           <div className="extract-block">
             <div className="extract-label">Или вставь текст инструкции — AI заполнит поля выше</div>

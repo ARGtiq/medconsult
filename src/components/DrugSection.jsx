@@ -4,6 +4,7 @@ import { checkAllergyLocal, getAlternatives, DRUG_GROUPS } from '../data/drugSaf
 import { checkDrugInteractions, checkAllergyAI, suggestAnalogsAI } from '../lib/openrouter'
 import AddDrugToDbModal from './AddDrugToDbModal'
 import VoiceInputButton from './VoiceInputButton'
+import EvidenceCheckButton from './EvidenceCheckButton'
 
 export default function DrugSection({ complaints, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
@@ -296,6 +297,8 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                     Off-label
                   </button>
                 </div>
+
+                <EvidenceCheckButton drugName={drug.name} compact />
 
                 <div className="alt-wrap">
                   {alternatives.length > 0 ? (

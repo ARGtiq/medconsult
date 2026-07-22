@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '0.12.0',
+    date: '2026-07-22',
+    items: [
+      'Кнопка "Выяснить доказательность" на карточке препарата — копирует готовый промпт и открывает поиск (Cochrane/WHO/RxList) в Perplexity',
+    ],
+  },
+  {
     version: '0.11.2',
     date: '2026-07-22',
     items: [
