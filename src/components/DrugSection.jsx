@@ -227,6 +227,13 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                 </div>
               )}
 
+              {dbInfo?.monitoring && (
+                <div className="drug-monitoring-row">
+                  <span className="drug-monitoring-icon">🩺</span>
+                  <span><strong>Контролировать:</strong> {dbInfo.monitoring}</span>
+                </div>
+              )}
+
               {!dbInfo && (
                 <button type="button" className="add-to-db-btn" onClick={() => setAddToDbFor(drug.name)}>
                   + Добавить в базу

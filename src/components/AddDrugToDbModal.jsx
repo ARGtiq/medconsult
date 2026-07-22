@@ -19,6 +19,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
     brandNames: '',
     interactions: '',
     contraindications: '',
+    monitoring: '',
     mkb10Codes: '',
     evidenceLevel: '',
   })
@@ -119,6 +120,12 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
             placeholder="Противопоказания"
             value={form.contraindications}
             onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
+            rows={2}
+          />
+          <textarea
+            placeholder="Мониторинг / обследования на фоне приёма"
+            value={form.monitoring}
+            onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
             rows={2}
           />
           <div className="drug-form-row">

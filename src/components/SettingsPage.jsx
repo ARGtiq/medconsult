@@ -27,6 +27,7 @@ function blankForm() {
     brandNames: '',
     interactions: '',
     contraindications: '',
+    monitoring: '',
     mkb10Codes: '',
     evidenceLevel: '',
   }
@@ -153,6 +154,12 @@ function DrugsTab() {
           onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
           rows={2}
         />
+        <textarea
+          placeholder="Мониторинг / обследования на фоне приёма (напр. ПСА каждые 3 мес, функция печени)"
+          value={form.monitoring}
+          onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
+          rows={2}
+        />
         <div className="drug-form-row">
           <input
             placeholder="Коды МКБ-10 через запятую (напр. N40, N41.1)"
@@ -207,6 +214,7 @@ function DrugsTab() {
               {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
               {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
+              {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}
               {d.interactions && <div className="drug-db-line">Взаимодействия: {d.interactions}</div>}
               {d.contraindications && <div className="drug-db-line">Противопоказания: {d.contraindications}</div>}
               {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}

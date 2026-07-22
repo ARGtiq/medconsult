@@ -1288,6 +1288,20 @@ body {
 .drug-db-card-name:hover { text-decoration: underline; color: var(--teal); }
 .drug-form-actions { display: flex; gap: 8px; }
 .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+.drug-db-line-highlight { color: var(--teal); font-weight: 500; }
+
+.drug-monitoring-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  background: var(--teal-soft);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--teal);
+}
+.drug-monitoring-icon { flex-shrink: 0; }
 
 .template-card {
   background: var(--panel);
