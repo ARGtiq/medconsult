@@ -318,8 +318,8 @@ body {
 .chip {
   border: 1px solid var(--line);
   background: var(--paper);
-  padding: 7px 12px;
-  border-radius: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
   font-size: 13.5px;
   cursor: pointer;
   color: var(--ink);
@@ -409,22 +409,22 @@ body {
   border: 1px solid var(--teal);
   color: var(--teal);
   background: white;
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
   font-size: 13.5px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .btn-secondary:hover { background: var(--teal-soft); }
-.btn-small { padding: 5px 10px; font-size: 12.5px; }
+.btn-small { padding: 5px 12px; font-size: 12.5px; }
 
 .btn-primary {
   border: none;
   background: var(--teal);
   color: white;
-  padding: 11px 20px;
-  border-radius: 8px;
+  padding: 11px 22px;
+  border-radius: 999px;
   font-size: 14.5px;
   cursor: pointer;
   align-self: flex-start;
@@ -1096,8 +1096,8 @@ body {
   border: 1px solid #6b5fa8;
   color: #6b5fa8;
   background: #f4f1fb;
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
   font-size: 13px;
   cursor: pointer;
 }
@@ -1548,6 +1548,18 @@ body {
 .settings-note-inline { font-size: 12.5px; color: var(--ink-soft); font-style: italic; margin: 4px 0 0; }
 
 .chip-editor-list { display: flex; flex-direction: column; gap: 10px; padding-left: 8px; border-left: 2px solid var(--line); }
+
+.chip-drag-wrap { display: flex; align-items: flex-start; gap: 4px; }
+.chip-drag-wrap.drag-over { outline: 2px dashed var(--teal); border-radius: 8px; }
+.chip-drag-wrap .chip-editor-card { flex: 1; }
+.chip-drag-handle {
+  cursor: grab;
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: 10px 2px;
+  user-select: none;
+}
+.chip-drag-handle:active { cursor: grabbing; }
 
 .chip-editor-card {
   background: var(--paper);

@@ -5,7 +5,7 @@ const KEY = 'medconsult_v1'
 // Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
 // (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
 // свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 3
+const TEMPLATES_SEED_VERSION = 4
 
 function readAll() {
   try {
@@ -190,6 +190,82 @@ function seedTemplates() {
           ],
         },
         { id: 'recommendations', title: 'Коррекция назначений', type: 'drugs' },
+      ],
+    },
+    {
+      id: 'preop_epicrisis',
+      name: 'Преоперационный эпикриз',
+      sections: [
+        { id: 'diagnosis', title: 'Диагноз (основной)', type: 'freeform' },
+        { id: 'concomitant', title: 'Сопутствующие заболевания', type: 'freeform' },
+        { id: 'indications', title: 'Показания к операции', type: 'freeform' },
+        {
+          id: 'investigations',
+          title: 'Данные обследования',
+          type: 'investigations',
+          chips: [
+            { text: 'ОАК', modifierGroups: [] },
+            { text: 'ОАМ', modifierGroups: [] },
+            { text: 'Биохимия крови (креатинин, мочевина, электролиты)', modifierGroups: [] },
+            { text: 'Коагулограмма', modifierGroups: [] },
+            { text: 'Группа крови и резус-фактор', modifierGroups: [] },
+            { text: 'ЭКГ', modifierGroups: [] },
+            { text: 'Рентгенография органов грудной клетки', modifierGroups: [] },
+            { text: 'УЗИ', modifierGroups: [] },
+            { text: 'КТ/МРТ', modifierGroups: [] },
+          ],
+        },
+        {
+          id: 'asa',
+          title: 'Оценка анестезиологического риска (ASA)',
+          type: 'select',
+          options: ['ASA I', 'ASA II', 'ASA III', 'ASA IV', 'ASA V'],
+        },
+        {
+          id: 'anesthesia_plan',
+          title: 'Планируемый вид анестезии',
+          type: 'select',
+          options: ['Общая', 'Спинальная', 'Эпидуральная', 'Местная', 'Комбинированная'],
+        },
+        { id: 'operation_plan', title: 'Планируемый объём операции', type: 'freeform' },
+        {
+          id: 'consents',
+          title: 'Информирование и согласие',
+          type: 'checkbox',
+          options: [
+            'Пациент информирован о ходе, рисках и альтернативах операции',
+            'Пациент информирован о рисках анестезии',
+            'Информированное добровольное согласие подписано',
+            'Согласие на переливание компонентов крови получено (при необходимости)',
+          ],
+        },
+        { id: 'notes', title: 'Дополнительные примечания', type: 'freeform' },
+      ],
+    },
+    {
+      id: 'operation_protocol',
+      name: 'Протокол операции',
+      sections: [
+        { id: 'operation_name', title: 'Название операции', type: 'text' },
+        { id: 'diagnosis', title: 'Диагноз', type: 'freeform' },
+        { id: 'team', title: 'Хирург / ассистент(ы) / анестезиолог', type: 'freeform' },
+        {
+          id: 'anesthesia_type',
+          title: 'Вид анестезии',
+          type: 'select',
+          options: ['Общая', 'Спинальная', 'Эпидуральная', 'Местная', 'Комбинированная'],
+        },
+        { id: 'duration', title: 'Продолжительность операции', type: 'text' },
+        { id: 'course', title: 'Ход операции', type: 'freeform' },
+        { id: 'blood_loss', title: 'Кровопотеря', type: 'text' },
+        {
+          id: 'complications',
+          title: 'Интраоперационные осложнения',
+          type: 'checkbox',
+          options: ['Без осложнений', 'Кровотечение', 'Повреждение соседних органов', 'Конверсия доступа', 'Другое (см. примечания)'],
+        },
+        { id: 'removed_material', title: 'Удалённый/установленный материал (дренажи, катетеры, импланты)', type: 'freeform' },
+        { id: 'conclusion', title: 'Заключение', type: 'freeform' },
       ],
     },
   ]

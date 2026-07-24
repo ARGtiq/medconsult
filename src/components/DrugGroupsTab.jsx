@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { DRUG_GROUPS, CROSS_REACTIVITY } from '../data/drugSafety'
+import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
 
 function blankGroupForm() {
   return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '' }
@@ -44,16 +44,17 @@ export default function DrugGroupsTab() {
   }
 
   function editStaticGroup(key) {
-    const meta = store.getGroupMeta(key) || {}
+    const override = store.getGroupMeta(key) || {}
+    const builtin = getBuiltinGroupMeta(key) || {}
     setEditingStaticKey(key)
     setForm({
       key,
       label: DRUG_GROUPS[key].label,
       drugsText: DRUG_GROUPS[key].drugs.join(', '),
-      crossAllergyNote: meta.crossAllergyNote || '',
-      sideEffects: meta.sideEffects || '',
-      contraindications: meta.contraindications || '',
-      mkb10Codes: meta.mkb10Codes || '',
+      crossAllergyNote: override.crossAllergyNote ?? builtin.crossAllergyNote ?? '',
+      sideEffects: override.sideEffects ?? builtin.sideEffects ?? '',
+      contraindications: override.contraindications ?? builtin.contraindications ?? '',
+      mkb10Codes: override.mkb10Codes ?? builtin.mkb10Codes ?? '',
     })
   }
 
@@ -168,11 +169,18 @@ export default function DrugGroupsTab() {
       <div className="drug-db-list">
         <h4>Встроенные группы</h4>
         {staticEntries.map(([key, g]) => {
-          const meta = store.getGroupMeta(key) || {}
+          const override = store.getGroupMeta(key) || {}
+          const builtin = getBuiltinGroupMeta(key) || {}
+          const meta = {
+            crossAllergyNote: override.crossAllergyNote ?? builtin.crossAllergyNote,
+            sideEffects: override.sideEffects ?? builtin.sideEffects,
+            contraindications: override.contraindications ?? builtin.contraindications,
+            mkb10Codes: override.mkb10Codes ?? builtin.mkb10Codes,
+          }
           return (
             <div key={key} className="drug-db-card">
               <div className="drug-db-card-top">
-                <strong className="drug-db-card-name" onClick={() => editStaticGroup(key)} title="Нажми, чтобы дополнить заметками">
+                <strong className="drug-db-card-name" onClick={() => editStaticGroup(key)} title="Нажми, чтобы отредактировать заметки">
                   {g.label}
                 </strong>
               </div>

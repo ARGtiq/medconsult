@@ -119,6 +119,9 @@ function OptionsListEditor({ optionsText, onChange }) {
 }
 
 function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
+  const [chipDragIdx, setChipDragIdx] = useState(null)
+  const [chipDragOverIdx, setChipDragOverIdx] = useState(null)
+
   function update(patch) {
     onChange({ ...section, ...patch })
   }
@@ -133,6 +136,14 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
 
   function removeChip(idx) {
     update({ chips: (section.chips || []).filter((_, i) => i !== idx) })
+  }
+
+  function reorderChips(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return
+    const chips = [...(section.chips || [])]
+    const [moved] = chips.splice(fromIdx, 1)
+    chips.splice(toIdx, 0, moved)
+    update({ chips })
   }
 
   const usesChips = section.type === 'chips' || section.type === 'investigations'
@@ -165,12 +176,30 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
       {usesChips && (
         <div className="chip-editor-list">
           {(section.chips || []).map((chip, idx) => (
-            <ChipEditor
+            <div
               key={idx}
-              chip={chip}
-              onChange={(c) => updateChip(idx, c)}
-              onDelete={() => removeChip(idx)}
-            />
+              className={idx === chipDragOverIdx ? 'chip-drag-wrap drag-over' : 'chip-drag-wrap'}
+              draggable
+              onDragStart={() => setChipDragIdx(idx)}
+              onDragOver={(e) => {
+                e.preventDefault()
+                if (chipDragOverIdx !== idx) setChipDragOverIdx(idx)
+              }}
+              onDragLeave={() => setChipDragOverIdx((prev) => (prev === idx ? null : prev))}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (chipDragIdx !== null) reorderChips(chipDragIdx, idx)
+                setChipDragIdx(null)
+                setChipDragOverIdx(null)
+              }}
+              onDragEnd={() => {
+                setChipDragIdx(null)
+                setChipDragOverIdx(null)
+              }}
+            >
+              <span className="chip-drag-handle" title="Перетащи, чтобы изменить порядок">⠿</span>
+              <ChipEditor chip={chip} onChange={(c) => updateChip(idx, c)} onDelete={() => removeChip(idx)} />
+            </div>
           ))}
           <button type="button" className="btn-secondary btn-small" onClick={addChip}>
             + Чип
