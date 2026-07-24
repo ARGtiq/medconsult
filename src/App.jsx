@@ -8,6 +8,7 @@ import './App.css'
 // Настройки тянут за собой Supabase, редактор шаблонов и AI-клиент —
 // незачем грузить это на первом экране "Приём", когда открывают само приложение
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
+const GuidelinesPage = lazy(() => import('./components/GuidelinesPage'))
 
 export default function App() {
   const [templates, setTemplates] = useState(store.getTemplates())
@@ -76,6 +77,9 @@ export default function App() {
                 {t.name}
               </button>
             ))}
+          <button className={page === 'guidelines' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('guidelines'); setNavOpen(false) }}>
+            📋 Справочник
+          </button>
           <button className={page === 'settings' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('settings'); setNavOpen(false) }}>
             ⚙ Настройки
           </button>
@@ -90,6 +94,10 @@ export default function App() {
         {page === 'settings' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка настроек…</p>}>
             <SettingsPage />
+          </Suspense>
+        ) : page === 'guidelines' ? (
+          <Suspense fallback={<p className="settings-loading">Загрузка справочника…</p>}>
+            <GuidelinesPage />
           </Suspense>
         ) : activeTemplate ? (
           <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />

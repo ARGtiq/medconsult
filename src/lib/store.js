@@ -56,6 +56,9 @@ function defaultState() {
     crossReactivityCustom: [],
     // репорты об ошибках
     bugReports: [],
+    // клинические рекомендации: id -> { mkb10Codes[], title, definition, diagnosisFormulation,
+    //   diagnostics, firstLine, secondLine, redFlags, source, sourceYear, updatedAt }
+    clinicalGuidelines: {},
     // пресеты: templateId -> [{id, name, sectionValues}]
     templatePresets: {},
     // id шаблона, который открывается по умолчанию на вкладке "Приём"
@@ -488,6 +491,39 @@ export const store = {
 
   getBugReports() {
     return readAll().bugReports || []
+  },
+
+  // --- клинические рекомендации ---
+  getGuidelines() {
+    return readAll().clinicalGuidelines || {}
+  },
+
+  getGuideline(id) {
+    return readAll().clinicalGuidelines[id] || null
+  },
+
+  saveGuideline(guideline) {
+    const state = readAll()
+    const id = guideline.id || crypto.randomUUID()
+    state.clinicalGuidelines[id] = { ...guideline, id, updatedAt: Date.now() }
+    writeAll(state)
+    return state.clinicalGuidelines
+  },
+
+  deleteGuideline(id) {
+    const state = readAll()
+    delete state.clinicalGuidelines[id]
+    writeAll(state)
+    return state.clinicalGuidelines
+  },
+
+  // codes — массив кодов МКБ-10, извлечённых из текста диагноза (напр. ['N40', 'N41.1'])
+  getGuidelinesForCodes(codes) {
+    if (!codes?.length) return []
+    const norm = codes.map((c) => c.trim().toUpperCase())
+    return Object.values(readAll().clinicalGuidelines || {}).filter((g) =>
+      (g.mkb10Codes || []).some((gc) => norm.includes(gc.trim().toUpperCase()))
+    )
   },
 
   // --- пресеты визита (типовые сценарии в один клик) ---

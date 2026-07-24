@@ -134,3 +134,11 @@ export function searchMkb10(query) {
     .filter((c) => c.code.toLowerCase().includes(q) || c.label.toLowerCase().includes(q))
     .slice(0, 10)
 }
+
+// Достаём коды вида N40, N41.1, C61 из произвольного текста диагноза —
+// используется, чтобы понять, для каких кодов искать клинические рекомендации.
+export function extractCodesFromText(text) {
+  if (!text) return []
+  const matches = text.match(/\b[A-Z]\d{2}(\.\d+)?\b/g) || []
+  return [...new Set(matches.map((c) => c.toUpperCase()))]
+}

@@ -5,6 +5,7 @@ import InvestigationSection from './InvestigationSection'
 import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import Mkb10Picker from './Mkb10Picker'
+import GuidelinePanel from './GuidelinePanel'
 import VoiceInputButton from './VoiceInputButton'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
@@ -39,6 +40,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
+  const [formulationTag, setFormulationTag] = useState(null) // {guidelineId, guidelineUpdatedAt} — живой тег формулировки диагноза
   const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
@@ -102,6 +104,32 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}, ${text}` : text)
   }
 
+  // Живой тег: формулировка диагноза "помнит", из какой рекомендации и какой её
+  // версии она вставлена. Если рекомендацию потом отредактируют в справочнике —
+  // GuidelinePanel покажет "обновилось", а не подменит текст сама собой.
+  function insertDiagnosisFormulation(text, guideline) {
+    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}\n${text}` : text)
+    setFormulationTag({ guidelineId: guideline.id, guidelineUpdatedAt: guideline.updatedAt })
+  }
+
+  function insertGuidelineList(sectionId, items) {
+    const current = sectionValues[sectionId] || []
+    const toAdd = items.filter((item) => !current.includes(item))
+    if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
+  }
+
+  function insertGuidelineDrugs(sectionId, drugNames) {
+    const current = sectionValues[sectionId] || []
+    const existingNames = new Set(current.map((d) => d.name.toLowerCase()))
+    const toAdd = drugNames
+      .filter((name) => !existingNames.has(name.toLowerCase()))
+      .map((name) => {
+        const dbInfo = store.getDrugInfo(name)
+        return { name, evidence: 'guideline', dosage: dbInfo?.dosage || '', frequency: dbInfo?.frequency || '' }
+      })
+    if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
+  }
+
   function saveVisit() {
     store.saveVisit({
       templateId: template.id,
@@ -163,11 +191,18 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 />
               )}
               {section.type === 'investigations' && (
-                <InvestigationSection
-                  section={section}
-                  values={sectionValues[section.id] || []}
-                  onChange={(v) => updateSection(section.id, v)}
-                />
+                <>
+                  <InvestigationSection
+                    section={section}
+                    values={sectionValues[section.id] || []}
+                    onChange={(v) => updateSection(section.id, v)}
+                  />
+                  <GuidelinePanel
+                    diagnosisText={sectionValues.diagnosis}
+                    mode="investigations"
+                    onInsertDiagnostics={(items) => insertGuidelineList(section.id, items)}
+                  />
+                </>
               )}
               {section.type === 'text' && (
                 <input
@@ -233,6 +268,14 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     />
                   </div>
                   {section.id === 'diagnosis' && (
+                    <GuidelinePanel
+                      diagnosisText={sectionValues.diagnosis}
+                      mode="diagnosis"
+                      onInsertFormulation={insertDiagnosisFormulation}
+                      formulationTag={formulationTag}
+                    />
+                  )}
+                  {section.id === 'diagnosis' && (
                     <div className="ai-check-block">
                       <button type="button" className="btn-ai" onClick={runDiagnosisSuggestion} disabled={diagnosisLoading}>
                         {diagnosisLoading ? 'Думаю…' : '🤖 Подсказка по диагнозу (AI)'}
@@ -249,13 +292,20 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 </>
               )}
               {section.type === 'drugs' && (
-                <DrugSection
-                  complaints={complaints}
-                  patientAllergies={patient?.allergies || []}
-                  values={sectionValues[section.id] || []}
-                  onChange={(v) => updateSection(section.id, v)}
-                  onInsertMkb={insertIntoDiagnosis}
-                />
+                <>
+                  <DrugSection
+                    complaints={complaints}
+                    patientAllergies={patient?.allergies || []}
+                    values={sectionValues[section.id] || []}
+                    onChange={(v) => updateSection(section.id, v)}
+                    onInsertMkb={insertIntoDiagnosis}
+                  />
+                  <GuidelinePanel
+                    diagnosisText={sectionValues.diagnosis}
+                    mode="drugs"
+                    onInsertFirstLine={(drugs) => insertGuidelineDrugs(section.id, drugs)}
+                  />
+                </>
               )}
             </section>
           ))}

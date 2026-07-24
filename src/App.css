@@ -1561,6 +1561,63 @@ body {
 }
 .chip-drag-handle:active { cursor: grabbing; }
 
+.guideline-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.guideline-panel-item {
+  border: 1px solid #cfe0da;
+  background: var(--teal-soft);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.guideline-panel-item summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideline-update-flag {
+  font-size: 11px;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.guideline-update-btn { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+
+.guideline-panel-text { font-size: 13px; margin: 6px 0; line-height: 1.5; }
+.guideline-panel-text-muted { font-size: 12.5px; color: var(--ink-soft); margin: 6px 0; line-height: 1.5; }
+
+.guideline-redflags {
+  font-size: 12.5px;
+  color: var(--red);
+  background: var(--red-soft);
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin-top: 6px;
+}
+
+.guideline-source { font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
+
+.guidelines-page { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
+.guidelines-title { font-family: var(--font-display); font-size: 20px; margin: 0; }
+
+.guideline-stale-badge {
+  font-size: 11px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
 .chip-editor-card {
   background: var(--paper);
   border: 1px solid var(--line);
