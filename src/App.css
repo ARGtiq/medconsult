@@ -1618,6 +1618,68 @@ body {
   border-radius: 999px;
 }
 
+.scenarios-block {
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scenarios-block-label { font-size: 12.5px; color: var(--ink-soft); }
+
+.scenario-editor {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scenario-editor-top { display: flex; gap: 8px; align-items: center; }
+.scenario-editor-top input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.scenario-drug-rows { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; }
+.scenario-drug-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.scenario-drug-row input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.scenario-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.scenario-tab {
+  border: 1px solid var(--teal);
+  background: white;
+  color: var(--teal);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.scenario-tab.active { background: var(--teal); color: white; }
+
+.guideline-drug-list {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+}
+.guideline-drug-list li { margin-bottom: 3px; }
+
 .chip-editor-card {
   background: var(--paper);
   border: 1px solid var(--line);

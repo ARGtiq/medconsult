@@ -1,20 +1,23 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import { extractCodesFromText } from '../data/mkb10'
 
 // Всплывает в секциях "Диагноз"/"Обследования"/"Рекомендации", если код МКБ
 // в диагнозе совпадает с чем-то из справочника клинических рекомендаций.
-// mode определяет, какая кнопка-мост показывается.
+// mode определяет, какая кнопка-мост показывается. В режиме drugs, если
+// сценариев терапии несколько (тяжесть/путь введения/линия) — сначала выбор
+// сценария вкладками, только потом вставка препаратов уже с дозой и длительностью.
 export default function GuidelinePanel({
   diagnosisText,
   mode, // 'diagnosis' | 'investigations' | 'drugs'
   onInsertFormulation,
   onInsertDiagnostics,
-  onInsertFirstLine,
+  onInsertScenarioDrugs,
   formulationTag,
 }) {
   const codes = useMemo(() => extractCodesFromText(diagnosisText), [diagnosisText])
   const matches = useMemo(() => store.getGuidelinesForCodes(codes), [codes])
+  const [activeScenarioIdx, setActiveScenarioIdx] = useState({}) // guidelineId -> idx выбранного сценария
 
   if (!matches.length) return null
 
@@ -23,6 +26,9 @@ export default function GuidelinePanel({
       {matches.map((g) => {
         const isFormulationSource = formulationTag?.guidelineId === g.id
         const needsUpdate = isFormulationSource && formulationTag.guidelineUpdatedAt !== g.updatedAt
+        const scenarios = g.scenarios || []
+        const selectedIdx = activeScenarioIdx[g.id] ?? 0
+        const selectedScenario = scenarios[selectedIdx]
 
         return (
           <details key={g.id} className="guideline-panel-item" open={matches.length === 1}>
@@ -35,6 +41,7 @@ export default function GuidelinePanel({
 
             {mode === 'diagnosis' && (
               <>
+                {g.diagnosisCriteria && <p className="guideline-panel-text-muted">Критерии: {g.diagnosisCriteria}</p>}
                 {g.diagnosisFormulation && (
                   <button
                     type="button"
@@ -48,34 +55,51 @@ export default function GuidelinePanel({
               </>
             )}
 
-            {mode === 'investigations' && g.diagnostics && (
+            {mode === 'investigations' && (g.investigations || []).length > 0 && (
               <>
-                <p className="guideline-panel-text">Рекомендуется: {g.diagnostics}</p>
-                <button
-                  type="button"
-                  className="btn-secondary btn-small"
-                  onClick={() => onInsertDiagnostics(g.diagnostics.split(',').map((s) => s.trim()).filter(Boolean))}
-                >
+                <p className="guideline-panel-text">Рекомендуется: {g.investigations.join(', ')}</p>
+                <button type="button" className="btn-secondary btn-small" onClick={() => onInsertDiagnostics(g.investigations)}>
                   Добавить в обследования
                 </button>
               </>
             )}
 
-            {mode === 'drugs' && (
+            {mode === 'drugs' && scenarios.length > 0 && (
               <>
-                {g.firstLine && (
+                {scenarios.length > 1 && (
+                  <div className="scenario-tabs">
+                    {scenarios.map((s, i) => (
+                      <button
+                        type="button"
+                        key={i}
+                        className={i === selectedIdx ? 'scenario-tab active' : 'scenario-tab'}
+                        onClick={() => setActiveScenarioIdx((prev) => ({ ...prev, [g.id]: i }))}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedScenario && (
                   <>
-                    <p className="guideline-panel-text">Терапия 1-й линии: {g.firstLine}</p>
+                    <ul className="guideline-drug-list">
+                      {selectedScenario.drugs.map((d, i) => (
+                        <li key={i}>
+                          {d.name}
+                          {d.dose ? ` — ${d.dose}` : ''}
+                          {d.duration ? `, ${d.duration}` : ''}
+                        </li>
+                      ))}
+                    </ul>
                     <button
                       type="button"
                       className="btn-secondary btn-small"
-                      onClick={() => onInsertFirstLine(g.firstLine.split(',').map((s) => s.trim()).filter(Boolean))}
+                      onClick={() => onInsertScenarioDrugs(selectedScenario.drugs)}
                     >
-                      Добавить препараты
+                      Добавить препараты из этого сценария
                     </button>
                   </>
                 )}
-                {g.secondLine && <p className="guideline-panel-text-muted">2-я линия / когда направлять: {g.secondLine}</p>}
               </>
             )}
 

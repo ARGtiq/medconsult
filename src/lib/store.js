@@ -57,7 +57,8 @@ function defaultState() {
     // репорты об ошибках
     bugReports: [],
     // клинические рекомендации: id -> { mkb10Codes[], title, definition, diagnosisFormulation,
-    //   diagnostics, firstLine, secondLine, redFlags, source, sourceYear, updatedAt }
+    //   diagnosisCriteria, investigations[], scenarios: [{name, drugs: [{name, dose, duration}]}],
+    //   redFlags, source, sourceYear, updatedAt }
     clinicalGuidelines: {},
     // пресеты: templateId -> [{id, name, sectionValues}]
     templatePresets: {},

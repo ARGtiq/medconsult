@@ -118,14 +118,19 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
   }
 
-  function insertGuidelineDrugs(sectionId, drugNames) {
+  function insertGuidelineDrugs(sectionId, scenarioDrugs) {
     const current = sectionValues[sectionId] || []
     const existingNames = new Set(current.map((d) => d.name.toLowerCase()))
-    const toAdd = drugNames
-      .filter((name) => !existingNames.has(name.toLowerCase()))
-      .map((name) => {
-        const dbInfo = store.getDrugInfo(name)
-        return { name, evidence: 'guideline', dosage: dbInfo?.dosage || '', frequency: dbInfo?.frequency || '' }
+    const toAdd = scenarioDrugs
+      .filter((d) => d.name && !existingNames.has(d.name.toLowerCase()))
+      .map((d) => {
+        const dbInfo = store.getDrugInfo(d.name)
+        return {
+          name: d.name,
+          evidence: 'guideline',
+          dosage: d.dose || dbInfo?.dosage || '',
+          frequency: d.duration || dbInfo?.frequency || '',
+        }
       })
     if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
   }
@@ -303,7 +308,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   <GuidelinePanel
                     diagnosisText={sectionValues.diagnosis}
                     mode="drugs"
-                    onInsertFirstLine={(drugs) => insertGuidelineDrugs(section.id, drugs)}
+                    onInsertScenarioDrugs={(drugs) => insertGuidelineDrugs(section.id, drugs)}
                   />
                 </>
               )}
