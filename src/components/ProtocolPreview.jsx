@@ -18,9 +18,11 @@ function sectionToText(section, value, patient) {
   else if (Array.isArray(value)) text = value.join(', ')
   else text = value || ''
 
-  if (section.id === 'anamnesis_vitae' && patient?.currentMedications?.length) {
-    const medsLine = `Принимает в настоящее время: ${patient.currentMedications.join(', ')}.`
-    text = text ? `${medsLine}\n${text}` : medsLine
+  if (section.id === 'anamnesis_vitae') {
+    const extraLines = []
+    if (patient?.allergies?.length) extraLines.push(`Аллергоанамнез: ${patient.allergies.join(', ')}.`)
+    if (patient?.currentMedications?.length) extraLines.push(`Принимает в настоящее время: ${patient.currentMedications.join(', ')}.`)
+    if (extraLines.length) text = text ? `${extraLines.join('\n')}\n${text}` : extraLines.join('\n')
   }
 
   return text

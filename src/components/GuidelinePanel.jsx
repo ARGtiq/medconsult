@@ -58,7 +58,7 @@ export default function GuidelinePanel({
             {mode === 'investigations' && (g.investigations || []).length > 0 && (
               <>
                 <p className="guideline-panel-text">Рекомендуется: {g.investigations.join(', ')}</p>
-                <button type="button" className="btn-secondary btn-small" onClick={() => onInsertDiagnostics(g.investigations)}>
+                <button type="button" className="btn-secondary btn-small" onClick={() => onInsertDiagnostics(g.investigations, g)}>
                   Добавить в обследования
                 </button>
               </>
@@ -94,7 +94,7 @@ export default function GuidelinePanel({
                     <button
                       type="button"
                       className="btn-secondary btn-small"
-                      onClick={() => onInsertScenarioDrugs(selectedScenario.drugs)}
+                      onClick={() => onInsertScenarioDrugs(selectedScenario.drugs, g)}
                     >
                       Добавить препараты из этого сценария
                     </button>

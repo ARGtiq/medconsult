@@ -383,14 +383,6 @@ body {
 
 .selected-chip { cursor: pointer; }
 
-.selected-chip-edit input {
-  padding: 5px 10px;
-  border: 1px solid var(--teal);
-  border-radius: 999px;
-  font-size: 13px;
-  min-width: 160px;
-}
-
 .free-input-row {
   display: flex;
   gap: 8px;
@@ -468,6 +460,42 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.selected-values-block {
+  background: var(--paper);
+  border: 1px solid #cfe0da;
+  border-left: 3px solid var(--teal);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 4px;
+}
+.selected-values-block .selected-values { margin-top: 0; }
+.selected-values-block-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--teal);
+  margin-bottom: 6px;
+}
+
+.auto-width-input-wrap { position: relative; display: inline-block; }
+.auto-width-mirror {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font-size: 13px;
+  padding: 5px 10px;
+  pointer-events: none;
+}
+
+.selected-chip-edit input {
+  padding: 5px 10px;
+  border: 1px solid var(--teal);
+  border-radius: 999px;
+  font-size: 13px;
+  min-width: 60px;
+  max-width: 100%;
 }
 
 .selected-chip {
@@ -615,7 +643,22 @@ body {
   align-items: center;
 }
 
-.drug-name { font-weight: 600; font-size: 14.5px; }
+.drug-name { font-weight: 600; font-size: 14.5px; cursor: pointer; }
+.drug-name:hover { text-decoration: underline; color: var(--teal); }
+
+.drug-inline-edit-input {
+  border: 1px solid var(--teal);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: inherit;
+  font-family: inherit;
+  min-width: 40px;
+  max-width: 100%;
+}
+
+.drug-db-hint-editable { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.drug-hint-editable-part { cursor: pointer; }
+.drug-hint-editable-part:hover { text-decoration: underline; color: var(--teal); }
 
 .drug-db-hint {
   font-size: 12px;
@@ -1679,6 +1722,15 @@ body {
   font-size: 12.5px;
 }
 .guideline-drug-list li { margin-bottom: 3px; }
+
+.stale-guideline-list {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 10px 14px 10px 28px;
+  margin: 10px 0;
+}
 
 .chip-editor-card {
   background: var(--paper);

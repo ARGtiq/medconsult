@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import VoiceInputButton from './VoiceInputButton'
+import AutoWidthInput from './AutoWidthInput'
 
 // Режим "конструктора" жалобы: клик по базовой карточке (боль и т.п.)
 // подменяет ряд чипов на карточки текущей группы уточнений (локализация,
@@ -237,40 +238,47 @@ export default function ChipSection({ section, values, onChange }) {
       )}
 
       {values.length > 0 && (
-        <div className="selected-values">
-          {values.map((v, idx) =>
-            plainEditIdx === idx ? (
-              <form
-                key={`${v}-${idx}`}
-                className="selected-chip-edit"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  savePlainEdit()
-                }}
-              >
-                <input autoFocus value={plainEditText} onChange={(e) => setPlainEditText(e.target.value)} onBlur={savePlainEdit} />
-              </form>
-            ) : (
-              <span
-                key={`${v}-${idx}`}
-                className="selected-chip"
-                onClick={() => startEditStructured(idx)}
-                title="Нажми, чтобы отредактировать"
-              >
-                {v}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeValue(idx)
+        <div className="selected-values-block">
+          <div className="selected-values-block-label">Уже выбрано</div>
+          <div className="selected-values">
+            {values.map((v, idx) =>
+              plainEditIdx === idx ? (
+                <form
+                  key={`${v}-${idx}`}
+                  className="selected-chip-edit"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    savePlainEdit()
                   }}
-                  aria-label="Удалить"
                 >
-                  ×
-                </button>
-              </span>
-            )
-          )}
+                  <AutoWidthInput
+                    value={plainEditText}
+                    onChange={(e) => setPlainEditText(e.target.value)}
+                    onBlur={savePlainEdit}
+                  />
+                </form>
+              ) : (
+                <span
+                  key={`${v}-${idx}`}
+                  className="selected-chip"
+                  onClick={() => startEditStructured(idx)}
+                  title="Нажми, чтобы отредактировать"
+                >
+                  {v}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeValue(idx)
+                    }}
+                    aria-label="Удалить"
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            )}
+          </div>
         </div>
       )}
     </div>

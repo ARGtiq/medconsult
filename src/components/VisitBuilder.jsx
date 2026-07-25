@@ -9,6 +9,7 @@ import GuidelinePanel from './GuidelinePanel'
 import VoiceInputButton from './VoiceInputButton'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
+import { extractCodesFromText } from '../data/mkb10'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -41,6 +42,9 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
   const [formulationTag, setFormulationTag] = useState(null) // {guidelineId, guidelineUpdatedAt} — живой тег формулировки диагноза
+  const [guidelineInsertions, setGuidelineInsertions] = useState([]) // [{guidelineId, guidelineTitle, sectionId, type, items}]
+  const [staleGuidelinePrompt, setStaleGuidelinePrompt] = useState(null) // список guidelineInsertions, ставших неактуальными
+  const prevCodesRef = useRef(null)
   const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
@@ -112,13 +116,19 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     setFormulationTag({ guidelineId: guideline.id, guidelineUpdatedAt: guideline.updatedAt })
   }
 
-  function insertGuidelineList(sectionId, items) {
+  function insertGuidelineList(sectionId, items, guideline) {
     const current = sectionValues[sectionId] || []
     const toAdd = items.filter((item) => !current.includes(item))
-    if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
+    if (toAdd.length) {
+      updateSection(sectionId, [...current, ...toAdd])
+      setGuidelineInsertions((prev) => [
+        ...prev.filter((ins) => !(ins.guidelineId === guideline.id && ins.sectionId === sectionId && ins.type === 'investigations')),
+        { guidelineId: guideline.id, guidelineTitle: guideline.title, sectionId, type: 'investigations', items: toAdd },
+      ])
+    }
   }
 
-  function insertGuidelineDrugs(sectionId, scenarioDrugs) {
+  function insertGuidelineDrugs(sectionId, scenarioDrugs, guideline) {
     const current = sectionValues[sectionId] || []
     const existingNames = new Set(current.map((d) => d.name.toLowerCase()))
     const toAdd = scenarioDrugs
@@ -132,7 +142,50 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           frequency: d.duration || dbInfo?.frequency || '',
         }
       })
-    if (toAdd.length) updateSection(sectionId, [...current, ...toAdd])
+    if (toAdd.length) {
+      updateSection(sectionId, [...current, ...toAdd])
+      setGuidelineInsertions((prev) => [
+        ...prev.filter((ins) => !(ins.guidelineId === guideline.id && ins.sectionId === sectionId && ins.type === 'drugs')),
+        { guidelineId: guideline.id, guidelineTitle: guideline.title, sectionId, type: 'drugs', items: toAdd.map((d) => d.name) },
+      ])
+    }
+  }
+
+  // Следим за кодами МКБ в диагнозе: если код сменился так, что ранее вставленная
+  // рекомендация больше не подходит — спрашиваем, удалить ли то, что из неё вставлено
+  useEffect(() => {
+    const codes = extractCodesFromText(sectionValues.diagnosis)
+    if (prevCodesRef.current === null) {
+      prevCodesRef.current = codes
+      return
+    }
+    const changed = codes.join(',') !== prevCodesRef.current.join(',')
+    prevCodesRef.current = codes
+    if (!changed || guidelineInsertions.length === 0) return
+
+    const currentGuidelineIds = new Set(store.getGuidelinesForCodes(codes).map((g) => g.id))
+    const stale = guidelineInsertions.filter((ins) => !currentGuidelineIds.has(ins.guidelineId))
+    if (stale.length) setStaleGuidelinePrompt(stale)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionValues.diagnosis])
+
+  function confirmRemoveStaleGuideline(shouldRemove) {
+    if (shouldRemove && staleGuidelinePrompt) {
+      const updated = { ...sectionValues }
+      staleGuidelinePrompt.forEach((ins) => {
+        const current = updated[ins.sectionId] || []
+        if (ins.type === 'investigations') {
+          updated[ins.sectionId] = current.filter((v) => !ins.items.includes(v))
+        } else if (ins.type === 'drugs') {
+          const namesLower = ins.items.map((n) => n.toLowerCase())
+          updated[ins.sectionId] = current.filter((d) => !namesLower.includes(d.name.toLowerCase()))
+        }
+      })
+      setSectionValues(updated)
+    }
+    const staleKeys = new Set((staleGuidelinePrompt || []).map((s) => `${s.guidelineId}-${s.sectionId}-${s.type}`))
+    setGuidelineInsertions((prev) => prev.filter((ins) => !staleKeys.has(`${ins.guidelineId}-${ins.sectionId}-${ins.type}`)))
+    setStaleGuidelinePrompt(null)
   }
 
   function saveVisit() {
@@ -205,7 +258,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   <GuidelinePanel
                     diagnosisText={sectionValues.diagnosis}
                     mode="investigations"
-                    onInsertDiagnostics={(items) => insertGuidelineList(section.id, items)}
+                    onInsertDiagnostics={(items, g) => insertGuidelineList(section.id, items, g)}
                   />
                 </>
               )}
@@ -308,7 +361,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   <GuidelinePanel
                     diagnosisText={sectionValues.diagnosis}
                     mode="drugs"
-                    onInsertScenarioDrugs={(drugs) => insertGuidelineDrugs(section.id, drugs)}
+                    onInsertScenarioDrugs={(drugs, g) => insertGuidelineDrugs(section.id, drugs, g)}
                   />
                 </>
               )}
@@ -329,6 +382,34 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           <ProtocolPreview template={template} sectionValues={sectionValues} patient={patient} visitDate={visitDate} />
         </div>
       </div>
+
+      {staleGuidelinePrompt && (
+        <div className="modal-overlay" onClick={() => confirmRemoveStaleGuideline(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Код диагноза изменился</h3>
+            </div>
+            <p className="settings-note-inline">
+              Ранее были подтянуты данные из рекомендации «{staleGuidelinePrompt[0].guidelineTitle}»,
+              которая больше не подходит под текущий диагноз. Удалить старые рекомендации (обследования/препараты),
+              вставленные из неё?
+            </p>
+            <ul className="stale-guideline-list">
+              {staleGuidelinePrompt.map((ins, i) => (
+                <li key={i}>{ins.type === 'investigations' ? 'Обследования' : 'Препараты'}: {ins.items.join(', ')}</li>
+              ))}
+            </ul>
+            <div className="drug-form-actions">
+              <button type="button" className="btn-primary" onClick={() => confirmRemoveStaleGuideline(true)}>
+                Удалить
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => confirmRemoveStaleGuideline(false)}>
+                Оставить как есть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

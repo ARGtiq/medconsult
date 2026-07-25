@@ -5,6 +5,7 @@ import { checkDrugInteractions, checkAllergyAI, suggestAnalogsAI } from '../lib/
 import AddDrugToDbModal from './AddDrugToDbModal'
 import VoiceInputButton from './VoiceInputButton'
 import EvidenceCheckButton from './EvidenceCheckButton'
+import AutoWidthInput from './AutoWidthInput'
 
 export default function DrugSection({ complaints, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
@@ -18,6 +19,9 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   const [checkingInteractions, setCheckingInteractions] = useState(false)
   const [interactionError, setInteractionError] = useState('')
   const [addToDbFor, setAddToDbFor] = useState(null)
+  const [editingIdx, setEditingIdx] = useState(null)
+  const [editingField, setEditingField] = useState(null) // 'name' | 'dosage' | 'frequency'
+  const [editingText, setEditingText] = useState('')
 
   const safeValues = Array.isArray(values) ? values : []
 
@@ -102,6 +106,20 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
   function handleManualSubmit(e) {
     e.preventDefault()
     addDrug(manualDrug)
+  }
+
+  function startEditField(idx, field, currentValue) {
+    setEditingIdx(idx)
+    setEditingField(field)
+    setEditingText(currentValue || '')
+  }
+
+  function saveEditField() {
+    if (editingIdx === null) return
+    onChange(safeValues.map((d, i) => (i === editingIdx ? { ...d, [editingField]: editingText.trim() } : d)))
+    setEditingIdx(null)
+    setEditingField(null)
+    setEditingText('')
   }
 
   async function runAiAnalogs(idx, drugName) {
@@ -197,19 +215,56 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
           return (
             <div key={`${drug.name}-${idx}`} className={`drug-card evidence-${drug.evidence}`}>
               <div className="drug-card-top">
-                <span className="drug-name">{drug.name}</span>
+                {editingIdx === idx && editingField === 'name' ? (
+                  <AutoWidthInput
+                    className="drug-inline-edit-input"
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onBlur={saveEditField}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditField()}
+                  />
+                ) : (
+                  <span className="drug-name" onClick={() => startEditField(idx, 'name', drug.name)} title="Нажми, чтобы отредактировать">
+                    {drug.name}
+                  </span>
+                )}
                 <button type="button" className="remove-btn" onClick={() => removeDrug(idx)} aria-label="Удалить">
                   ×
                 </button>
               </div>
 
-              {(drug.dosage || drug.frequency || dbInfo?.brandNames) && (
-                <div className="drug-db-hint">
-                  {drug.dosage && <span>{drug.dosage}</span>}
-                  {drug.frequency && <span> · {drug.frequency}</span>}
-                  {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
-                </div>
-              )}
+              <div className="drug-db-hint drug-db-hint-editable">
+                {editingIdx === idx && editingField === 'dosage' ? (
+                  <AutoWidthInput
+                    className="drug-inline-edit-input"
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onBlur={saveEditField}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditField()}
+                    placeholder="доза"
+                  />
+                ) : (
+                  <span onClick={() => startEditField(idx, 'dosage', drug.dosage)} title="Нажми, чтобы отредактировать" className="drug-hint-editable-part">
+                    {drug.dosage || 'доза'}
+                  </span>
+                )}
+                <span> · </span>
+                {editingIdx === idx && editingField === 'frequency' ? (
+                  <AutoWidthInput
+                    className="drug-inline-edit-input"
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onBlur={saveEditField}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditField()}
+                    placeholder="кратность/длительность"
+                  />
+                ) : (
+                  <span onClick={() => startEditField(idx, 'frequency', drug.frequency)} title="Нажми, чтобы отредактировать" className="drug-hint-editable-part">
+                    {drug.frequency || 'кратность/длительность'}
+                  </span>
+                )}
+                {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
+              </div>
 
               {dbInfo?.mkb10Codes && (
                 <div className="drug-mkb-row">

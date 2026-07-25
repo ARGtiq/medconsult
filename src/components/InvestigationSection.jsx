@@ -134,6 +134,7 @@ export default function InvestigationSection({ section, values, onChange }) {
       </form>
 
       {values.length > 0 && (
+        <div className="selected-values-block">
         <div className="selected-values investigation-list">
           {values.map((v, idx) => (
             <div key={`${v}-${idx}`} className="investigation-entry" onClick={() => openEdit(idx)} title="Нажми, чтобы отредактировать">
@@ -150,6 +151,7 @@ export default function InvestigationSection({ section, values, onChange }) {
               </button>
             </div>
           ))}
+        </div>
         </div>
       )}
     </div>
