@@ -7,7 +7,7 @@ function sectionToText(section, value, patient) {
     if (!drugs.length) return ''
     return drugs
       .map((d) => {
-        const extra = [d.dosage, d.frequency].filter(Boolean).join(', ')
+        const extra = [d.dosage, d.frequency, d.duration].filter(Boolean).join(', ')
         return `— ${d.name}${extra ? ` (${extra})` : ''}`
       })
       .join('\n')

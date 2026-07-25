@@ -7,7 +7,7 @@ import VoiceInputButton from './VoiceInputButton'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import AutoWidthInput from './AutoWidthInput'
 
-export default function DrugSection({ complaints, patientAllergies, values, onChange, onInsertMkb }) {
+export default function DrugSection({ complaints, diagnosisText, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
   const [altOpenFor, setAltOpenFor] = useState(null)
   const [aiAnalogsFor, setAiAnalogsFor] = useState(null)
@@ -78,6 +78,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
         evidence: 'self_verified',
         dosage: dbInfo?.dosage || '',
         frequency: dbInfo?.frequency || '',
+        duration: dbInfo?.duration || '',
       },
     ])
     ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, clean))
@@ -96,7 +97,9 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
     const dbInfo = store.getDrugInfo(newName)
     onChange(
       safeValues.map((d, i) =>
-        i === idx ? { ...d, name: newName, dosage: dbInfo?.dosage || d.dosage, frequency: dbInfo?.frequency || d.frequency } : d
+        i === idx
+          ? { ...d, name: newName, dosage: dbInfo?.dosage || d.dosage, frequency: dbInfo?.frequency || d.frequency, duration: dbInfo?.duration || d.duration }
+          : d
       )
     )
     setAltOpenFor(null)
@@ -264,6 +267,21 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                   </span>
                 )}
                 {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
+                <span> · </span>
+                {editingIdx === idx && editingField === 'duration' ? (
+                  <AutoWidthInput
+                    className="drug-inline-edit-input"
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onBlur={saveEditField}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditField()}
+                    placeholder="длительность курса"
+                  />
+                ) : (
+                  <span onClick={() => startEditField(idx, 'duration', drug.duration)} title="Нажми, чтобы отредактировать" className="drug-hint-editable-part">
+                    {drug.duration || 'длительность курса'}
+                  </span>
+                )}
               </div>
 
               {dbInfo?.mkb10Codes && (
@@ -353,7 +371,7 @@ export default function DrugSection({ complaints, patientAllergies, values, onCh
                   </button>
                 </div>
 
-                <EvidenceCheckButton drugName={drug.name} compact />
+                <EvidenceCheckButton drugName={drug.name} diagnosisText={diagnosisText} compact />
 
                 <div className="alt-wrap">
                   {alternatives.length > 0 ? (

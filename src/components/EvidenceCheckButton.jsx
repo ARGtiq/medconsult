@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { openEvidenceSearch } from '../lib/evidencePrompt'
 
-export default function EvidenceCheckButton({ drugName, compact = false }) {
+export default function EvidenceCheckButton({ drugName, diagnosisText, compact = false }) {
   const [status, setStatus] = useState('idle') // idle | copied | blocked
 
   function run() {
     if (!drugName?.trim()) return
-    const { opened } = openEvidenceSearch(drugName)
+    const { opened } = openEvidenceSearch(drugName, diagnosisText)
     setStatus(opened ? 'copied' : 'blocked')
     setTimeout(() => setStatus('idle'), 3000)
   }

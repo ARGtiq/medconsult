@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractGuidelineInfo } from '../lib/openrouter'
+import AutoResizeTextarea from './AutoResizeTextarea'
 
 function blankForm() {
   return {
@@ -8,11 +9,15 @@ function blankForm() {
     mkb10CodesText: '',
     title: '',
     definition: '',
+    classification: '',
     diagnosisFormulation: '',
     diagnosisCriteria: '',
     investigationsText: '',
+    clinicalPictureText: '',
     scenarios: [],
+    nonDrugTherapy: '',
     redFlags: '',
+    additionalInfo: '',
     source: '',
     sourceYear: '',
   }
@@ -30,6 +35,26 @@ function isStale(sourceYear) {
   if (!sourceYear) return false
   const currentYear = new Date().getFullYear()
   return currentYear - Number(sourceYear) >= 2
+}
+
+// Каждый препарат из сценариев терапии клинрека автоматически попадает в базу
+// лекарств (если его там ещё нет) — тогда он появится в автоподсказках при
+// ручном добавлении препарата на приёме, даже вне контекста этого клинрека.
+function registerScenarioDrugsInDb(scenarios) {
+  scenarios.forEach((s) => {
+    s.drugs.forEach((d) => {
+      if (!d.name?.trim()) return
+      const existing = store.getDrugInfo(d.name)
+      if (!existing) {
+        store.saveDrugInfo({
+          name: d.name.trim(),
+          dosage: d.dose || '',
+          duration: d.duration || '',
+          evidenceLevel: 'guideline',
+        })
+      }
+    })
+  })
 }
 
 function ScenarioEditor({ scenario, onChange, onDelete }) {
@@ -91,11 +116,15 @@ export default function GuidelinesPage() {
       mkb10CodesText: (g.mkb10Codes || []).join(', '),
       title: g.title || '',
       definition: g.definition || '',
+      classification: g.classification || '',
       diagnosisFormulation: g.diagnosisFormulation || '',
       diagnosisCriteria: g.diagnosisCriteria || '',
       investigationsText: (g.investigations || []).join(', '),
+      clinicalPictureText: (g.clinicalPicture || []).join(', '),
       scenarios: g.scenarios?.length ? g.scenarios : [],
+      nonDrugTherapy: g.nonDrugTherapy || '',
       redFlags: g.redFlags || '',
+      additionalInfo: g.additionalInfo || '',
       source: g.source || '',
       sourceYear: g.sourceYear || '',
     })
@@ -124,10 +153,12 @@ export default function GuidelinesPage() {
     if (!form.title.trim() || !form.mkb10CodesText.trim()) return
     const mkb10Codes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
     const investigations = form.investigationsText.split(',').map((s) => s.trim()).filter(Boolean)
+    const clinicalPicture = form.clinicalPictureText.split(',').map((s) => s.trim()).filter(Boolean)
     const scenarios = form.scenarios
       .map((s) => ({ ...s, drugs: s.drugs.filter((d) => d.name.trim()) }))
       .filter((s) => s.name.trim() && s.drugs.length)
-    store.saveGuideline({ ...form, mkb10Codes, investigations, scenarios })
+    store.saveGuideline({ ...form, mkb10Codes, investigations, clinicalPicture, scenarios })
+    registerScenarioDrugsInDb(scenarios)
     setForm(blankForm())
     refresh()
   }
@@ -143,6 +174,7 @@ export default function GuidelinesPage() {
         ...info,
         mkb10CodesText: info.mkb10Codes || prev.mkb10CodesText,
         investigationsText: info.investigations || prev.investigationsText,
+        clinicalPictureText: info.clinicalPicture || prev.clinicalPictureText,
         scenarios: info.scenarios?.length
           ? info.scenarios.map((s) => ({ name: s.name || '', drugs: s.drugs?.length ? s.drugs : [blankDrugRow()] }))
           : prev.scenarios,
@@ -156,11 +188,10 @@ export default function GuidelinesPage() {
 
   return (
     <div className="guidelines-page">
-      <h2 className="guidelines-title">Клинические рекомендации</h2>
       <p className="settings-note-inline">
         Краткая шпаргалка по состояниям, привязанная к кодам МКБ-10. Терапия организована сценариями
         (тяжесть/путь введения/линия) с конкретными дозами — как в российских клинреках (reclin.ru и т.п.).
-        Всплывает подсказкой на приёме в секциях "Диагноз", "Обследования" и "Рекомендации".
+        Всплывает подсказкой на приёме в секциях "Жалобы", "Диагноз", "Обследования" и "Рекомендации".
       </p>
 
       <form className="drug-form" onSubmit={save}>
@@ -176,29 +207,35 @@ export default function GuidelinesPage() {
             onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
           />
         </div>
-        <textarea
+        <AutoResizeTextarea
           placeholder="Определение (1-2 предложения)"
           value={form.definition}
           onChange={(e) => setForm({ ...form, definition: e.target.value })}
-          rows={2}
         />
-        <textarea
+        <AutoResizeTextarea
+          placeholder="Классификация / стадии (напр. I стадия — ..., II стадия — ...)"
+          value={form.classification}
+          onChange={(e) => setForm({ ...form, classification: e.target.value })}
+        />
+        <AutoResizeTextarea
           placeholder="Формулировка диагноза для протокола (шаблон фразы)"
           value={form.diagnosisFormulation}
           onChange={(e) => setForm({ ...form, diagnosisFormulation: e.target.value })}
-          rows={2}
         />
-        <textarea
+        <AutoResizeTextarea
           placeholder="Критерии постановки диагноза (что подтверждает диагноз, не список обследований)"
           value={form.diagnosisCriteria}
           onChange={(e) => setForm({ ...form, diagnosisCriteria: e.target.value })}
-          rows={2}
         />
-        <textarea
+        <AutoResizeTextarea
+          placeholder="Клиническая картина — типичные жалобы через запятую (подскажутся в разделе «Жалобы»)"
+          value={form.clinicalPictureText}
+          onChange={(e) => setForm({ ...form, clinicalPictureText: e.target.value })}
+        />
+        <AutoResizeTextarea
           placeholder="Обследования для диагностики через запятую (ОАК, УЗИ почек, КТ и т.п.)"
           value={form.investigationsText}
           onChange={(e) => setForm({ ...form, investigationsText: e.target.value })}
-          rows={2}
         />
 
         <div className="scenarios-block">
@@ -209,11 +246,20 @@ export default function GuidelinesPage() {
           <button type="button" className="btn-secondary btn-small" onClick={addScenario}>+ Сценарий терапии</button>
         </div>
 
-        <textarea
+        <AutoResizeTextarea
+          placeholder="Немедикаментозная терапия / общие рекомендации (режим, диета, физиотерапия и т.п.)"
+          value={form.nonDrugTherapy}
+          onChange={(e) => setForm({ ...form, nonDrugTherapy: e.target.value })}
+        />
+        <AutoResizeTextarea
           placeholder="Красные флаги — когда точно направлять, не лечить самому"
           value={form.redFlags}
           onChange={(e) => setForm({ ...form, redFlags: e.target.value })}
-          rows={2}
+        />
+        <AutoResizeTextarea
+          placeholder="Дополнительная информация (прогноз, диспансерное наблюдение и т.п.)"
+          value={form.additionalInfo}
+          onChange={(e) => setForm({ ...form, additionalInfo: e.target.value })}
         />
         <div className="drug-form-row">
           <input
@@ -245,7 +291,7 @@ export default function GuidelinesPage() {
 
         <div className="drug-form-actions">
           <button type="submit" className="btn-primary">{form.id ? 'Сохранить изменения' : 'Добавить рекомендацию'}</button>
-          {form.id && <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Отмена</button>}
+          <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>
         </div>
       </form>
 

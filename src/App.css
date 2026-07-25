@@ -1611,6 +1611,30 @@ body {
   margin-top: 10px;
 }
 
+.guideline-panel-complaints .guideline-panel-item {
+  border: 1px solid #ddd0f0;
+  background: #f4f1fb;
+}
+.guideline-panel-complaints .guideline-panel-item summary { color: #6b5fa8; }
+
+.guideline-complaint-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.suggestion-pill-guideline {
+  border: 1px dashed #6b5fa8;
+  background: #ece5f5;
+  color: #6b5fa8;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.suggestion-pill-guideline:hover { background: #e0d6f2; }
+
 .guideline-panel-item {
   border: 1px solid #cfe0da;
   background: var(--teal-soft);

@@ -15,6 +15,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
     name: drugName,
     dosage: '',
     frequency: '',
+    duration: '',
     sideEffects: '',
     group: '',
     brandNames: '',
@@ -93,6 +94,11 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               placeholder="Кратность приёма"
               value={form.frequency}
               onChange={(e) => setForm({ ...form, frequency: e.target.value })}
+            />
+            <input
+              placeholder="Длительность курса"
+              value={form.duration}
+              onChange={(e) => setForm({ ...form, duration: e.target.value })}
             />
           </div>
           <div className="drug-form-row drug-form-row-brand">

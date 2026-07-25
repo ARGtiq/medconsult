@@ -8,7 +8,7 @@ import './App.css'
 // Настройки тянут за собой Supabase, редактор шаблонов и AI-клиент —
 // незачем грузить это на первом экране "Приём", когда открывают само приложение
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
-const GuidelinesPage = lazy(() => import('./components/GuidelinesPage'))
+const ReferencePage = lazy(() => import('./components/ReferencePage'))
 
 export default function App() {
   const [templates, setTemplates] = useState(store.getTemplates())
@@ -97,7 +97,7 @@ export default function App() {
           </Suspense>
         ) : page === 'guidelines' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка справочника…</p>}>
-            <GuidelinesPage />
+            <ReferencePage />
           </Suspense>
         ) : activeTemplate ? (
           <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />

@@ -14,7 +14,6 @@ import AutoWidthInput from './AutoWidthInput'
 export default function ChipSection({ section, values, onChange }) {
   const [freeInput, setFreeInput] = useState('')
   const [builderChip, setBuilderChip] = useState(null)
-  const [groupIndex, setGroupIndex] = useState(0)
   const [selections, setSelections] = useState({})
   const [editIdx, setEditIdx] = useState(null) // индекс в values, который редактируем структурно
   const [plainEditIdx, setPlainEditIdx] = useState(null) // fallback: обычная текстовая правка
@@ -58,7 +57,6 @@ export default function ChipSection({ section, values, onChange }) {
       return
     }
     setBuilderChip(chip)
-    setGroupIndex(0)
     setSelections({})
     setEditIdx(null)
   }
@@ -83,14 +81,12 @@ export default function ChipSection({ section, values, onChange }) {
       if (found.length) restored[gIdx] = new Set(found)
     })
     setBuilderChip(match)
-    setGroupIndex(0)
     setSelections(restored)
     setEditIdx(idx)
   }
 
   function cancelBuilder() {
     setBuilderChip(null)
-    setGroupIndex(0)
     setSelections({})
     setEditIdx(null)
   }
@@ -121,16 +117,6 @@ export default function ChipSection({ section, values, onChange }) {
     cancelBuilder()
   }
 
-  function goNextGroup() {
-    if (groupIndex < builderChip.modifierGroups.length - 1) setGroupIndex((i) => i + 1)
-    else insertAndClose()
-  }
-
-  function goPrevGroup() {
-    if (groupIndex === 0) cancelBuilder()
-    else setGroupIndex((i) => i - 1)
-  }
-
   function savePlainEdit() {
     const clean = plainEditText.trim()
     if (clean) replaceValueAt(plainEditIdx, clean)
@@ -138,7 +124,6 @@ export default function ChipSection({ section, values, onChange }) {
     setPlainEditText('')
   }
 
-  const activeGroup = builderChip?.modifierGroups?.[groupIndex]
   const selectedCountTotal = Object.values(selections).reduce((sum, s) => sum + (s?.size || 0), 0)
 
   return (
@@ -169,36 +154,31 @@ export default function ChipSection({ section, values, onChange }) {
               ))}
           </div>
 
-          {activeGroup && (
-            <>
-              <div className="chip-builder-group-label">{activeGroup.label} (можно несколько)</div>
+          {(builderChip.modifierGroups || []).map((group, gIdx) => (
+            <div key={group.label || gIdx}>
+              <div className="chip-builder-group-label">{group.label} (можно несколько)</div>
               <div className="chip-row">
-                {activeGroup.options.map((opt) => {
-                  const isSelected = selections[groupIndex]?.has(opt)
+                {group.options.map((opt) => {
+                  const isSelected = selections[gIdx]?.has(opt)
                   return (
                     <button
                       type="button"
                       key={opt}
                       className={isSelected ? 'chip chip-active' : 'chip'}
-                      onClick={() => toggleOption(groupIndex, opt)}
+                      onClick={() => toggleOption(gIdx, opt)}
                     >
                       {opt}
                     </button>
                   )
                 })}
               </div>
-            </>
-          )}
+            </div>
+          ))}
 
           <div className="chip-builder-controls">
-            <button type="button" className="btn-secondary btn-small" onClick={goPrevGroup}>
-              {groupIndex === 0 ? 'Отмена' : '← Назад'}
+            <button type="button" className="btn-secondary btn-small" onClick={cancelBuilder}>
+              Отмена
             </button>
-            {groupIndex < builderChip.modifierGroups.length - 1 && (
-              <button type="button" className="btn-secondary btn-small" onClick={goNextGroup}>
-                Далее →
-              </button>
-            )}
             <button type="button" className="btn-primary btn-small btn-insert" onClick={insertAndClose}>
               {editIdx !== null ? 'Сохранить' : `Вставить${selectedCountTotal ? ` (${selectedCountTotal})` : ' как есть'}`}
             </button>

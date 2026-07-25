@@ -116,6 +116,11 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     setFormulationTag({ guidelineId: guideline.id, guidelineUpdatedAt: guideline.updatedAt })
   }
 
+  function insertGuidelineComplaint(text) {
+    const current = sectionValues.complaints || []
+    if (!current.includes(text)) updateSection('complaints', [...current, text])
+  }
+
   function insertGuidelineList(sectionId, items, guideline) {
     const current = sectionValues[sectionId] || []
     const toAdd = items.filter((item) => !current.includes(item))
@@ -139,7 +144,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           name: d.name,
           evidence: 'guideline',
           dosage: d.dose || dbInfo?.dosage || '',
-          frequency: d.duration || dbInfo?.frequency || '',
+          frequency: dbInfo?.frequency || '',
+          duration: d.duration || dbInfo?.duration || '',
         }
       })
     if (toAdd.length) {
@@ -242,11 +248,20 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
             <section key={section.id} className="section-block">
               <h3>{section.title}</h3>
               {section.type === 'chips' && (
-                <ChipSection
-                  section={section}
-                  values={sectionValues[section.id] || []}
-                  onChange={(v) => updateSection(section.id, v)}
-                />
+                <>
+                  <ChipSection
+                    section={section}
+                    values={sectionValues[section.id] || []}
+                    onChange={(v) => updateSection(section.id, v)}
+                  />
+                  {section.id === 'complaints' && (
+                    <GuidelinePanel
+                      diagnosisText={sectionValues.diagnosis}
+                      mode="complaints"
+                      onInsertComplaint={insertGuidelineComplaint}
+                    />
+                  )}
+                </>
               )}
               {section.type === 'investigations' && (
                 <>
@@ -353,6 +368,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 <>
                   <DrugSection
                     complaints={complaints}
+                    diagnosisText={sectionValues.diagnosis}
                     patientAllergies={patient?.allergies || []}
                     values={sectionValues[section.id] || []}
                     onChange={(v) => updateSection(section.id, v)}

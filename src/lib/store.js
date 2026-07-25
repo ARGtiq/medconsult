@@ -5,7 +5,7 @@ const KEY = 'medconsult_v1'
 // Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
 // (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
 // свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 4
+const TEMPLATES_SEED_VERSION = 5
 
 function readAll() {
   try {
@@ -56,9 +56,10 @@ function defaultState() {
     crossReactivityCustom: [],
     // репорты об ошибках
     bugReports: [],
-    // клинические рекомендации: id -> { mkb10Codes[], title, definition, diagnosisFormulation,
-    //   diagnosisCriteria, investigations[], scenarios: [{name, drugs: [{name, dose, duration}]}],
-    //   redFlags, source, sourceYear, updatedAt }
+    // клинические рекомендации: id -> { mkb10Codes[], title, definition, classification,
+    //   diagnosisFormulation, diagnosisCriteria, investigations[], clinicalPicture[],
+    //   scenarios: [{name, drugs: [{name, dose, duration}]}], nonDrugTherapy, redFlags,
+    //   additionalInfo, source, sourceYear, updatedAt }
     clinicalGuidelines: {},
     // пресеты: templateId -> [{id, name, sectionValues}]
     templatePresets: {},
@@ -121,6 +122,35 @@ function seedTemplates() {
               text: 'примесь крови в моче',
               modifierGroups: [{ label: 'Когда', options: ['в начале струи', 'в конце струи', 'на всём протяжении'] }],
             },
+            { text: 'прерывистое мочеиспускание', modifierGroups: [] },
+            { text: 'чувство неполного опорожнения мочевого пузыря', modifierGroups: [] },
+            { text: 'императивные позывы к мочеиспусканию', modifierGroups: [] },
+            {
+              text: 'недержание мочи',
+              modifierGroups: [{ label: 'Тип', options: ['стрессовое', 'ургентное', 'смешанное', 'постоянное'] }],
+            },
+            { text: 'жжение/резь при мочеиспускании', modifierGroups: [] },
+            {
+              text: 'эректильная дисфункция',
+              modifierGroups: [{ label: 'Степень', options: ['лёгкая', 'умеренная', 'тяжёлая'] }],
+            },
+            { text: 'снижение либидо', modifierGroups: [] },
+            { text: 'преждевременная эякуляция', modifierGroups: [] },
+            {
+              text: 'боль в мошонке',
+              modifierGroups: [{ label: 'Сторона', options: ['слева', 'справа', 'с обеих сторон'] }],
+            },
+            { text: 'увеличение мошонки/яичка', modifierGroups: [] },
+            { text: 'выделения из уретры', modifierGroups: [] },
+            {
+              text: 'боль в промежности',
+              modifierGroups: [{ label: 'Характер', options: ['острая', 'тупая', 'ноющая'] }],
+            },
+            { text: 'повышение температуры тела', modifierGroups: [{ label: 'Значения', options: ['субфебрильная (до 38)', 'фебрильная (38-39)', 'выше 39'] }] },
+            { text: 'озноб', modifierGroups: [] },
+            { text: 'общая слабость', modifierGroups: [] },
+            { text: 'отхождение конкремента', modifierGroups: [] },
+            { text: 'бесплодие в браке', modifierGroups: [{ label: 'Длительность', options: ['<1 года', '1-2 года', '>2 лет'] }] },
           ],
         },
         {
@@ -134,7 +164,23 @@ function seedTemplates() {
               modifierGroups: [{ label: 'Длительность', options: ['>6 мес', '>1 года', '>3 лет'] }],
             },
             { text: 'рецидив после лечения', modifierGroups: [] },
+            { text: 'ухудшение постепенное', modifierGroups: [] },
+            { text: 'ухудшение внезапное', modifierGroups: [] },
+            { text: 'связывает с переохлаждением', modifierGroups: [] },
+            { text: 'связывает с травмой', modifierGroups: [] },
+            { text: 'ранее не обследовался', modifierGroups: [] },
+            { text: 'самостоятельно принимал антибиотики', modifierGroups: [] },
           ],
+        },
+        {
+          id: 'anamnesis_duration',
+          title: 'Длительность текущего эпизода / заболевания',
+          type: 'text',
+        },
+        {
+          id: 'anamnesis_free',
+          title: 'Анамнез заболевания — дополнительное описание',
+          type: 'freeform',
         },
         {
           id: 'anamnesis_vitae',

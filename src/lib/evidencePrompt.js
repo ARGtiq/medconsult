@@ -5,17 +5,20 @@
 // (Perplexity ищет в реальном времени и даёт ссылки на источники) — человек одним
 // движением получает сводку с конкретными ссылками, без ручного набора запроса.
 
-export function buildEvidencePrompt(drugName) {
-  return `Проверь доказательную базу препарата "${drugName}" по следующим источникам:
+export function buildEvidencePrompt(drugName, diagnosisText) {
+  const diagnosisLine = diagnosisText?.trim()
+    ? `\nКонтекст — препарат назначается по диагнозу: "${diagnosisText.trim()}".\n`
+    : ''
+  return `Проверь доказательную базу препарата "${drugName}" по следующим источникам:${diagnosisLine}
 1. Cochrane Library (cochranelibrary.com) — есть ли систематические обзоры, сколько, о чём
 2. WHO publications (who.int/publications) — упоминается ли в гайдлайнах/эссенциальных списках ВОЗ
 3. RxList (rxlist.com) — есть ли клинические данные, официальные показания
 
-Дай краткую сводку по каждому источнику: найдено / не найдено, сколько публикаций (примерно), о чём именно (кратко), и ссылки на самые релевантные материалы. Если по препарату почти нет доказательной базы — прямо скажи об этом.`
+Дай краткую сводку по каждому источнику: найдено / не найдено, сколько публикаций (примерно), о чём именно (кратко), и ссылки на самые релевантные материалы. Если указан диагноз — отдельно отметь, есть ли доказательная база именно по применению препарата при этом диагнозе. Если по препарату почти нет доказательной базы — прямо скажи об этом.`
 }
 
-export function openEvidenceSearch(drugName) {
-  const prompt = buildEvidencePrompt(drugName)
+export function openEvidenceSearch(drugName, diagnosisText) {
+  const prompt = buildEvidencePrompt(drugName, diagnosisText)
   const opened = window.open(`https://www.perplexity.ai/search?q=${encodeURIComponent(prompt)}`, '_blank', 'noopener')
   // на случай если Perplexity не подхватит q= (меняют URL API время от времени) —
   // промпт всё равно уже в буфере обмена, можно вставить руками в любую нейросеть
