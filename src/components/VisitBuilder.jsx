@@ -19,7 +19,8 @@ function blankSectionValues(template) {
   const init = {}
   const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
   template.sections.forEach((s) => {
-    init[s.id] = arrayTypes.includes(s.type) ? [] : ''
+    if (arrayTypes.includes(s.type)) init[s.id] = []
+    else init[s.id] = s.defaultText || ''
   })
   return init
 }
@@ -45,6 +46,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [guidelineInsertions, setGuidelineInsertions] = useState([]) // [{guidelineId, guidelineTitle, sectionId, type, items}]
   const [staleGuidelinePrompt, setStaleGuidelinePrompt] = useState(null) // список guidelineInsertions, ставших неактуальными
   const prevCodesRef = useRef(null)
+  const autoFilledRef = useRef(new Set())
   const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
@@ -194,6 +196,57 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     setStaleGuidelinePrompt(null)
   }
 
+  // Автоподстановка из клинрека: если у совпавшей рекомендации есть клиническая
+  // картина/обследования, а соответствующее поле визита ещё пустое — подставляем
+  // без клика по кнопке. "Только если пусто" и только один раз на рекомендацию,
+  // чтобы не переписывать то, что врач уже удалил вручную.
+  useEffect(() => {
+    const codes = extractCodesFromText(sectionValues.diagnosis)
+    if (!codes.length) return
+    const matches = store.getGuidelinesForCodes(codes)
+    if (!matches.length) return
+
+    const investigationsSection = template.sections.find((s) => s.type === 'investigations')
+
+    setSectionValues((prev) => {
+      let next = prev
+      let changed = false
+
+      matches.forEach((g) => {
+        const complaintsKey = `${g.id}:complaints`
+        if ((g.clinicalPicture || []).length && !(prev.complaints || []).length && !autoFilledRef.current.has(complaintsKey)) {
+          autoFilledRef.current.add(complaintsKey)
+          if (!changed) next = { ...next }
+          next.complaints = [...g.clinicalPicture]
+          changed = true
+        }
+
+        if (investigationsSection) {
+          const invKey = `${g.id}:investigations-${investigationsSection.id}`
+          if (
+            (g.investigations || []).length &&
+            !(prev[investigationsSection.id] || []).length &&
+            !autoFilledRef.current.has(invKey)
+          ) {
+            autoFilledRef.current.add(invKey)
+            if (!changed) next = { ...next }
+            next[investigationsSection.id] = [...g.investigations]
+            changed = true
+          }
+        }
+      })
+
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionValues.diagnosis])
+
+  function clearSection(section) {
+    const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
+    updateSection(section.id, arrayTypes.includes(section.type) ? [] : '')
+    if (section.hasDurationField) updateSection(`${section.id}_duration`, '')
+  }
+
   function saveVisit() {
     store.saveVisit({
       templateId: template.id,
@@ -246,7 +299,25 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         <div className="visit-sections">
           {template.sections.map((section) => (
             <section key={section.id} className="section-block">
-              <h3>{section.title}</h3>
+              <div className="section-block-header">
+                <h3>{section.title}</h3>
+                <button type="button" className="section-clear-btn" onClick={() => clearSection(section)}>
+                  Очистить
+                </button>
+              </div>
+              {section.hasDurationField && (
+                <div className="section-duration-row">
+                  <label>
+                    Длительность
+                    <input
+                      type="text"
+                      value={sectionValues[`${section.id}_duration`] || ''}
+                      onChange={(e) => updateSection(`${section.id}_duration`, e.target.value)}
+                      placeholder="напр. 3 дня, 2 недели, 6 месяцев"
+                    />
+                  </label>
+                </div>
+              )}
               {section.type === 'chips' && (
                 <>
                   <ChipSection
@@ -378,6 +449,10 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     diagnosisText={sectionValues.diagnosis}
                     mode="drugs"
                     onInsertScenarioDrugs={(drugs, g) => insertGuidelineDrugs(section.id, drugs, g)}
+                    onInsertInvestigationsFromDrugs={(items, g) => {
+                      const invSection = template.sections.find((s) => s.type === 'investigations')
+                      if (invSection) insertGuidelineList(invSection.id, items, g)
+                    }}
                   />
                 </>
               )}

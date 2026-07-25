@@ -102,6 +102,7 @@ function ScenarioEditor({ scenario, onChange, onDelete }) {
 export default function GuidelinesPage() {
   const [guidelines, setGuidelines] = useState(store.getGuidelines())
   const [form, setForm] = useState(blankForm())
+  const [formOpen, setFormOpen] = useState(false)
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -128,6 +129,7 @@ export default function GuidelinesPage() {
       source: g.source || '',
       sourceYear: g.sourceYear || '',
     })
+    setFormOpen(true)
   }
 
   function remove(id) {
@@ -160,6 +162,7 @@ export default function GuidelinesPage() {
     store.saveGuideline({ ...form, mkb10Codes, investigations, clinicalPicture, scenarios })
     registerScenarioDrugsInDb(scenarios)
     setForm(blankForm())
+    setFormOpen(false)
     refresh()
   }
 
@@ -194,6 +197,17 @@ export default function GuidelinesPage() {
         Всплывает подсказкой на приёме в секциях "Жалобы", "Диагноз", "Обследования" и "Рекомендации".
       </p>
 
+      <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true) }}>
+        + Добавить рекомендацию
+      </button>
+
+      {formOpen && (
+        <div className="modal-overlay" onClick={() => setFormOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{form.id ? `Редактировать: ${form.title}` : 'Новая рекомендация'}</h3>
+              <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
+            </div>
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
           <input
@@ -294,6 +308,9 @@ export default function GuidelinesPage() {
           <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>
         </div>
       </form>
+          </div>
+        </div>
+      )}
 
       <div className="drug-db-list">
         <h4>Справочник ({Object.keys(guidelines).length})</h4>

@@ -5,7 +5,7 @@ const KEY = 'medconsult_v1'
 // Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
 // (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
 // свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 5
+const TEMPLATES_SEED_VERSION = 6
 
 function readAll() {
   try {
@@ -86,12 +86,18 @@ function seedTemplates() {
       name: 'Первичный приём (уролог)',
       sections: [
         {
+          id: 'diagnosis',
+          title: 'Диагноз',
+          type: 'freeform',
+        },
+        {
           id: 'complaints',
           title: 'Жалобы',
           type: 'chips',
           chips: [
             {
               text: 'боль внизу живота',
+              category: 'Боль',
               modifierGroups: [
                 { label: 'Характер', options: ['острая', 'тупая', 'ноющая', 'схваткообразная'] },
                 {
@@ -109,54 +115,62 @@ function seedTemplates() {
               ],
             },
             {
+              text: 'боль в мошонке',
+              category: 'Боль',
+              modifierGroups: [{ label: 'Сторона', options: ['слева', 'справа', 'с обеих сторон'] }],
+            },
+            {
+              text: 'боль в промежности',
+              category: 'Боль',
+              modifierGroups: [{ label: 'Характер', options: ['острая', 'тупая', 'ноющая'] }],
+            },
+            {
               text: 'учащённое мочеиспускание',
+              category: 'Мочеиспускание',
               modifierGroups: [{ label: 'Когда', options: ['днём', 'ночью', 'постоянно'] }],
             },
             {
               text: 'никтурия',
+              category: 'Мочеиспускание',
               modifierGroups: [{ label: 'Кратность', options: ['x1', 'x2', 'x3+'] }],
             },
-            { text: 'затруднённое мочеиспускание', modifierGroups: [] },
-            { text: 'слабая струя мочи', modifierGroups: [] },
-            {
-              text: 'примесь крови в моче',
-              modifierGroups: [{ label: 'Когда', options: ['в начале струи', 'в конце струи', 'на всём протяжении'] }],
-            },
-            { text: 'прерывистое мочеиспускание', modifierGroups: [] },
-            { text: 'чувство неполного опорожнения мочевого пузыря', modifierGroups: [] },
-            { text: 'императивные позывы к мочеиспусканию', modifierGroups: [] },
+            { text: 'затруднённое мочеиспускание', category: 'Мочеиспускание', modifierGroups: [] },
+            { text: 'слабая струя мочи', category: 'Мочеиспускание', modifierGroups: [] },
+            { text: 'прерывистое мочеиспускание', category: 'Мочеиспускание', modifierGroups: [] },
+            { text: 'чувство неполного опорожнения мочевого пузыря', category: 'Мочеиспускание', modifierGroups: [] },
+            { text: 'императивные позывы к мочеиспусканию', category: 'Мочеиспускание', modifierGroups: [] },
             {
               text: 'недержание мочи',
+              category: 'Мочеиспускание',
               modifierGroups: [{ label: 'Тип', options: ['стрессовое', 'ургентное', 'смешанное', 'постоянное'] }],
             },
-            { text: 'жжение/резь при мочеиспускании', modifierGroups: [] },
+            { text: 'жжение/резь при мочеиспускании', category: 'Мочеиспускание', modifierGroups: [] },
+            {
+              text: 'примесь крови в моче',
+              category: 'Кровь / выделения',
+              modifierGroups: [{ label: 'Когда', options: ['в начале струи', 'в конце струи', 'на всём протяжении'] }],
+            },
+            { text: 'выделения из уретры', category: 'Кровь / выделения', modifierGroups: [] },
+            { text: 'отхождение конкремента', category: 'Кровь / выделения', modifierGroups: [] },
             {
               text: 'эректильная дисфункция',
+              category: 'Половая функция',
               modifierGroups: [{ label: 'Степень', options: ['лёгкая', 'умеренная', 'тяжёлая'] }],
             },
-            { text: 'снижение либидо', modifierGroups: [] },
-            { text: 'преждевременная эякуляция', modifierGroups: [] },
-            {
-              text: 'боль в мошонке',
-              modifierGroups: [{ label: 'Сторона', options: ['слева', 'справа', 'с обеих сторон'] }],
-            },
-            { text: 'увеличение мошонки/яичка', modifierGroups: [] },
-            { text: 'выделения из уретры', modifierGroups: [] },
-            {
-              text: 'боль в промежности',
-              modifierGroups: [{ label: 'Характер', options: ['острая', 'тупая', 'ноющая'] }],
-            },
-            { text: 'повышение температуры тела', modifierGroups: [{ label: 'Значения', options: ['субфебрильная (до 38)', 'фебрильная (38-39)', 'выше 39'] }] },
-            { text: 'озноб', modifierGroups: [] },
-            { text: 'общая слабость', modifierGroups: [] },
-            { text: 'отхождение конкремента', modifierGroups: [] },
-            { text: 'бесплодие в браке', modifierGroups: [{ label: 'Длительность', options: ['<1 года', '1-2 года', '>2 лет'] }] },
+            { text: 'снижение либидо', category: 'Половая функция', modifierGroups: [] },
+            { text: 'преждевременная эякуляция', category: 'Половая функция', modifierGroups: [] },
+            { text: 'бесплодие в браке', category: 'Половая функция', modifierGroups: [{ label: 'Длительность', options: ['<1 года', '1-2 года', '>2 лет'] }] },
+            { text: 'увеличение мошонки/яичка', category: 'Мошонка / яички', modifierGroups: [] },
+            { text: 'повышение температуры тела', category: 'Общие симптомы', modifierGroups: [{ label: 'Значения', options: ['субфебрильная (до 38)', 'фебрильная (38-39)', 'выше 39'] }] },
+            { text: 'озноб', category: 'Общие симптомы', modifierGroups: [] },
+            { text: 'общая слабость', category: 'Общие симптомы', modifierGroups: [] },
           ],
         },
         {
           id: 'anamnesis',
           title: 'Анамнез заболевания',
           type: 'chips',
+          hasDurationField: true,
           chips: [
             { text: 'считает себя больным впервые', modifierGroups: [] },
             {
@@ -171,11 +185,6 @@ function seedTemplates() {
             { text: 'ранее не обследовался', modifierGroups: [] },
             { text: 'самостоятельно принимал антибиотики', modifierGroups: [] },
           ],
-        },
-        {
-          id: 'anamnesis_duration',
-          title: 'Длительность текущего эпизода / заболевания',
-          type: 'text',
         },
         {
           id: 'anamnesis_free',
@@ -195,11 +204,6 @@ function seedTemplates() {
             { text: 'наружные половые органы развиты правильно', modifierGroups: [] },
             { text: 'per rectum: простата не увеличена, безболезненна', modifierGroups: [] },
           ],
-        },
-        {
-          id: 'diagnosis',
-          title: 'Диагноз',
-          type: 'freeform',
         },
         {
           id: 'investigations',

@@ -13,6 +13,7 @@ export default function GuidelinePanel({
   onInsertFormulation,
   onInsertComplaint,
   onInsertDiagnostics,
+  onInsertInvestigationsFromDrugs,
   onInsertScenarioDrugs,
   formulationTag,
 }) {
@@ -59,7 +60,6 @@ export default function GuidelinePanel({
             {mode === 'diagnosis' && (
               <>
                 {g.classification && <p className="guideline-panel-text-muted">Классификация: {g.classification}</p>}
-                {g.diagnosisCriteria && <p className="guideline-panel-text-muted">Критерии: {g.diagnosisCriteria}</p>}
                 {g.diagnosisFormulation && (
                   <button
                     type="button"
@@ -85,6 +85,14 @@ export default function GuidelinePanel({
 
             {mode === 'drugs' && (
               <>
+                {(g.investigations || []).length > 0 && onInsertInvestigationsFromDrugs && (
+                  <div className="guideline-drugs-investigations">
+                    <p className="guideline-panel-text-muted">Обследования по рекомендации: {g.investigations.join(', ')}</p>
+                    <button type="button" className="btn-secondary btn-small" onClick={() => onInsertInvestigationsFromDrugs(g.investigations, g)}>
+                      Добавить эти обследования
+                    </button>
+                  </div>
+                )}
                 {g.nonDrugTherapy && (
                   <p className="guideline-panel-text-muted">Немедикаментозно: {g.nonDrugTherapy}</p>
                 )}

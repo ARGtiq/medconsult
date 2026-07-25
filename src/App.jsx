@@ -9,6 +9,7 @@ import './App.css'
 // незачем грузить это на первом экране "Приём", когда открывают само приложение
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const ReferencePage = lazy(() => import('./components/ReferencePage'))
+const PatientsPage = lazy(() => import('./components/PatientsPage'))
 
 export default function App() {
   const [templates, setTemplates] = useState(store.getTemplates())
@@ -80,6 +81,9 @@ export default function App() {
           <button className={page === 'guidelines' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('guidelines'); setNavOpen(false) }}>
             📋 Справочник
           </button>
+          <button className={page === 'patients' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('patients'); setNavOpen(false) }}>
+            🧑 Пациенты
+          </button>
           <button className={page === 'settings' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('settings'); setNavOpen(false) }}>
             ⚙ Настройки
           </button>
@@ -98,6 +102,10 @@ export default function App() {
         ) : page === 'guidelines' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка справочника…</p>}>
             <ReferencePage />
+          </Suspense>
+        ) : page === 'patients' ? (
+          <Suspense fallback={<p className="settings-loading">Загрузка пациентов…</p>}>
+            <PatientsPage />
           </Suspense>
         ) : activeTemplate ? (
           <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />

@@ -216,8 +216,29 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
         </div>
       )}
 
-      {section.type === 'freeform' && <p className="settings-note-inline">Многострочное свободное текстовое поле.</p>}
-      {section.type === 'text' && <p className="settings-note-inline">Однострочное текстовое поле.</p>}
+      {section.type === 'freeform' && (
+        <div className="options-editor">
+          <textarea
+            className="section-default-text-input"
+            placeholder="Текст по умолчанию (необязательно) — подставится при создании нового визита"
+            value={section.defaultText || ''}
+            onChange={(e) => update({ defaultText: e.target.value })}
+            rows={2}
+          />
+          <p className="settings-note-inline">Многострочное свободное текстовое поле.</p>
+        </div>
+      )}
+      {section.type === 'text' && (
+        <div className="options-editor">
+          <input
+            className="section-default-text-input"
+            placeholder="Текст по умолчанию (необязательно)"
+            value={section.defaultText || ''}
+            onChange={(e) => update({ defaultText: e.target.value })}
+          />
+          <p className="settings-note-inline">Однострочное текстовое поле.</p>
+        </div>
+      )}
       {section.type === 'drugs' && <p className="settings-note-inline">Секция назначений: автоподсказки, аллергии, взаимодействия — без доп. настройки.</p>}
     </div>
   )

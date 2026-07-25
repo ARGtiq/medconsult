@@ -9,6 +9,7 @@ function blankGroupForm() {
 export default function DrugGroupsTab() {
   const [customGroups, setCustomGroups] = useState(store.getCustomGroups())
   const [form, setForm] = useState(blankGroupForm())
+  const [formOpen, setFormOpen] = useState(false)
   const [editingStaticKey, setEditingStaticKey] = useState(null)
   const [crossList, setCrossList] = useState(store.getCrossReactivity())
   const [crossForm, setCrossForm] = useState({ groupA: '', groupB: '', note: '' })
@@ -56,6 +57,7 @@ export default function DrugGroupsTab() {
       contraindications: override.contraindications ?? builtin.contraindications ?? '',
       mkb10Codes: override.mkb10Codes ?? builtin.mkb10Codes ?? '',
     })
+    setFormOpen(true)
   }
 
   function editCustomGroup(key, group) {
@@ -69,11 +71,13 @@ export default function DrugGroupsTab() {
       contraindications: group.contraindications || '',
       mkb10Codes: group.mkb10Codes || '',
     })
+    setFormOpen(true)
   }
 
   function startNew() {
     setEditingStaticKey(null)
     setForm(blankGroupForm())
+    setFormOpen(true)
   }
 
   function save(e) {
@@ -100,6 +104,7 @@ export default function DrugGroupsTab() {
     refresh()
     setForm(blankGroupForm())
     setEditingStaticKey(null)
+    setFormOpen(false)
   }
 
   function removeCustom(key) {
@@ -119,6 +124,17 @@ export default function DrugGroupsTab() {
         заметки (побочки, противопоказания, МКБ-10) можно дополнить здесь. Свои группы — полностью редактируемые.
       </p>
 
+      <button type="button" className="btn-primary" onClick={startNew}>
+        + Добавить группу
+      </button>
+
+      {formOpen && (
+        <div className="modal-overlay" onClick={() => setFormOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingStaticKey ? `Заметки: ${form.label}` : form.key ? `Редактировать: ${form.label}` : 'Новая группа'}</h3>
+              <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
+            </div>
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
           <input
@@ -165,6 +181,9 @@ export default function DrugGroupsTab() {
           <button type="button" className="btn-secondary" onClick={startNew}>Новая группа</button>
         </div>
       </form>
+          </div>
+        </div>
+      )}
 
       <div className="drug-db-list">
         <h4>Встроенные группы</h4>

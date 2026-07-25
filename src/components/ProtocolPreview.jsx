@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { polishNarrative } from '../lib/openrouter'
 
-function sectionToText(section, value, patient) {
+function sectionToText(section, value, patient, durationValue) {
   if (section.type === 'drugs') {
     const drugs = value || []
     if (!drugs.length) return ''
@@ -18,11 +18,15 @@ function sectionToText(section, value, patient) {
   else if (Array.isArray(value)) text = value.join(', ')
   else text = value || ''
 
+  if (section.hasDurationField && durationValue?.trim()) {
+    text = text ? `Длительность: ${durationValue.trim()}\n${text}` : `Длительность: ${durationValue.trim()}`
+  }
+
   if (section.id === 'anamnesis_vitae') {
     const extraLines = []
-    if (patient?.allergies?.length) extraLines.push(`Аллергоанамнез: ${patient.allergies.join(', ')}.`)
-    if (patient?.currentMedications?.length) extraLines.push(`Принимает в настоящее время: ${patient.currentMedications.join(', ')}.`)
-    if (extraLines.length) text = text ? `${extraLines.join('\n')}\n${text}` : extraLines.join('\n')
+    extraLines.push(`Аллергоанамнез: ${patient?.allergies?.length ? patient.allergies.join(', ') : 'отрицает'}.`)
+    extraLines.push(`Принимает в настоящее время: ${patient?.currentMedications?.length ? patient.currentMedications.join(', ') : 'не принимает'}.`)
+    text = text ? `${extraLines.join('\n')}\n${text}` : extraLines.join('\n')
   }
 
   return text
@@ -67,7 +71,7 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
   const generatedText = useMemo(() => {
     const body = template.sections
       .map((s) => {
-        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient)
+        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues[`${s.id}_duration`])
         if (!text) return null
         return `${s.title}:\n${text}`
       })
@@ -152,7 +156,7 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
             </div>
           )}
           {template.sections.map((s) => {
-            const generated = sectionToText(s, sectionValues[s.id], patient)
+            const generated = sectionToText(s, sectionValues[s.id], patient, sectionValues[`${s.id}_duration`])
             const text = fieldOverrides[s.id] ?? generated
             return (
               <div key={s.id} className="field-preview-block">

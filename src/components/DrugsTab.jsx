@@ -30,6 +30,7 @@ function blankForm() {
 export default function DrugsTab() {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
   const [form, setForm] = useState(blankForm())
+  const [formOpen, setFormOpen] = useState(false)
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -45,11 +46,13 @@ export default function DrugsTab() {
     if (!form.name.trim()) return
     store.saveDrugInfo(form)
     setForm(blankForm())
+    setFormOpen(false)
     refresh()
   }
 
   function editExisting(d) {
     setForm({ ...blankForm(), ...d })
+    setFormOpen(true)
   }
 
   async function runBrandNames() {
@@ -93,6 +96,17 @@ export default function DrugsTab() {
 
   return (
     <div className="settings-tab">
+      <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true) }}>
+        + Добавить препарат
+      </button>
+
+      {formOpen && (
+        <div className="modal-overlay" onClick={() => setFormOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{form.name ? `Редактировать: ${form.name}` : 'Новый препарат'}</h3>
+              <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
+            </div>
       <form className="drug-form" onSubmit={saveForm}>
         <div className="drug-form-row">
           <input
@@ -192,9 +206,12 @@ export default function DrugsTab() {
 
         <div className="drug-form-actions">
           <button type="submit" className="btn-primary">Сохранить препарат</button>
-          {form.name && <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>}
+          <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>
         </div>
       </form>
+          </div>
+        </div>
+      )}
 
       <div className="drug-db-list">
         <h4>База препаратов ({Object.keys(drugs).length})</h4>
