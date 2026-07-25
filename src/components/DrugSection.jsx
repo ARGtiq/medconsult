@@ -6,6 +6,7 @@ import AddDrugToDbModal from './AddDrugToDbModal'
 import VoiceInputButton from './VoiceInputButton'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import AutoWidthInput from './AutoWidthInput'
+import { extractCodesFromText } from '../data/mkb10'
 
 export default function DrugSection({ complaints, diagnosisText, patientAllergies, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
@@ -45,6 +46,15 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
     [JSON.stringify(complaints)]
   )
 
+  const diagnosisCodes = useMemo(() => extractCodesFromText(diagnosisText), [diagnosisText])
+
+  const previouslyForDiagnosis = useMemo(() => {
+    if (!diagnosisCodes.length) return []
+    const already = new Set([...safeValues.map((d) => d.name.toLowerCase()), ...suggested.map((s) => s.drug.toLowerCase())])
+    return store.getDrugsForDiagnosisCodes(diagnosisCodes).filter((d) => !already.has(d.drug.toLowerCase()))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnosisCodes.join(','), JSON.stringify(safeValues.map((d) => d.name))])
+
   const drugDbNames = useMemo(() => Object.values(store.getDrugInfoAll()), [])
   const customGroups = useMemo(() => store.getCustomGroups(), [])
   const crossReactivity = useMemo(() => store.getCrossReactivity(), [])
@@ -79,9 +89,11 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
         dosage: dbInfo?.dosage || '',
         frequency: dbInfo?.frequency || '',
         duration: dbInfo?.duration || '',
+        brandNames: dbInfo?.brandNames || '',
       },
     ])
     ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, clean))
+    diagnosisCodes.forEach((code) => store.recordDiagnosisDrug(code, clean))
     setManualDrug('')
   }
 
@@ -266,7 +278,7 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
                     {drug.frequency || 'кратность/длительность'}
                   </span>
                 )}
-                {dbInfo?.brandNames && <span className="drug-db-hint-brands"> · торговые: {dbInfo.brandNames}</span>}
+                {dbInfo?.brandNames && !drug.brandNames && <span className="drug-db-hint-brands"> · есть в базе: {dbInfo.brandNames}</span>}
                 <span> · </span>
                 {editingIdx === idx && editingField === 'duration' ? (
                   <AutoWidthInput
@@ -281,6 +293,42 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
                   <span onClick={() => startEditField(idx, 'duration', drug.duration)} title="Нажми, чтобы отредактировать" className="drug-hint-editable-part">
                     {drug.duration || 'длительность курса'}
                   </span>
+                )}
+              </div>
+
+              <div className="drug-brandnames-row">
+                {editingIdx === idx && editingField === 'brandNames' ? (
+                  <AutoWidthInput
+                    className="drug-inline-edit-input"
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onBlur={saveEditField}
+                    onKeyDown={(e) => e.key === 'Enter' && saveEditField()}
+                    placeholder="торговые названия через запятую"
+                  />
+                ) : drug.brandNames ? (
+                  <span
+                    className="drug-brandnames-value"
+                    onClick={() => startEditField(idx, 'brandNames', drug.brandNames)}
+                    title="Нажми, чтобы отредактировать"
+                  >
+                    ({drug.brandNames})
+                    <button
+                      type="button"
+                      className="drug-brandnames-remove"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onChange(safeValues.map((d, i) => (i === idx ? { ...d, brandNames: '' } : d)))
+                      }}
+                      aria-label="Убрать торговые названия"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" className="drug-brandnames-add" onClick={() => startEditField(idx, 'brandNames', '')}>
+                    + торговые названия
+                  </button>
                 )}
               </div>
 
@@ -422,6 +470,17 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
           )
         })}
       </div>
+
+      {previouslyForDiagnosis.length > 0 && (
+        <div className="suggestions suggestions-diagnosis-history">
+          <div className="suggestions-label">Ранее также назначали при этом диагнозе:</div>
+          {previouslyForDiagnosis.map((s) => (
+            <button type="button" key={s.drug} className="suggestion-pill" onClick={() => addDrug(s.drug)}>
+              {s.drug} <span className="suggestion-count">×{s.weight}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {addToDbFor && (
         <AddDrugToDbModal

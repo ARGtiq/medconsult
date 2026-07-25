@@ -1,22 +1,32 @@
 import { useState, useMemo, useEffect } from 'react'
 import { polishNarrative } from '../lib/openrouter'
 
-function sectionToText(section, value, patient, durationValue) {
+function sectionToText(section, value, patient, sectionValues) {
+  const durationValue = sectionValues[`${section.id}_duration`]
+  const freeTextValue = sectionValues[`${section.id}_freetext`]
+  const pendingInvestigations = sectionValues[`${section.id}_pending_investigations`]
+
   if (section.type === 'drugs') {
     const drugs = value || []
-    if (!drugs.length) return ''
-    return drugs
-      .map((d) => {
-        const extra = [d.dosage, d.frequency, d.duration].filter(Boolean).join(', ')
-        return `— ${d.name}${extra ? ` (${extra})` : ''}`
-      })
-      .join('\n')
+    const lines = drugs.map((d) => {
+      const extra = [d.dosage, d.frequency, d.duration].filter(Boolean).join(', ')
+      const brand = d.brandNames ? ` (${d.brandNames})` : ''
+      return `— ${d.name}${brand}${extra ? ` (${extra})` : ''}`
+    })
+    if (pendingInvestigations?.length) {
+      lines.push('', 'Обследования, которые нужно пройти:', ...pendingInvestigations.map((i) => `— ${i}`))
+    }
+    return lines.join('\n')
   }
 
   let text = ''
   if (section.type === 'investigations' && Array.isArray(value)) text = value.join('\n')
   else if (Array.isArray(value)) text = value.join(', ')
   else text = value || ''
+
+  if (section.hasFreeTextField && freeTextValue?.trim()) {
+    text = text ? `${text}\n${freeTextValue.trim()}` : freeTextValue.trim()
+  }
 
   if (section.hasDurationField && durationValue?.trim()) {
     text = text ? `Длительность: ${durationValue.trim()}\n${text}` : `Длительность: ${durationValue.trim()}`
@@ -71,7 +81,7 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
   const generatedText = useMemo(() => {
     const body = template.sections
       .map((s) => {
-        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues[`${s.id}_duration`])
+        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues)
         if (!text) return null
         return `${s.title}:\n${text}`
       })
@@ -155,11 +165,11 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
               <div className="field-preview-body">{headerText}</div>
             </div>
           )}
-          {template.sections.map((s) => {
-            const generated = sectionToText(s, sectionValues[s.id], patient, sectionValues[`${s.id}_duration`])
+          {template.sections.map((s, idx) => {
+            const generated = sectionToText(s, sectionValues[s.id], patient, sectionValues)
             const text = fieldOverrides[s.id] ?? generated
             return (
-              <div key={s.id} className="field-preview-block">
+              <div key={s.id} className={idx % 2 === 0 ? 'field-preview-block' : 'field-preview-block field-preview-block-alt'}>
                 <div className="field-preview-header">
                   <span>{s.title}</span>
                   <div className="field-preview-header-actions">

@@ -11,6 +11,8 @@ const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const ReferencePage = lazy(() => import('./components/ReferencePage'))
 const PatientsPage = lazy(() => import('./components/PatientsPage'))
 
+const HIDDEN_FROM_NAV = ['preop_epicrisis', 'operation_protocol']
+
 export default function App() {
   const [templates, setTemplates] = useState(store.getTemplates())
   const [activeTemplateId, setActiveTemplateId] = useState(
@@ -65,19 +67,38 @@ export default function App() {
             Приём
           </button>
           {page === 'visit' &&
-            templates.map((t) => (
-              <button
-                key={t.id}
-                className={t.id === activeTemplateId ? 'tab active' : 'tab'}
-                onClick={() => {
-                  setActiveTemplateId(t.id)
-                  setPendingVisit(null)
-                  setNavOpen(false)
-                }}
-              >
-                {t.name}
-              </button>
-            ))}
+            templates
+              .filter((t) => !HIDDEN_FROM_NAV.includes(t.id))
+              .map((t) => (
+                <button
+                  key={t.id}
+                  className={t.id === activeTemplateId ? 'tab active' : 'tab'}
+                  onClick={() => {
+                    setActiveTemplateId(t.id)
+                    setPendingVisit(null)
+                    setNavOpen(false)
+                  }}
+                >
+                  {t.name}
+                </button>
+              ))}
+          {page === 'visit' && templates.some((t) => HIDDEN_FROM_NAV.includes(t.id)) && (
+            <select
+              className="tab-more-select"
+              value={HIDDEN_FROM_NAV.includes(activeTemplateId) ? activeTemplateId : ''}
+              onChange={(e) => {
+                if (!e.target.value) return
+                setActiveTemplateId(e.target.value)
+                setPendingVisit(null)
+                setNavOpen(false)
+              }}
+            >
+              <option value="">Ещё шаблоны…</option>
+              {templates.filter((t) => HIDDEN_FROM_NAV.includes(t.id)).map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
           <button className={page === 'guidelines' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('guidelines'); setNavOpen(false) }}>
             📋 Справочник
           </button>
@@ -105,7 +126,7 @@ export default function App() {
           </Suspense>
         ) : page === 'patients' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка пациентов…</p>}>
-            <PatientsPage />
+            <PatientsPage onLoadVisit={loadVisit} />
           </Suspense>
         ) : activeTemplate ? (
           <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />

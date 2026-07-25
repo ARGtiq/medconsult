@@ -178,7 +178,10 @@ export default function ChipSection({ section, values, onChange }) {
             )}
           </div>
         ) : (
-          <div className="chip-row">{section.chips?.map(renderChipButton)}</div>
+          <details className="chip-category-spoiler chip-flat-spoiler">
+            <summary>Показать варианты <span className="chip-category-count">({section.chips?.length || 0})</span></summary>
+            <div className="chip-row">{section.chips?.map(renderChipButton)}</div>
+          </details>
         )
       ) : (
         <div className="chip-builder">

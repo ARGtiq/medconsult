@@ -617,6 +617,136 @@ body {
 .patients-field-value { cursor: pointer; font-size: 13.5px; }
 .patients-field-value:hover { text-decoration: underline; color: var(--teal); }
 
+.drug-brandnames-row { margin-top: 4px; font-size: 12px; }
+.drug-brandnames-value {
+  cursor: pointer;
+  color: var(--teal);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.drug-brandnames-remove {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.drug-brandnames-add {
+  border: 1px dashed var(--line);
+  background: none;
+  color: var(--ink-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.suggestions-diagnosis-history { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+
+.duration-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.duration-picker-amount {
+  width: 90px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+.duration-picker-unit {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+  background: white;
+}
+.duration-picker-preview { font-size: 12px; color: var(--ink-soft); }
+
+.field-preview-block-alt { background: rgba(15, 110, 95, 0.03); border-radius: 8px; }
+
+.patient-details-spoiler { margin-bottom: 14px; }
+.patient-details-spoiler summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+  padding: 4px 0;
+  list-style: none;
+}
+.patient-details-spoiler summary::-webkit-details-marker { display: none; }
+.patient-details-spoiler summary::before { content: '▸ '; color: var(--teal); }
+.patient-details-spoiler[open] summary::before { content: '▾ '; }
+.patient-details-spoiler .visit-top-row { margin-top: 10px; }
+
+.anamnesis-freetext-block { margin-top: 10px; }
+.anamnesis-freetext-block label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.anamnesis-freetext-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.pending-investigations-block {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.pending-investigations-label { font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+
+.guideline-scenario-block { margin-bottom: 8px; }
+.guideline-scenario-name { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+.guideline-drug-buttons { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.guideline-drug-btn {
+  border: 1px dashed #6b5fa8;
+  background: #f4f1fb;
+  color: #6b5fa8;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.guideline-drug-btn:hover { background: #e9e3f7; }
+
+.tab-more-select {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.visit-history-card .btn-small { margin-top: 8px; }
+
+.chip-flat-spoiler { margin-bottom: 8px; }
+
+.chip-default-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip-default-toggle input { width: 14px; height: 14px; }
+
+.modifier-group-default-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px dashed var(--amber);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--amber-soft);
+}
+
 .selected-chip {
   background: var(--paper);
   border: 1px solid var(--line);

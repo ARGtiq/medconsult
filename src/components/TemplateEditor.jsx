@@ -76,6 +76,14 @@ function ChipEditor({ chip, onChange, onDelete }) {
           value={chip.text}
           onChange={(e) => updateText(e.target.value)}
         />
+        <label className="chip-default-toggle" title="Будет выбран автоматически в новом визите">
+          <input
+            type="checkbox"
+            checked={!!chip.defaultSelected}
+            onChange={(e) => onChange({ ...chip, defaultSelected: e.target.checked })}
+          />
+          по умолчанию
+        </label>
         <button type="button" className="remove-btn" onClick={onDelete}>×</button>
       </div>
 
@@ -96,6 +104,12 @@ function ChipEditor({ chip, onChange, onDelete }) {
             placeholder="Варианты через запятую: острая, тупая, ноющая"
             value={g.optionsText ?? (g.options || []).join(', ')}
             onChange={(e) => updateGroup(gIdx, { optionsText: e.target.value })}
+          />
+          <input
+            className="modifier-group-default-input"
+            placeholder="По умолчанию (подчип), напр. острая"
+            value={g.defaultOptionsText ?? (g.defaultOptions || []).join(', ')}
+            onChange={(e) => updateGroup(gIdx, { defaultOptionsText: e.target.value })}
           />
           <button type="button" className="remove-btn" onClick={() => removeGroup(gIdx)}>×</button>
         </div>
@@ -318,10 +332,15 @@ export default function TemplateEditor() {
       if (s.type === 'chips' || s.type === 'investigations') {
         base.chips = (s.chips || []).map((chip) => ({
           text: chip.text,
+          defaultSelected: !!chip.defaultSelected,
           modifierGroups: (chip.modifierGroups || [])
             .map((g) => ({
               label: g.label,
               options: (g.optionsText ?? (g.options || []).join(', '))
+                .split(',')
+                .map((o) => o.trim())
+                .filter(Boolean),
+              defaultOptions: (g.defaultOptionsText ?? (g.defaultOptions || []).join(', '))
                 .split(',')
                 .map((o) => o.trim())
                 .filter(Boolean),

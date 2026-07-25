@@ -27,7 +27,7 @@ function summarizeVisit(v) {
   }
 }
 
-export default function PatientsPage() {
+export default function PatientsPage({ onLoadVisit }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -157,6 +157,11 @@ export default function PatientsPage() {
                       {complaintsText && <div className="visit-history-line"><strong>Жалобы:</strong> {complaintsText}</div>}
                       {drugsText && <div className="visit-history-line"><strong>Назначено:</strong> {drugsText}</div>}
                       {!complaintsText && !drugsText && <div className="visit-history-line empty-hint">Без деталей</div>}
+                      {onLoadVisit && (
+                        <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
+                          Открыть на приёме
+                        </button>
+                      )}
                     </div>
                   )
                 })}

@@ -227,7 +227,7 @@ export default function GuidelinesPage() {
           onChange={(e) => setForm({ ...form, definition: e.target.value })}
         />
         <AutoResizeTextarea
-          placeholder="Классификация / стадии (напр. I стадия — ..., II стадия — ...)"
+          placeholder="Классификация / стадии — каждая стадия на отдельной строке (напр. I стадия — компенсация)"
           value={form.classification}
           onChange={(e) => setForm({ ...form, classification: e.target.value })}
         />

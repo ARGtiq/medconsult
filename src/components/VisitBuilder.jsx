@@ -7,6 +7,8 @@ import PatientPanel from './PatientPanel'
 import Mkb10Picker from './Mkb10Picker'
 import GuidelinePanel from './GuidelinePanel'
 import VoiceInputButton from './VoiceInputButton'
+import AutoResizeTextarea from './AutoResizeTextarea'
+import DurationPicker from './DurationPicker'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 import { extractCodesFromText } from '../data/mkb10'
@@ -15,12 +17,29 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function lowercaseFirst(s) {
+  return s ? s.charAt(0).toLowerCase() + s.slice(1) : s
+}
+
+function composeDefaultChipText(chip) {
+  const parts = []
+  ;(chip.modifierGroups || []).forEach((g) => {
+    if (g.defaultOptions?.length) parts.push(...g.defaultOptions)
+  })
+  return parts.length ? `${chip.text} (${parts.join(', ')})` : chip.text
+}
+
 function blankSectionValues(template) {
   const init = {}
   const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
   template.sections.forEach((s) => {
-    if (arrayTypes.includes(s.type)) init[s.id] = []
-    else init[s.id] = s.defaultText || ''
+    if (s.type === 'chips' || s.type === 'investigations') {
+      init[s.id] = (s.chips || []).filter((c) => c.defaultSelected).map(composeDefaultChipText)
+    } else if (arrayTypes.includes(s.type)) {
+      init[s.id] = []
+    } else {
+      init[s.id] = s.defaultText || ''
+    }
   })
   return init
 }
@@ -50,6 +69,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
+  const recommendationsSection = template.sections.find((s) => s.type === 'drugs')
+  const pendingInvestigationsKey = recommendationsSection ? `${recommendationsSection.id}_pending_investigations` : null
 
   // Автосохранение черновика — debounce на 800мс, чтобы не писать в localStorage
   // на каждое нажатие клавиши
@@ -118,45 +139,37 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     setFormulationTag({ guidelineId: guideline.id, guidelineUpdatedAt: guideline.updatedAt })
   }
 
+  function insertClassificationLine(text) {
+    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}\n${text}` : text)
+  }
+
   function insertGuidelineComplaint(text) {
+    const clean = lowercaseFirst(text)
     const current = sectionValues.complaints || []
-    if (!current.includes(text)) updateSection('complaints', [...current, text])
+    if (!current.includes(clean)) updateSection('complaints', [...current, clean])
   }
 
-  function insertGuidelineList(sectionId, items, guideline) {
-    const current = sectionValues[sectionId] || []
-    const toAdd = items.filter((item) => !current.includes(item))
-    if (toAdd.length) {
-      updateSection(sectionId, [...current, ...toAdd])
-      setGuidelineInsertions((prev) => [
-        ...prev.filter((ins) => !(ins.guidelineId === guideline.id && ins.sectionId === sectionId && ins.type === 'investigations')),
-        { guidelineId: guideline.id, guidelineTitle: guideline.title, sectionId, type: 'investigations', items: toAdd },
-      ])
-    }
+  function insertGuidelineInvestigation(text) {
+    if (!pendingInvestigationsKey) return
+    const current = sectionValues[pendingInvestigationsKey] || []
+    if (!current.includes(text)) updateSection(pendingInvestigationsKey, [...current, text])
   }
 
-  function insertGuidelineDrugs(sectionId, scenarioDrugs, guideline) {
+  function insertGuidelineDrugSingle(sectionId, drug) {
     const current = sectionValues[sectionId] || []
-    const existingNames = new Set(current.map((d) => d.name.toLowerCase()))
-    const toAdd = scenarioDrugs
-      .filter((d) => d.name && !existingNames.has(d.name.toLowerCase()))
-      .map((d) => {
-        const dbInfo = store.getDrugInfo(d.name)
-        return {
-          name: d.name,
-          evidence: 'guideline',
-          dosage: d.dose || dbInfo?.dosage || '',
-          frequency: dbInfo?.frequency || '',
-          duration: d.duration || dbInfo?.duration || '',
-        }
-      })
-    if (toAdd.length) {
-      updateSection(sectionId, [...current, ...toAdd])
-      setGuidelineInsertions((prev) => [
-        ...prev.filter((ins) => !(ins.guidelineId === guideline.id && ins.sectionId === sectionId && ins.type === 'drugs')),
-        { guidelineId: guideline.id, guidelineTitle: guideline.title, sectionId, type: 'drugs', items: toAdd.map((d) => d.name) },
-      ])
-    }
+    if (current.some((d) => d.name.toLowerCase() === drug.name.toLowerCase())) return
+    const dbInfo = store.getDrugInfo(drug.name)
+    updateSection(sectionId, [
+      ...current,
+      {
+        name: drug.name,
+        evidence: 'guideline',
+        dosage: drug.dose || dbInfo?.dosage || '',
+        frequency: dbInfo?.frequency || '',
+        duration: drug.duration || dbInfo?.duration || '',
+        brandNames: dbInfo?.brandNames || '',
+      },
+    ])
   }
 
   // Следим за кодами МКБ в диагнозе: если код сменился так, что ранее вставленная
@@ -206,8 +219,6 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     const matches = store.getGuidelinesForCodes(codes)
     if (!matches.length) return
 
-    const investigationsSection = template.sections.find((s) => s.type === 'investigations')
-
     setSectionValues((prev) => {
       let next = prev
       let changed = false
@@ -217,20 +228,20 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         if ((g.clinicalPicture || []).length && !(prev.complaints || []).length && !autoFilledRef.current.has(complaintsKey)) {
           autoFilledRef.current.add(complaintsKey)
           if (!changed) next = { ...next }
-          next.complaints = [...g.clinicalPicture]
+          next.complaints = g.clinicalPicture.map(lowercaseFirst)
           changed = true
         }
 
-        if (investigationsSection) {
-          const invKey = `${g.id}:investigations-${investigationsSection.id}`
+        if (pendingInvestigationsKey) {
+          const invKey = `${g.id}:pending-investigations`
           if (
             (g.investigations || []).length &&
-            !(prev[investigationsSection.id] || []).length &&
+            !(prev[pendingInvestigationsKey] || []).length &&
             !autoFilledRef.current.has(invKey)
           ) {
             autoFilledRef.current.add(invKey)
             if (!changed) next = { ...next }
-            next[investigationsSection.id] = [...g.investigations]
+            next[pendingInvestigationsKey] = [...g.investigations]
             changed = true
           }
         }
@@ -245,6 +256,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
     updateSection(section.id, arrayTypes.includes(section.type) ? [] : '')
     if (section.hasDurationField) updateSection(`${section.id}_duration`, '')
+    if (section.hasFreeTextField) updateSection(`${section.id}_freetext`, '')
+    if (section.type === 'drugs') updateSection(`${section.id}_pending_investigations`, [])
   }
 
   function saveVisit() {
@@ -287,13 +300,16 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         </div>
       )}
 
-      <div className="visit-top-row">
-        <PatientPanel patient={patient} onChange={setPatient} onLoadVisit={onLoadVisit} />
-        <label className="visit-date-label">
-          Дата консультации
-          <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
-        </label>
-      </div>
+      <details className="patient-details-spoiler" open>
+        <summary>Пациент {patient ? `— ${patient.name}` : ''}</summary>
+        <div className="visit-top-row">
+          <PatientPanel patient={patient} onChange={setPatient} onLoadVisit={onLoadVisit} />
+          <label className="visit-date-label">
+            Дата консультации
+            <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+          </label>
+        </div>
+      </details>
 
       <div className="visit-layout">
         <div className="visit-sections">
@@ -307,15 +323,11 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
               </div>
               {section.hasDurationField && (
                 <div className="section-duration-row">
-                  <label>
-                    Длительность
-                    <input
-                      type="text"
-                      value={sectionValues[`${section.id}_duration`] || ''}
-                      onChange={(e) => updateSection(`${section.id}_duration`, e.target.value)}
-                      placeholder="напр. 3 дня, 2 недели, 6 месяцев"
-                    />
-                  </label>
+                  <label>Длительность</label>
+                  <DurationPicker
+                    value={sectionValues[`${section.id}_duration`] || ''}
+                    onChange={(v) => updateSection(`${section.id}_duration`, v)}
+                  />
                 </div>
               )}
               {section.type === 'chips' && (
@@ -325,6 +337,17 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     values={sectionValues[section.id] || []}
                     onChange={(v) => updateSection(section.id, v)}
                   />
+                  {section.hasFreeTextField && (
+                    <div className="anamnesis-freetext-block">
+                      <label>Дополнительное описание</label>
+                      <AutoResizeTextarea
+                        className="anamnesis-freetext-input"
+                        value={sectionValues[`${section.id}_freetext`] || ''}
+                        onChange={(e) => updateSection(`${section.id}_freetext`, e.target.value)}
+                        placeholder="Свободное описание анамнеза заболевания…"
+                      />
+                    </div>
+                  )}
                   {section.id === 'complaints' && (
                     <GuidelinePanel
                       diagnosisText={sectionValues.diagnosis}
@@ -335,18 +358,11 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 </>
               )}
               {section.type === 'investigations' && (
-                <>
-                  <InvestigationSection
-                    section={section}
-                    values={sectionValues[section.id] || []}
-                    onChange={(v) => updateSection(section.id, v)}
-                  />
-                  <GuidelinePanel
-                    diagnosisText={sectionValues.diagnosis}
-                    mode="investigations"
-                    onInsertDiagnostics={(items, g) => insertGuidelineList(section.id, items, g)}
-                  />
-                </>
+                <InvestigationSection
+                  section={section}
+                  values={sectionValues[section.id] || []}
+                  onChange={(v) => updateSection(section.id, v)}
+                />
               )}
               {section.type === 'text' && (
                 <input
@@ -398,11 +414,10 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 <>
                   {section.id === 'diagnosis' && <Mkb10Picker onInsert={insertIntoDiagnosis} />}
                   <div className="textarea-with-voice">
-                    <textarea
+                    <AutoResizeTextarea
                       className="freeform-textarea"
                       value={sectionValues[section.id] || ''}
                       onChange={(e) => updateSection(section.id, e.target.value)}
-                      rows={4}
                       placeholder="Свободный текст…"
                     />
                     <VoiceInputButton
@@ -416,6 +431,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                       diagnosisText={sectionValues.diagnosis}
                       mode="diagnosis"
                       onInsertFormulation={insertDiagnosisFormulation}
+                      onInsertClassificationLine={insertClassificationLine}
                       formulationTag={formulationTag}
                     />
                   )}
@@ -437,6 +453,28 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
               )}
               {section.type === 'drugs' && (
                 <>
+                  {(sectionValues[`${section.id}_pending_investigations`] || []).length > 0 && (
+                    <div className="pending-investigations-block">
+                      <div className="pending-investigations-label">Обследования, которые нужно пройти</div>
+                      <div className="selected-values">
+                        {(sectionValues[`${section.id}_pending_investigations`] || []).map((item, idx) => (
+                          <span key={`${item}-${idx}`} className="selected-chip">
+                            {item}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const key = `${section.id}_pending_investigations`
+                                updateSection(key, sectionValues[key].filter((_, i) => i !== idx))
+                              }}
+                              aria-label="Удалить"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <DrugSection
                     complaints={complaints}
                     diagnosisText={sectionValues.diagnosis}
@@ -448,11 +486,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   <GuidelinePanel
                     diagnosisText={sectionValues.diagnosis}
                     mode="drugs"
-                    onInsertScenarioDrugs={(drugs, g) => insertGuidelineDrugs(section.id, drugs, g)}
-                    onInsertInvestigationsFromDrugs={(items, g) => {
-                      const invSection = template.sections.find((s) => s.type === 'investigations')
-                      if (invSection) insertGuidelineList(invSection.id, items, g)
-                    }}
+                    onInsertInvestigation={insertGuidelineInvestigation}
+                    onInsertDrug={(drug) => insertGuidelineDrugSingle(section.id, drug)}
                   />
                 </>
               )}

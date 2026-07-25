@@ -5,7 +5,7 @@ const KEY = 'medconsult_v1'
 // Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
 // (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
 // свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 6
+const TEMPLATES_SEED_VERSION = 7
 
 function readAll() {
   try {
@@ -39,6 +39,8 @@ function defaultState() {
     complaintSuggestions: {},
     // "жалоба||препарат" -> { drug, complaint, weight, lastUsedAt }
     complaintDrugLinks: {},
+    // "код||препарат" -> { code, drug, weight, lastUsedAt }
+    diagnosisDrugLinks: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
     // сохранённые визиты (черновики/готовые протоколы)
@@ -171,6 +173,7 @@ function seedTemplates() {
           title: 'Анамнез заболевания',
           type: 'chips',
           hasDurationField: true,
+          hasFreeTextField: true,
           chips: [
             { text: 'считает себя больным впервые', modifierGroups: [] },
             {
@@ -185,11 +188,6 @@ function seedTemplates() {
             { text: 'ранее не обследовался', modifierGroups: [] },
             { text: 'самостоятельно принимал антибиотики', modifierGroups: [] },
           ],
-        },
-        {
-          id: 'anamnesis_free',
-          title: 'Анамнез заболевания — дополнительное описание',
-          type: 'freeform',
         },
         {
           id: 'anamnesis_vitae',
@@ -207,7 +205,7 @@ function seedTemplates() {
         },
         {
           id: 'investigations',
-          title: 'Обследования',
+          title: 'Пройденные исследования',
           type: 'investigations',
           chips: [
             { text: 'ОАМ', modifierGroups: [] },
@@ -235,7 +233,7 @@ function seedTemplates() {
         { id: 'complaints', title: 'Жалобы', type: 'chips', chips: [] },
         {
           id: 'investigations',
-          title: 'Обследования',
+          title: 'Пройденные исследования',
           type: 'investigations',
           chips: [
             { text: 'ОАМ', modifierGroups: [] },
@@ -381,6 +379,33 @@ export const store = {
     return Object.values(byDrug)
       .map((d) => ({ ...d, complaints: Array.from(d.complaints) }))
       .sort((a, b) => b.weight - a.weight)
+  },
+
+  // --- связка код МКБ -> препарат (что назначали при этом диагнозе раньше) ---
+  recordDiagnosisDrug(code, drug) {
+    if (!code || !drug) return
+    const state = readAll()
+    state.diagnosisDrugLinks = state.diagnosisDrugLinks || {}
+    const key = `${code.trim().toUpperCase()}||${drug.trim().toLowerCase()}`
+    const existing = state.diagnosisDrugLinks[key]
+    state.diagnosisDrugLinks[key] = {
+      code: code.trim().toUpperCase(),
+      drug: drug.trim(),
+      weight: (existing?.weight || 0) + 1,
+      lastUsedAt: Date.now(),
+    }
+    writeAll(state)
+  },
+
+  getDrugsForDiagnosisCodes(codes) {
+    const state = readAll()
+    const links = Object.values(state.diagnosisDrugLinks || {}).filter((l) => codes.includes(l.code))
+    const byDrug = {}
+    for (const l of links) {
+      if (!byDrug[l.drug]) byDrug[l.drug] = { drug: l.drug, weight: 0 }
+      byDrug[l.drug].weight += l.weight
+    }
+    return Object.values(byDrug).sort((a, b) => b.weight - a.weight)
   },
 
   // --- пациенты и аллергии ---
