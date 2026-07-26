@@ -519,6 +519,30 @@ export const store = {
     return readAll().visits.sort((a, b) => b.updatedAt - a.updatedAt)
   },
 
+  // --- инкрементальный синк пациентов: та же логика, что у визитов ---
+  getPatientsChangedSince(ts) {
+    return readAll().patients.filter((p) => (p.updatedAt || 0) > (ts || 0))
+  },
+
+  mergePatientsFromCloud(cloudPatients) {
+    const state = readAll()
+    const byId = {}
+    state.patients.forEach((p) => {
+      byId[p.id] = p
+    })
+    let changed = 0
+    cloudPatients.forEach((cp) => {
+      const local = byId[cp.id]
+      if (!local || (cp.updatedAt || 0) > (local.updatedAt || 0)) {
+        byId[cp.id] = cp
+        changed++
+      }
+    })
+    state.patients = Object.values(byId)
+    writeAll(state)
+    return changed
+  },
+
   // --- инкрементальный синк визитов: только то, что изменилось ---
   getVisitsChangedSince(ts) {
     return readAll().visits.filter((v) => (v.updatedAt || 0) > (ts || 0))

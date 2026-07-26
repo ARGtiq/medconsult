@@ -9,6 +9,8 @@ import {
   pullNamespace,
   pushVisitsIncremental,
   pullVisitsIncremental,
+  pushPatientsIncremental,
+  pullPatientsIncremental,
   getLastSync,
   sendMagicLink,
   getCurrentUser,
@@ -45,33 +47,44 @@ export default function SupabaseSettings() {
   const [nsError, setNsError] = useState({})
   const [nsOk, setNsOk] = useState({})
   const [visitSyncBusy, setVisitSyncBusy] = useState(null)
-  const [visitSyncResult, setVisitSyncResult] = useState('')
-  const [visitSyncError, setVisitSyncError] = useState('')
+  const [visitSyncResult, setVisitSyncResult] = useState({})
+  const [visitSyncError, setVisitSyncError] = useState({})
   const lastSync = getLastSync()
 
-  async function doPushVisitsIncremental() {
-    setVisitSyncBusy('push')
-    setVisitSyncError('')
-    setVisitSyncResult('')
+  const INCREMENTAL_ENTITIES = {
+    visits: { label: 'Визиты', push: pushVisitsIncremental, pull: pullVisitsIncremental, pushWord: 'визитов', pullWord: 'визитов' },
+    patients: { label: 'Пациенты', push: pushPatientsIncremental, pull: pullPatientsIncremental, pushWord: 'пациентов', pullWord: 'пациентов' },
+  }
+
+  async function doPushIncremental(entity) {
+    setVisitSyncBusy(`push-${entity}`)
+    setVisitSyncError((p) => ({ ...p, [entity]: '' }))
+    setVisitSyncResult((p) => ({ ...p, [entity]: '' }))
     try {
-      const { pushed } = await pushVisitsIncremental()
-      setVisitSyncResult(pushed ? `Отправлено изменённых визитов: ${pushed}` : 'Изменений нет — всё уже синхронизировано')
+      const { pushed } = await INCREMENTAL_ENTITIES[entity].push()
+      setVisitSyncResult((p) => ({
+        ...p,
+        [entity]: pushed ? `Отправлено изменённых: ${pushed}` : 'Изменений нет — всё уже синхронизировано',
+      }))
     } catch (e) {
-      setVisitSyncError(e.message)
+      setVisitSyncError((p) => ({ ...p, [entity]: e.message }))
     } finally {
       setVisitSyncBusy(null)
     }
   }
 
-  async function doPullVisitsIncremental() {
-    setVisitSyncBusy('pull')
-    setVisitSyncError('')
-    setVisitSyncResult('')
+  async function doPullIncremental(entity) {
+    setVisitSyncBusy(`pull-${entity}`)
+    setVisitSyncError((p) => ({ ...p, [entity]: '' }))
+    setVisitSyncResult((p) => ({ ...p, [entity]: '' }))
     try {
-      const { pulled, merged } = await pullVisitsIncremental()
-      setVisitSyncResult(pulled ? `Загружено ${pulled}, обновлено локально: ${merged}` : 'Новых визитов в облаке нет')
+      const { pulled, merged } = await INCREMENTAL_ENTITIES[entity].pull()
+      setVisitSyncResult((p) => ({
+        ...p,
+        [entity]: pulled ? `Загружено ${pulled}, обновлено локально: ${merged}` : 'Новых записей в облаке нет',
+      }))
     } catch (e) {
-      setVisitSyncError(e.message)
+      setVisitSyncError((p) => ({ ...p, [entity]: e.message }))
     } finally {
       setVisitSyncBusy(null)
     }
@@ -239,27 +252,32 @@ export default function SupabaseSettings() {
       {actionOk && <div className="ai-diagnostic ok">{actionOk}</div>}
 
       <div className="visit-incremental-sync">
-        <div className="visit-incremental-sync-label">Визиты — только изменённое (не весь список)</div>
-        <div className="data-export-ns-actions">
-          <button
-            type="button"
-            className="btn-secondary btn-small"
-            onClick={doPushVisitsIncremental}
-            disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
-          >
-            {visitSyncBusy === 'push' ? '…' : 'Отправить изменённые'}
-          </button>
-          <button
-            type="button"
-            className="btn-secondary btn-small"
-            onClick={doPullVisitsIncremental}
-            disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
-          >
-            {visitSyncBusy === 'pull' ? '…' : 'Забрать изменённые'}
-          </button>
-        </div>
-        {visitSyncError && <div className="ai-error">{visitSyncError}</div>}
-        {visitSyncResult && <div className="ai-diagnostic ok">{visitSyncResult}</div>}
+        <div className="visit-incremental-sync-label">Только изменённое (не весь список каждый раз)</div>
+        {Object.entries(INCREMENTAL_ENTITIES).map(([entity, cfg]) => (
+          <div key={entity} className="data-export-ns-row">
+            <span>{cfg.label}</span>
+            <div className="data-export-ns-actions">
+              <button
+                type="button"
+                className="btn-secondary btn-small"
+                onClick={() => doPushIncremental(entity)}
+                disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
+              >
+                {visitSyncBusy === `push-${entity}` ? '…' : 'Отправить'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-small"
+                onClick={() => doPullIncremental(entity)}
+                disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
+              >
+                {visitSyncBusy === `pull-${entity}` ? '…' : 'Забрать'}
+              </button>
+            </div>
+            {visitSyncError[entity] && <div className="ai-error">{visitSyncError[entity]}</div>}
+            {visitSyncResult[entity] && <div className="ai-diagnostic ok">{visitSyncResult[entity]}</div>}
+          </div>
+        ))}
       </div>
 
       <button type="button" className="data-export-toggle" onClick={() => setNsOpen((v) => !v)}>

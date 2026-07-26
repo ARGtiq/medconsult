@@ -94,6 +94,19 @@ create policy "own visits insert" on medconsult_visits for insert with check (au
 create policy "own visits update" on medconsult_visits for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create index if not exists medconsult_visits_updated_at_idx on medconsult_visits (user_id, updated_at);
 
+-- Та же логика для пациентов — построчный синк
+create table if not exists medconsult_patients (
+  id uuid primary key,
+  user_id uuid not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table medconsult_patients enable row level security;
+create policy "own patients select" on medconsult_patients for select using (auth.uid() = user_id);
+create policy "own patients insert" on medconsult_patients for insert with check (auth.uid() = user_id);
+create policy "own patients update" on medconsult_patients for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create index if not exists medconsult_patients_updated_at_idx on medconsult_patients (user_id, updated_at);
+
 -- Зашифрованные AI-ключи (для восстановления на другом устройстве) — отдельно, не привязано к неймспейсам
 create table if not exists medconsult_secrets (
   id uuid primary key,

@@ -145,6 +145,49 @@ export async function pullVisitsIncremental() {
   return { pulled: rows.length, merged }
 }
 
+// --- То же самое для пациентов: своя таблица, строка = один пациент ---
+const PATIENTS_TABLE = 'medconsult_patients'
+const LAST_PATIENT_PUSH_KEY = 'medconsult_last_patient_push_at'
+const LAST_PATIENT_PULL_KEY = 'medconsult_last_patient_pull_at'
+
+export async function pushPatientsIncremental() {
+  const client = getSupabaseClient()
+  if (!client) throw new Error('Supabase не настроен')
+  const userId = await requireUserId(client)
+  const since = getMark(LAST_PATIENT_PUSH_KEY)
+  const changed = store.getPatientsChangedSince(since)
+  if (!changed.length) return { pushed: 0 }
+
+  const rows = changed.map((p) => ({
+    id: p.id,
+    user_id: userId,
+    data: p,
+    updated_at: new Date(p.updatedAt || Date.now()).toISOString(),
+  }))
+  const { error } = await client.from(PATIENTS_TABLE).upsert(rows)
+  if (error) throw new Error(error.message)
+  setMark(LAST_PATIENT_PUSH_KEY, Date.now())
+  localStorage.setItem('medconsult_last_backup', String(Date.now()))
+  return { pushed: changed.length }
+}
+
+export async function pullPatientsIncremental() {
+  const client = getSupabaseClient()
+  if (!client) throw new Error('Supabase не настроен')
+  const userId = await requireUserId(client)
+  const since = getMark(LAST_PATIENT_PULL_KEY)
+  const { data, error } = await client
+    .from(PATIENTS_TABLE)
+    .select('data, updated_at')
+    .eq('user_id', userId)
+    .gt('updated_at', new Date(since).toISOString())
+  if (error) throw new Error(error.message)
+  const rows = (data || []).map((r) => r.data)
+  const merged = store.mergePatientsFromCloud(rows)
+  setMark(LAST_PATIENT_PULL_KEY, Date.now())
+  return { pulled: rows.length, merged }
+}
+
 // --- Magic Link ---
 export async function sendMagicLink(email) {
   const client = getSupabaseClient()
