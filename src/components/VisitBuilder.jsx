@@ -6,6 +6,7 @@ import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import Mkb10Picker from './Mkb10Picker'
 import GuidelinePanel from './GuidelinePanel'
+import GuidelineHub from './GuidelineHub'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import DurationPicker from './DurationPicker'
@@ -68,6 +69,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [presets, setPresets] = useState(store.getPresets(template.id))
   const [saved, setSaved] = useState(false)
   const [openSectionId, setOpenSectionId] = useState(template.sections[0]?.id || null)
+  const [hubOpen, setHubOpen] = useState(false)
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
@@ -79,6 +81,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const firstRender = useRef(true)
 
   const complaints = sectionValues.complaints || []
+  const matchedGuidelines = store.getGuidelinesForCodes(extractCodesFromText(sectionValues.diagnosis))
   const recommendationsSection = template.sections.find((s) => s.type === 'drugs')
   const pendingInvestigationsKey = recommendationsSection ? `${recommendationsSection.id}_pending_investigations` : null
 
@@ -310,6 +313,12 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         </div>
       )}
 
+      {matchedGuidelines.length > 0 && (
+        <button type="button" className="guideline-hub-badge" onClick={() => setHubOpen(true)}>
+          📋 Есть рекомендация по диагнозу: {matchedGuidelines.map((g) => g.title).join(', ')}
+        </button>
+      )}
+
       <details className="patient-details-spoiler" open>
         <summary>Пациент {patient ? `— ${patient.name}` : ''}</summary>
         <div className="visit-top-row">
@@ -536,6 +545,22 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           <ProtocolPreview template={template} sectionValues={sectionValues} patient={patient} visitDate={visitDate} />
         </div>
       </div>
+
+      {hubOpen && (
+        <GuidelineHub
+          diagnosisText={sectionValues.diagnosis}
+          onClose={() => setHubOpen(false)}
+          onInsertFormulation={insertDiagnosisFormulation}
+          onInsertComplaint={insertGuidelineComplaint}
+          onInsertClassificationLine={insertClassificationLine}
+          onInsertInvestigation={insertGuidelineInvestigation}
+          onInsertDrug={(drug) => {
+            const recSection = template.sections.find((s) => s.type === 'drugs')
+            if (recSection) insertGuidelineDrugSingle(recSection.id, drug)
+          }}
+          formulationTag={formulationTag}
+        />
+      )}
 
       {staleGuidelinePrompt && (
         <div className="modal-overlay" onClick={() => confirmRemoveStaleGuideline(false)}>
