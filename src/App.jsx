@@ -147,6 +147,8 @@ export default function App() {
           <Suspense fallback={<p className="settings-loading">Загрузка…</p>}>
             <HomePage
               onOpenDraft={openDraftTemplate}
+              onLoadVisit={loadVisit}
+              onGoToReference={() => setPage('guidelines')}
               onGoToVisit={goToVisit}
               onGoToPatients={() => setPage('patients')}
               onGoToSettings={() => setPage('settings')}

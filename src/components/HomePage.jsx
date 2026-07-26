@@ -11,10 +11,15 @@ function daysSince(ts) {
   return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24))
 }
 
-export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onGoToSettings }) {
+export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onGoToSettings, onLoadVisit, onGoToReference }) {
   const drafts = store.getAllDrafts()
   const visits = store.getVisits().slice(0, 5)
   const patients = store.getPatients()
+  const templates = store.getTemplates()
+  const guidelines = Object.keys(store.getGuidelines())
+  const drugs = Object.keys(store.getDrugInfoAll())
+  const groups = Object.keys(store.getCustomGroups())
+  const emptyDrugs = store.getEmptyDrugEntries()
   const lastBackup = Number(localStorage.getItem('medconsult_last_backup') || 0)
   const backupStale = daysSince(lastBackup) >= 7
   const [dismissedBackup, setDismissedBackup] = useState(false)
@@ -28,6 +33,15 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           {lastBackup ? `Последний бэкап был ${daysSince(lastBackup)} дн. назад` : 'Бэкап ещё ни разу не делался'} — сделать сейчас?
           <button type="button" onClick={onGoToSettings}>Перейти в Настройки</button>
           <button type="button" onClick={() => setDismissedBackup(true)}>Напомнить позже</button>
+        </div>
+      )}
+
+      {emptyDrugs.length > 0 && (
+        <div className="draft-banner">
+          В базе лекарств {emptyDrugs.length} {emptyDrugs.length === 1 ? 'карточка создана' : 'карточек создано'} автоматически
+          и ещё не заполнена (только название): {emptyDrugs.slice(0, 5).map((d) => d.name).join(', ')}
+          {emptyDrugs.length > 5 ? '…' : ''} — стоит дополнить дозой и группой.
+          <button type="button" onClick={onGoToReference}>Открыть Справочник</button>
         </div>
       )}
 
@@ -50,10 +64,15 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           {visits.length === 0 && <p className="empty-hint">Визитов ещё не было.</p>}
           <div className="home-draft-list">
             {visits.map((v) => (
-              <div key={v.id} className="home-visit-item">
+              <button
+                type="button"
+                key={v.id}
+                className="home-draft-item"
+                onClick={() => onLoadVisit && onLoadVisit(v)}
+              >
                 <strong>{v.patientName}</strong>
                 <span>{v.templateName} · {formatDateTime(v.updatedAt)}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -63,6 +82,16 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           <div className="home-actions">
             <button type="button" className="btn-primary" onClick={onGoToVisit}>+ Новый приём</button>
             <button type="button" className="btn-secondary" onClick={onGoToPatients}>Пациенты ({patients.length})</button>
+          </div>
+        </div>
+
+        <div className="home-card">
+          <h4>Справочник</h4>
+          <div className="home-actions">
+            <button type="button" className="btn-secondary" onClick={onGoToReference}>Шаблоны ({templates.length})</button>
+            <button type="button" className="btn-secondary" onClick={onGoToReference}>Клинрекомендации ({guidelines.length})</button>
+            <button type="button" className="btn-secondary" onClick={onGoToReference}>Лекарства ({drugs.length})</button>
+            <button type="button" className="btn-secondary" onClick={onGoToReference}>Свои группы ({groups.length})</button>
           </div>
         </div>
       </div>

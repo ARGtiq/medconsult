@@ -10,7 +10,7 @@ import { extractCodesFromText } from '../data/mkb10'
 
 const EVIDENCE_LABELS = { guideline: 'По гайдлайну', self_verified: 'Проверено мной', off_label: 'Off-label' }
 
-export default function DrugSection({ complaints, diagnosisText, patientAllergies, values, onChange, onInsertMkb }) {
+export default function DrugSection({ complaints, diagnosisText, patientAllergies, patientCurrentMedications, values, onChange, onInsertMkb }) {
   const [manualDrug, setManualDrug] = useState('')
   const [expanded, setExpanded] = useState(new Set()) // индексы развёрнутых карточек
   const [aiMenuFor, setAiMenuFor] = useState(null)
@@ -44,7 +44,11 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
     setInteractionError('')
     setInteractionResult('')
     try {
-      const result = await checkDrugInteractions(safeValues.map((d) => d.name))
+      const prescribed = safeValues.map((d) => d.name)
+      const alreadyTaking = (patientCurrentMedications || []).filter(
+        (m) => !prescribed.some((p) => p.toLowerCase() === m.toLowerCase())
+      )
+      const result = await checkDrugInteractions([...prescribed, ...alreadyTaking])
       setInteractionResult(result)
     } catch (e) {
       setInteractionError(e.message)
@@ -233,10 +237,10 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
         )}
       </div>
 
-      {safeValues.length > 1 && (
+      {safeValues.length + (patientCurrentMedications || []).length > 1 && (
         <div className="ai-check-block">
           <button type="button" className="btn-ai" onClick={runInteractionCheck} disabled={checkingInteractions}>
-            {checkingInteractions ? 'Проверяю…' : '🤖 Проверить несовместимость (AI)'}
+            {checkingInteractions ? 'Проверяю…' : `🤖 Проверить несовместимость (AI)${patientCurrentMedications?.length ? ' — с учётом принимаемых' : ''}`}
           </button>
           {interactionError && <div className="ai-error">{interactionError}</div>}
           {interactionResult && (

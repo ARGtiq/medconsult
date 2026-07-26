@@ -22,13 +22,25 @@ function lowercaseFirst(s) {
   return s ? s.charAt(0).toLowerCase() + s.slice(1) : s
 }
 
-function sectionPreviewText(section, value) {
+function sectionPreviewText(section, value, sectionValues) {
+  let text = ''
   if (section.type === 'drugs') {
     const drugs = value || []
-    return drugs.map((d) => [d.name, d.dosage].filter(Boolean).join(' ')).join(', ')
+    text = drugs.map((d) => [d.name, d.dosage].filter(Boolean).join(' ')).join(', ')
+  } else if (Array.isArray(value)) {
+    text = value.join(', ')
+  } else {
+    text = value || ''
   }
-  if (Array.isArray(value)) return value.join(', ')
-  return value || ''
+
+  if (section.hasFreeTextField && sectionValues?.[`${section.id}_freetext`]) {
+    text = [text, sectionValues[`${section.id}_freetext`]].filter(Boolean).join(' · ')
+  }
+  if (section.hasDurationField && sectionValues?.[`${section.id}_duration`]) {
+    const durationText = `болеет ${sectionValues[`${section.id}_duration`]}`
+    text = text ? `${durationText} · ${text}` : durationText
+  }
+  return text
 }
 
 function composeDefaultChipText(chip) {
@@ -68,6 +80,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [draftBannerVisible, setDraftBannerVisible] = useState(!!draft && !initialVisit)
   const [presets, setPresets] = useState(store.getPresets(template.id))
   const [saved, setSaved] = useState(false)
+  const [savedAsUpdate, setSavedAsUpdate] = useState(false)
   const [openSectionId, setOpenSectionId] = useState(template.sections[0]?.id || null)
   const [hubOpen, setHubOpen] = useState(false)
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
@@ -287,8 +300,17 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     if (section.type === 'drugs') updateSection(`${section.id}_pending_investigations`, [])
   }
 
-  function saveVisit() {
+  function saveVisit(forceNew = false) {
+    const existing =
+      !forceNew && patient
+        ? store.findVisitByPatientTemplateDate(patient.id, template.id, visitDate)
+        : null
+    // Если initialVisit был загружен (открыт из истории) — тоже сохраняем поверх него,
+    // а не создаём копию, даже если дата почему-то не совпала с найденным выше
+    const targetId = existing?.id || (!forceNew ? initialVisit?.id : null) || undefined
+
     store.saveVisit({
+      id: targetId,
       templateId: template.id,
       templateName: template.name,
       patientId: patient?.id || null,
@@ -298,6 +320,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     })
     store.clearDraft(template.id)
     setSaved(true)
+    setSavedAsUpdate(!!targetId)
     setTimeout(() => setSaved(false), 1500)
   }
 
@@ -348,7 +371,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         <div className="visit-sections">
           {template.sections.map((section) => {
             const isOpen = openSectionId === section.id
-            const preview = sectionPreviewText(section, sectionValues[section.id])
+            const preview = sectionPreviewText(section, sectionValues[section.id], sectionValues)
             return (
             <section key={section.id} className={isOpen ? 'section-block section-block-open' : 'section-block section-block-collapsed'}>
               <div
@@ -503,7 +526,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                 <>
                   {(sectionValues[`${section.id}_pending_investigations`] || []).length > 0 && (
                     <div className="pending-investigations-block">
-                      <div className="pending-investigations-label">Обследования, которые нужно пройти</div>
+                      <div className="pending-investigations-label">Дообследование</div>
                       <div className="selected-values">
                         {(sectionValues[`${section.id}_pending_investigations`] || []).map((item, idx) => (
                           <span key={`${item}-${idx}`} className="selected-chip">
@@ -527,6 +550,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     complaints={complaints}
                     diagnosisText={sectionValues[diagnosisSectionId]}
                     patientAllergies={patient?.allergies || []}
+                    patientCurrentMedications={patient?.currentMedications || []}
                     values={sectionValues[section.id] || []}
                     onChange={(v) => updateSection(section.id, v)}
                     onInsertMkb={insertIntoDiagnosis}
@@ -546,8 +570,16 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           })}
 
           <div className="visit-actions-row">
-            <button type="button" className="btn-primary" onClick={saveVisit}>
-              {saved ? 'Сохранено ✓' : 'Сохранить визит'}
+            <button type="button" className="btn-primary" onClick={() => saveVisit(false)}>
+              {saved ? (savedAsUpdate ? 'Обновлено ✓' : 'Сохранено ✓') : 'Сохранить визит'}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => saveVisit(true)}
+              title="Даже если визит этой датой уже есть — создать отдельный, не перезаписывать"
+            >
+              Сохранить как новый визит
             </button>
             <button type="button" className="btn-secondary" onClick={saveCurrentAsPreset}>
               Сохранить как пресет

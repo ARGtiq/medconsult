@@ -562,6 +562,17 @@ export const store = {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   },
 
+  // Ищем визит того же пациента/шаблона/даты — чтобы при повторном
+  // сохранении в тот же день не плодить дубликаты, а обновлять существующий
+  findVisitByPatientTemplateDate(patientId, templateId, visitDate) {
+    if (!patientId) return null
+    return (
+      readAll().visits.find(
+        (v) => !v.deleted && v.patientId === patientId && v.templateId === templateId && v.visitDate === visitDate
+      ) || null
+    )
+  },
+
   // Физическая очистка старых меток удаления (по умолчанию старше 90 дней).
   // К этому моменту синк уже наверняка донёс удаление до всех устройств —
   // хранить tombstone вечно смысла нет, он просто занимает место.
@@ -681,6 +692,15 @@ export const store = {
   // --- база лекарств (дозировка/кратность/побочки) ---
   getDrugInfoAll() {
     return readAll().drugDatabase
+  },
+
+  // Карточки, созданные "на скорую руку" (напр. автоматически при добавлении
+  // в "принимает сейчас") — есть только название, ни дозы, ни группы. Для
+  // напоминания на главной странице.
+  getEmptyDrugEntries() {
+    return Object.values(readAll().drugDatabase).filter(
+      (d) => !d.dosage && !d.frequency && !d.duration && !d.group
+    )
   },
 
   getDrugInfo(name) {

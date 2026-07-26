@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
+import { getAllergyAutocompleteList } from '../data/drugSafety'
 
 function summarizeVisit(v) {
   const complaints = v.sectionValues?.complaints
@@ -22,6 +23,13 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
   }
   const [patients, setPatients] = useState(store.getPatients())
   const [allergyInput, setAllergyInput] = useState('')
+  const allergySuggestions = useMemo(() => {
+    const q = allergyInput.trim().toLowerCase()
+    if (!q) return []
+    const list = getAllergyAutocompleteList(store.getCustomGroups(), Object.keys(store.getDrugInfoAll()))
+    return list.filter((item) => item.toLowerCase().includes(q)).slice(0, 6)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allergyInput])
   const [medicationInput, setMedicationInput] = useState('')
   const [showList, setShowList] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -58,8 +66,8 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
     return years
   }
 
-  function addAllergy() {
-    const clean = allergyInput.trim()
+  function addAllergy(directValue) {
+    const clean = (directValue ?? allergyInput).trim()
     if (!clean || !patient) return
     const updated = { ...patient, allergies: [...(patient.allergies || []), clean] }
     store.savePatient(updated)
@@ -80,6 +88,9 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
     store.savePatient(updated)
     onChange(updated)
     setMedicationInput('')
+    if (!store.getDrugInfo(clean)) {
+      store.saveDrugInfo({ name: clean })
+    }
   }
 
   function removeMedication(idx) {
@@ -208,6 +219,20 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
               Добавить
             </button>
           </form>
+          {allergySuggestions.length > 0 && (
+            <div className="suggestions">
+              {allergySuggestions.map((s) => (
+                <button
+                  type="button"
+                  key={s}
+                  className="suggestion-pill"
+                  onClick={() => addAllergy(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

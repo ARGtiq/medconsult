@@ -83,7 +83,7 @@ export default function GuidelinePanel({
               <>
                 {(g.investigations || []).length > 0 && (
                   <>
-                    <p className="guideline-panel-text-muted">Обследования, которые нужно пройти (клик — добавить в рекомендации):</p>
+                    <p className="guideline-panel-text-muted">Дообследование (клик — добавить в рекомендации):</p>
                     <div className="guideline-complaint-suggestions">
                       {g.investigations.map((item) => (
                         <button type="button" key={item} className="suggestion-pill suggestion-pill-guideline" onClick={() => onInsertInvestigation(item)}>

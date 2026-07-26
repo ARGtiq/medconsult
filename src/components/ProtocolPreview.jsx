@@ -14,7 +14,7 @@ function sectionToText(section, value, patient, sectionValues) {
       return `— ${d.name}${brand}${extra ? ` (${extra})` : ''}`
     })
     if (pendingInvestigations?.length) {
-      lines.push('', 'Обследования, которые нужно пройти:', ...pendingInvestigations.map((i) => `— ${i}`))
+      lines.push('', 'Дообследование:', ...pendingInvestigations.map((i) => `— ${i}`))
     }
     return lines.join('\n')
   }
@@ -29,13 +29,13 @@ function sectionToText(section, value, patient, sectionValues) {
   }
 
   if (section.hasDurationField && durationValue?.trim()) {
-    text = text ? `Длительность: ${durationValue.trim()}\n${text}` : `Длительность: ${durationValue.trim()}`
+    text = text ? `Болеет: ${durationValue.trim()}\n${text}` : `Болеет: ${durationValue.trim()}`
   }
 
   if (section.id === 'anamnesis_vitae') {
     const extraLines = []
-    extraLines.push(`Аллергоанамнез: ${patient?.allergies?.length ? patient.allergies.join(', ') : 'отрицает'}.`)
-    extraLines.push(`Принимает в настоящее время: ${patient?.currentMedications?.length ? patient.currentMedications.join(', ') : 'не принимает'}.`)
+    extraLines.push(`Аллергоанамнез: ${patient?.allergies?.length ? patient.allergies.join(', ') : 'не отягощен'}.`)
+    extraLines.push(`Принимает в настоящее время: ${patient?.currentMedications?.length ? patient.currentMedications.join(', ') : 'лекарств не принимает'}.`)
     text = text ? `${extraLines.join('\n')}\n${text}` : extraLines.join('\n')
   }
 

@@ -168,20 +168,17 @@ export default function ChipSection({ section, values, onChange }) {
         categorized ? (
           <div className="chip-categories">
             {Object.entries(categorized.groups).map(([cat, chips]) => (
-              <details key={cat} className="chip-category-spoiler">
-                <summary>{cat} <span className="chip-category-count">({chips.length})</span></summary>
+              <div key={cat} className="chip-category-block">
+                <div className="chip-category-block-title">{cat} <span className="chip-category-count">({chips.length})</span></div>
                 <div className="chip-row">{chips.map(renderChipButton)}</div>
-              </details>
+              </div>
             ))}
             {categorized.withoutCategory.length > 0 && (
               <div className="chip-row">{categorized.withoutCategory.map(renderChipButton)}</div>
             )}
           </div>
         ) : (
-          <details className="chip-category-spoiler chip-flat-spoiler">
-            <summary>Показать варианты <span className="chip-category-count">({section.chips?.length || 0})</span></summary>
-            <div className="chip-row">{section.chips?.map(renderChipButton)}</div>
-          </details>
+          <div className="chip-row">{section.chips?.map(renderChipButton)}</div>
         )
       ) : (
         <div className="chip-builder">

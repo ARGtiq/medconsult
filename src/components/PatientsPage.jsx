@@ -185,7 +185,7 @@ export default function PatientsPage({ onLoadVisit }) {
                     className="patients-field-value"
                     onClick={() => startEdit('allergiesText', (selected.allergies || []).join(', '))}
                   >
-                    {(selected.allergies || []).join(', ') || 'отрицает (клик, чтобы указать)'}
+                    {(selected.allergies || []).join(', ') || 'не отягощен (клик, чтобы указать)'}
                   </span>
                 )}
               </div>
@@ -198,7 +198,11 @@ export default function PatientsPage({ onLoadVisit }) {
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
                     onBlur={() => {
-                      updatePatient({ currentMedications: editingText.split(',').map((s) => s.trim()).filter(Boolean) })
+                      const meds = editingText.split(',').map((s) => s.trim()).filter(Boolean)
+                      meds.forEach((m) => {
+                        if (!store.getDrugInfo(m)) store.saveDrugInfo({ name: m })
+                      })
+                      updatePatient({ currentMedications: meds })
                       setEditingField(null)
                     }}
                     placeholder="через запятую"
@@ -208,7 +212,7 @@ export default function PatientsPage({ onLoadVisit }) {
                     className="patients-field-value"
                     onClick={() => startEdit('medsText', (selected.currentMedications || []).join(', '))}
                   >
-                    {(selected.currentMedications || []).join(', ') || 'не принимает (клик, чтобы указать)'}
+                    {(selected.currentMedications || []).join(', ') || 'лекарств не принимает (клик, чтобы указать)'}
                   </span>
                 )}
               </div>

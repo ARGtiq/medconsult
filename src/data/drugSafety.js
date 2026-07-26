@@ -178,6 +178,11 @@ export function getBuiltinGroupMeta(key) {
 function findGroupByDrug(drugName, customGroups = {}) {
   const n = normalize(drugName)
   const groups = allGroups(customGroups)
+  // сначала — совпадение по названию самой группы (пациент/врач мог написать
+  // "аллергия на пенициллины", а не конкретный препарат)
+  for (const [key, group] of Object.entries(groups)) {
+    if (group.label && (n.includes(normalize(group.label)) || normalize(group.label).includes(n))) return key
+  }
   for (const [key, group] of Object.entries(groups)) {
     if (group.drugs.some((d) => n.includes(normalize(d)) || normalize(d).includes(n))) return key
   }
@@ -249,6 +254,15 @@ export function checkAllergyLocal(drugName, patientAllergies = [], customGroups 
   }
 
   return warnings
+}
+
+// Список для автоподсказки при вводе аллергии: названия групп + все препараты
+// из базы лекарств (не только встроенные группы) — набирает то, на что реально
+// может быть аллергия у пациента.
+export function getAllergyAutocompleteList(customGroups = {}, drugDbNames = []) {
+  const groups = allGroups(customGroups)
+  const groupLabels = Object.values(groups).map((g) => g.label)
+  return [...new Set([...groupLabels, ...drugDbNames])]
 }
 
 export function getAlternatives(drugName, customGroups = {}) {

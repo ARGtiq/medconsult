@@ -498,25 +498,20 @@ body {
   max-width: 100%;
 }
 
-.chip-categories { display: flex; flex-direction: column; gap: 6px; }
-.chip-category-spoiler {
+.chip-categories { display: flex; flex-direction: column; gap: 10px; }
+.chip-category-block {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--paper);
 }
-.chip-category-spoiler summary {
-  cursor: pointer;
+.chip-category-block-title {
   font-weight: 600;
   font-size: 13.5px;
   color: var(--ink);
-  list-style: none;
+  margin-bottom: 8px;
 }
-.chip-category-spoiler summary::-webkit-details-marker { display: none; }
-.chip-category-spoiler summary::before { content: '▸ '; color: var(--teal); }
-.chip-category-spoiler[open] summary::before { content: '▾ '; }
 .chip-category-count { color: var(--ink-soft); font-weight: 400; font-size: 12px; }
-.chip-category-spoiler .chip-row { margin-top: 8px; }
 
 .selected-chip.drag-over { outline: 2px dashed var(--teal); }
 .selected-chip { cursor: grab; }
@@ -838,7 +833,6 @@ body {
 
 .visit-history-card .btn-small { margin-top: 8px; }
 
-.chip-flat-spoiler { margin-bottom: 8px; }
 
 .chip-default-toggle {
   display: flex;
@@ -1338,6 +1332,12 @@ body {
 }
 
 .empty-hint { color: #b7bfbd; font-style: italic; }
+
+.auto-resize-textarea {
+  field-sizing: content;
+  min-height: 2.6em;
+  max-height: 50vh;
+}
 
 .data-export {
   display: flex;
