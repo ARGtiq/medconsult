@@ -1,36 +1,107 @@
 // Простое персистентное хранилище поверх localStorage.
 // Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
 
-const KEY = 'medconsult_v1'
-// Бампай это число при каждом изменении seedTemplates() — стандартные шаблоны
-// (id: 'primary', 'followup') будут автоматически обновлены у всех пользователей,
-// свои кастомные шаблоны и все остальные данные (пациенты/визиты/база лекарств) не тронутся.
-const TEMPLATES_SEED_VERSION = 7
+// Хранилище разложено по неймспейсам — отдельным ключам localStorage —
+// вместо одного большого блоба. Это не меняет внешний API store.js: все методы
+// ниже как читали/писали через readAll()/writeAll(state), так и продолжают,
+// просто эти две функции теперь физически читают/пишут в разные ключи.
+// Даёт: выборочный экспорт/импорт по смыслу, раздельную синхронизацию в Supabase
+// по неймспейсам (не гонять всё разом при любой мелкой правке), и точку, куда
+// прицельно повесить шифрование самых чувствительных данных (clinical).
+const OLD_KEY = 'medconsult_v1' // из версий до неймспейсов — мигрируется один раз и удаляется
+const TEMPLATES_SEED_VERSION = 8
 
-function readAll() {
+const NAMESPACES = {
+  // медицинские данные пациентов — самое чувствительное и быстрорастущее
+  clinical: ['patients', 'visits'],
+  // справочное содержание + обучаемые связки из практики (не привязаны к ФИО)
+  reference: [
+    'templates',
+    'templatesSeedVersion',
+    'drugDatabase',
+    'drugGroupMeta',
+    'customDrugGroups',
+    'crossReactivityCustom',
+    'clinicalGuidelines',
+    'complaintSuggestions',
+    'complaintDrugLinks',
+    'diagnosisDrugLinks',
+  ],
+  // рабочие заготовки, не жалко потерять
+  workspace: ['templatePresets'],
+  // метаданные самого приложения, не медицинские
+  system: ['bugReports', 'defaultTemplateId'],
+}
+
+function nsStorageKey(ns) {
+  return `medconsult_ns_${ns}`
+}
+
+function readNamespaceRaw(ns) {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return defaultState()
-    const parsed = JSON.parse(raw)
-    const merged = { ...defaultState(), ...parsed }
-
-    if (parsed.templatesSeedVersion !== TEMPLATES_SEED_VERSION) {
-      const freshSeed = seedTemplates()
-      const seedIds = new Set(freshSeed.map((t) => t.id))
-      const customTemplates = (parsed.templates || []).filter((t) => !seedIds.has(t.id))
-      merged.templates = [...freshSeed, ...customTemplates]
-      merged.templatesSeedVersion = TEMPLATES_SEED_VERSION
-      writeAll(merged)
-    }
-
-    return merged
+    const raw = localStorage.getItem(nsStorageKey(ns))
+    return raw ? JSON.parse(raw) : {}
   } catch {
-    return defaultState()
+    return {}
   }
 }
 
+function writeNamespaceRaw(ns, data) {
+  localStorage.setItem(nsStorageKey(ns), JSON.stringify(data))
+}
+
+// Разовая миграция: если жив старый единый блоб — разложить его по неймспейсам
+// и удалить. Идемпотентно (после первого прогона OLD_KEY уже не будет).
+function migrateOldBlobIfNeeded() {
+  const raw = localStorage.getItem(OLD_KEY)
+  if (!raw) return
+  try {
+    const old = JSON.parse(raw)
+    Object.entries(NAMESPACES).forEach(([ns, keys]) => {
+      const nsData = readNamespaceRaw(ns)
+      keys.forEach((k) => {
+        if (old[k] !== undefined) nsData[k] = old[k]
+      })
+      writeNamespaceRaw(ns, nsData)
+    })
+  } catch {
+    // старый блоб был битый — просто ничего не переносим, дальше пойдёт дефолт
+  } finally {
+    localStorage.removeItem(OLD_KEY)
+  }
+}
+
+function readAll() {
+  migrateOldBlobIfNeeded()
+  const merged = { ...defaultState() }
+  Object.entries(NAMESPACES).forEach(([ns, keys]) => {
+    const nsData = readNamespaceRaw(ns)
+    keys.forEach((k) => {
+      if (nsData[k] !== undefined) merged[k] = nsData[k]
+    })
+  })
+
+  if (merged.templatesSeedVersion !== TEMPLATES_SEED_VERSION) {
+    const freshSeed = seedTemplates()
+    const seedIds = new Set(freshSeed.map((t) => t.id))
+    const customTemplates = (merged.templates || []).filter((t) => !seedIds.has(t.id))
+    merged.templates = [...freshSeed, ...customTemplates]
+    merged.templatesSeedVersion = TEMPLATES_SEED_VERSION
+    writeAll(merged)
+  }
+
+  return merged
+}
+
 function writeAll(state) {
-  localStorage.setItem(KEY, JSON.stringify({ ...state, templatesSeedVersion: TEMPLATES_SEED_VERSION }))
+  const full = { ...state, templatesSeedVersion: TEMPLATES_SEED_VERSION }
+  Object.entries(NAMESPACES).forEach(([ns, keys]) => {
+    const nsData = {}
+    keys.forEach((k) => {
+      nsData[k] = full[k]
+    })
+    writeNamespaceRaw(ns, nsData)
+  })
 }
 
 function defaultState() {
@@ -91,11 +162,13 @@ function seedTemplates() {
           id: 'diagnosis',
           title: 'Диагноз',
           type: 'freeform',
+          role: 'diagnosis',
         },
         {
           id: 'complaints',
           title: 'Жалобы',
           type: 'chips',
+          role: 'complaints',
           chips: [
             {
               text: 'боль внизу живота',
@@ -222,6 +295,7 @@ function seedTemplates() {
           id: 'recommendations',
           title: 'Рекомендации / назначения',
           type: 'drugs',
+          role: 'recommendations',
         },
       ],
     },
@@ -230,7 +304,7 @@ function seedTemplates() {
       name: 'Повторный приём',
       sections: [
         { id: 'dynamics', title: 'Динамика на фоне лечения', type: 'freeform' },
-        { id: 'complaints', title: 'Жалобы', type: 'chips', chips: [] },
+        { id: 'complaints', title: 'Жалобы', type: 'chips', role: 'complaints', chips: [] },
         {
           id: 'investigations',
           title: 'Пройденные исследования',
@@ -241,14 +315,14 @@ function seedTemplates() {
             { text: 'УЗИ-контроль', modifierGroups: [] },
           ],
         },
-        { id: 'recommendations', title: 'Коррекция назначений', type: 'drugs' },
+        { id: 'recommendations', title: 'Коррекция назначений', type: 'drugs', role: 'recommendations' },
       ],
     },
     {
       id: 'preop_epicrisis',
       name: 'Преоперационный эпикриз',
       sections: [
-        { id: 'diagnosis', title: 'Диагноз (основной)', type: 'freeform' },
+        { id: 'diagnosis', title: 'Диагноз (основной)', type: 'freeform', role: 'diagnosis' },
         { id: 'concomitant', title: 'Сопутствующие заболевания', type: 'freeform' },
         { id: 'indications', title: 'Показания к операции', type: 'freeform' },
         {
@@ -299,7 +373,7 @@ function seedTemplates() {
       name: 'Протокол операции',
       sections: [
         { id: 'operation_name', title: 'Название операции', type: 'text' },
-        { id: 'diagnosis', title: 'Диагноз', type: 'freeform' },
+        { id: 'diagnosis', title: 'Диагноз', type: 'freeform', role: 'diagnosis' },
         { id: 'team', title: 'Хирург / ассистент(ы) / анестезиолог', type: 'freeform' },
         {
           id: 'anesthesia_type',
@@ -465,6 +539,20 @@ export const store = {
   importAll(json) {
     const parsed = JSON.parse(json)
     writeAll({ ...defaultState(), ...parsed })
+  },
+
+  // --- выборочный экспорт/импорт по неймспейсам (Настройки → Данные) ---
+  getNamespaceNames() {
+    return Object.keys(NAMESPACES)
+  },
+
+  exportNamespace(ns) {
+    return JSON.stringify(readNamespaceRaw(ns), null, 2)
+  },
+
+  importNamespace(ns, json) {
+    const parsed = JSON.parse(json)
+    writeNamespaceRaw(ns, parsed)
   },
 
   // --- база лекарств (дозировка/кратность/побочки) ---

@@ -15,7 +15,7 @@ function blankTemplate() {
 }
 
 function blankSection() {
-  return { id: crypto.randomUUID(), title: '', type: 'chips', chips: [], options: [] }
+  return { id: crypto.randomUUID(), title: '', type: 'chips', role: 'none', chips: [], options: [] }
 }
 
 function blankChip() {
@@ -30,6 +30,20 @@ const TYPE_LABELS = {
   select: 'Выпадающий список (один вариант)',
   drugs: 'Назначения (препараты)',
   investigations: 'Обследования (чипы)',
+}
+
+// Роль — то, что умная логика (клинрек, живые теги) ищет в шаблоне вместо
+// угадывания по id секции. Список ролей ограничен типом секции, чтобы нельзя
+// было назначить "Диагноз" чипам, например.
+const ROLE_LABELS = { none: 'Обычное поле, без роли' }
+const ROLES_BY_TYPE = {
+  chips: { none: ROLE_LABELS.none, complaints: 'Жалобы' },
+  freeform: { none: ROLE_LABELS.none, diagnosis: 'Диагноз' },
+  text: { none: ROLE_LABELS.none, diagnosis: 'Диагноз' },
+  drugs: { none: ROLE_LABELS.none, recommendations: 'Рекомендации/назначения' },
+  investigations: { none: ROLE_LABELS.none },
+  checkbox: { none: ROLE_LABELS.none },
+  select: { none: ROLE_LABELS.none },
 }
 
 // Группы уточнений редактируются через "черновой" текст (optionsText), а не
@@ -173,10 +187,22 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
           value={section.title}
           onChange={(e) => update({ title: e.target.value })}
         />
-        <select value={section.type} onChange={(e) => update({ type: e.target.value })}>
+        <select value={section.type} onChange={(e) => update({ type: e.target.value, role: 'none' })}>
           {Object.entries(TYPE_LABELS).map(([val, label]) => (
             <option key={val} value={val}>
               {label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={section.role || 'none'}
+          onChange={(e) => update({ role: e.target.value })}
+          className="section-role-select"
+          title="Роль поля для умной логики (клинрек, живые теги) — вместо угадывания по id"
+        >
+          {Object.entries(ROLES_BY_TYPE[section.type] || { none: ROLE_LABELS.none }).map(([val, label]) => (
+            <option key={val} value={val}>
+              {val === 'none' ? label : `Роль: ${label}`}
             </option>
           ))}
         </select>
@@ -324,6 +350,12 @@ export default function TemplateEditor() {
 
   function save() {
     if (!draft.name.trim()) return
+    const rolesUsed = draft.sections.map((s) => s.role).filter((r) => r && r !== 'none')
+    const dupeRole = rolesUsed.find((r, i) => rolesUsed.indexOf(r) !== i)
+    if (dupeRole) {
+      alert(`Роль назначена сразу двум секциям — это неоднозначно. Оставь роль только у одной секции.`)
+      return
+    }
     const idBase = draft.id || slugify(draft.name, `template_${Date.now()}`)
     const sections = draft.sections.map((s) => {
       const cleanId = s.id && !/^[0-9a-f-]{20,}$/i.test(s.id) ? s.id : slugify(s.title, s.id)
@@ -406,6 +438,17 @@ export default function TemplateEditor() {
       </div>
 
       <div className="template-editor-main">
+        <div className="template-role-summary">
+          Роли: {['diagnosis', 'complaints', 'recommendations'].map((r) => {
+            const labelMap = { diagnosis: 'Диагноз', complaints: 'Жалобы', recommendations: 'Рекомендации' }
+            const has = draft.sections.some((s) => s.role === r)
+            return (
+              <span key={r} className={has ? 'template-role-badge ok' : 'template-role-badge missing'}>
+                {labelMap[r]} {has ? '✓' : '— не назначено'}
+              </span>
+            )
+          })}
+        </div>
         <div className="template-editor-header">
           <input
             className="template-editor-name"

@@ -80,9 +80,23 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const autoFilledRef = useRef(new Set())
   const firstRender = useRef(true)
 
-  const complaints = sectionValues.complaints || []
-  const matchedGuidelines = store.getGuidelinesForCodes(extractCodesFromText(sectionValues.diagnosis))
-  const recommendationsSection = template.sections.find((s) => s.type === 'drugs')
+  // Секции находятся по явной роли (задаётся в редакторе шаблонов), а не по
+  // жёсткому id — так кастомные шаблоны с другими id тоже получают всю
+  // автоматику. Фоллбэк на 'diagnosis'/'complaints' — для шаблонов, где роль
+  // ещё не проставлена (в т.ч. созданных до появления ролей).
+  const diagnosisSectionId = (
+    template.sections.find((s) => s.role === 'diagnosis') || template.sections.find((s) => s.id === 'diagnosis')
+  )?.id
+  const complaintsSectionId = (
+    template.sections.find((s) => s.role === 'complaints') || template.sections.find((s) => s.id === 'complaints')
+  )?.id
+  const complaints = sectionValues[complaintsSectionId] || []
+  const matchedGuidelines = diagnosisSectionId
+    ? store.getGuidelinesForCodes(extractCodesFromText(sectionValues[diagnosisSectionId]))
+    : []
+  const recommendationsSection =
+    template.sections.find((s) => s.role === 'recommendations' && s.type === 'drugs') ||
+    template.sections.find((s) => s.type === 'drugs')
   const pendingInvestigationsKey = recommendationsSection ? `${recommendationsSection.id}_pending_investigations` : null
 
   // Автосохранение черновика — debounce на 800мс, чтобы не писать в localStorage
@@ -141,25 +155,25 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   }
 
   function insertIntoDiagnosis(text) {
-    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}, ${text}` : text)
+    updateSection(diagnosisSectionId, sectionValues[diagnosisSectionId] ? `${sectionValues[diagnosisSectionId]}, ${text}` : text)
   }
 
   // Живой тег: формулировка диагноза "помнит", из какой рекомендации и какой её
   // версии она вставлена. Если рекомендацию потом отредактируют в справочнике —
   // GuidelinePanel покажет "обновилось", а не подменит текст сама собой.
   function insertDiagnosisFormulation(text, guideline) {
-    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}\n${text}` : text)
+    updateSection(diagnosisSectionId, sectionValues[diagnosisSectionId] ? `${sectionValues[diagnosisSectionId]}\n${text}` : text)
     setFormulationTag({ guidelineId: guideline.id, guidelineUpdatedAt: guideline.updatedAt })
   }
 
   function insertClassificationLine(text) {
-    updateSection('diagnosis', sectionValues.diagnosis ? `${sectionValues.diagnosis}\n${text}` : text)
+    updateSection(diagnosisSectionId, sectionValues[diagnosisSectionId] ? `${sectionValues[diagnosisSectionId]}\n${text}` : text)
   }
 
   function insertGuidelineComplaint(text) {
     const clean = lowercaseFirst(text)
-    const current = sectionValues.complaints || []
-    if (!current.includes(clean)) updateSection('complaints', [...current, clean])
+    const current = sectionValues[complaintsSectionId] || []
+    if (!current.includes(clean)) updateSection(complaintsSectionId, [...current, clean])
   }
 
   function insertGuidelineInvestigation(text) {
@@ -188,7 +202,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   // Следим за кодами МКБ в диагнозе: если код сменился так, что ранее вставленная
   // рекомендация больше не подходит — спрашиваем, удалить ли то, что из неё вставлено
   useEffect(() => {
-    const codes = extractCodesFromText(sectionValues.diagnosis)
+    const codes = extractCodesFromText(sectionValues[diagnosisSectionId])
     if (prevCodesRef.current === null) {
       prevCodesRef.current = codes
       return
@@ -201,7 +215,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     const stale = guidelineInsertions.filter((ins) => !currentGuidelineIds.has(ins.guidelineId))
     if (stale.length) setStaleGuidelinePrompt(stale)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionValues.diagnosis])
+  }, [sectionValues[diagnosisSectionId]])
 
   function confirmRemoveStaleGuideline(shouldRemove) {
     if (shouldRemove && staleGuidelinePrompt) {
@@ -227,7 +241,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   // без клика по кнопке. "Только если пусто" и только один раз на рекомендацию,
   // чтобы не переписывать то, что врач уже удалил вручную.
   useEffect(() => {
-    const codes = extractCodesFromText(sectionValues.diagnosis)
+    const codes = extractCodesFromText(sectionValues[diagnosisSectionId])
     if (!codes.length) return
     const matches = store.getGuidelinesForCodes(codes)
     if (!matches.length) return
@@ -238,10 +252,10 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
 
       matches.forEach((g) => {
         const complaintsKey = `${g.id}:complaints`
-        if ((g.clinicalPicture || []).length && !(prev.complaints || []).length && !autoFilledRef.current.has(complaintsKey)) {
+        if ((g.clinicalPicture || []).length && !(prev[complaintsSectionId] || []).length && !autoFilledRef.current.has(complaintsKey)) {
           autoFilledRef.current.add(complaintsKey)
           if (!changed) next = { ...next }
-          next.complaints = g.clinicalPicture.map(lowercaseFirst)
+          next[complaintsSectionId] = g.clinicalPicture.map(lowercaseFirst)
           changed = true
         }
 
@@ -263,7 +277,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
       return changed ? next : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionValues.diagnosis])
+  }, [sectionValues[diagnosisSectionId]])
 
   function clearSection(section) {
     const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
@@ -382,9 +396,9 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                       />
                     </div>
                   )}
-                  {section.id === 'complaints' && (
+                  {section.id === complaintsSectionId && (
                     <GuidelinePanel
-                      diagnosisText={sectionValues.diagnosis}
+                      diagnosisText={sectionValues[diagnosisSectionId]}
                       mode="complaints"
                       onInsertComplaint={insertGuidelineComplaint}
                     />
@@ -446,7 +460,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
               )}
               {section.type === 'freeform' && (
                 <>
-                  {section.id === 'diagnosis' && <Mkb10Picker onInsert={insertIntoDiagnosis} />}
+                  {section.id === diagnosisSectionId && <Mkb10Picker onInsert={insertIntoDiagnosis} />}
                   <div className="textarea-with-voice">
                     <AutoResizeTextarea
                       className="freeform-textarea"
@@ -460,16 +474,16 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                       }
                     />
                   </div>
-                  {section.id === 'diagnosis' && (
+                  {section.id === diagnosisSectionId && (
                     <GuidelinePanel
-                      diagnosisText={sectionValues.diagnosis}
+                      diagnosisText={sectionValues[diagnosisSectionId]}
                       mode="diagnosis"
                       onInsertFormulation={insertDiagnosisFormulation}
                       onInsertClassificationLine={insertClassificationLine}
                       formulationTag={formulationTag}
                     />
                   )}
-                  {section.id === 'diagnosis' && (
+                  {section.id === diagnosisSectionId && (
                     <div className="ai-check-block">
                       <button type="button" className="btn-ai" onClick={runDiagnosisSuggestion} disabled={diagnosisLoading}>
                         {diagnosisLoading ? 'Думаю…' : '🤖 Подсказка по диагнозу (AI)'}
@@ -511,14 +525,14 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   )}
                   <DrugSection
                     complaints={complaints}
-                    diagnosisText={sectionValues.diagnosis}
+                    diagnosisText={sectionValues[diagnosisSectionId]}
                     patientAllergies={patient?.allergies || []}
                     values={sectionValues[section.id] || []}
                     onChange={(v) => updateSection(section.id, v)}
                     onInsertMkb={insertIntoDiagnosis}
                   />
                   <GuidelinePanel
-                    diagnosisText={sectionValues.diagnosis}
+                    diagnosisText={sectionValues[diagnosisSectionId]}
                     mode="drugs"
                     onInsertInvestigation={insertGuidelineInvestigation}
                     onInsertDrug={(drug) => insertGuidelineDrugSingle(section.id, drug)}
@@ -548,15 +562,14 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
 
       {hubOpen && (
         <GuidelineHub
-          diagnosisText={sectionValues.diagnosis}
+          diagnosisText={sectionValues[diagnosisSectionId]}
           onClose={() => setHubOpen(false)}
           onInsertFormulation={insertDiagnosisFormulation}
           onInsertComplaint={insertGuidelineComplaint}
           onInsertClassificationLine={insertClassificationLine}
           onInsertInvestigation={insertGuidelineInvestigation}
           onInsertDrug={(drug) => {
-            const recSection = template.sections.find((s) => s.type === 'drugs')
-            if (recSection) insertGuidelineDrugSingle(recSection.id, drug)
+            if (recommendationsSection) insertGuidelineDrugSingle(recommendationsSection.id, drug)
           }}
           formulationTag={formulationTag}
         />
