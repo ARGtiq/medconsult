@@ -589,7 +589,7 @@ body {
 }
 .guideline-hub-badge:hover { background: #d9ede7; }
 
-.guideline-hub-box { max-width: 640px; }
+.guideline-hub-box { max-width: min(640px, calc(100vw - 32px)); }
 .guideline-hub-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .guideline-hub-section:last-child { border-bottom: none; margin-bottom: 0; }
 .guideline-hub-section-label {
@@ -1897,10 +1897,15 @@ body {
   background: var(--panel);
   border-radius: var(--radius-lg);
   padding: 20px;
-  max-width: 480px;
+  max-width: min(640px, calc(100vw - 32px));
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+/* Формы с большим числом полей (клинреки, лекарства, группы) — шире на десктопе */
+.modal-box:has(.drug-form) {
+  max-width: min(760px, calc(100vw - 32px));
 }
 
 .modal-header {

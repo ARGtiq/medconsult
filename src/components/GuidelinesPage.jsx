@@ -202,7 +202,7 @@ export default function GuidelinesPage() {
       </button>
 
       {formOpen && (
-        <div className="modal-overlay" onClick={() => setFormOpen(false)}>
+        <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{form.id ? `Редактировать: ${form.title}` : 'Новая рекомендация'}</h3>

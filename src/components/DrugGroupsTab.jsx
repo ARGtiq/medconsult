@@ -129,7 +129,7 @@ export default function DrugGroupsTab() {
       </button>
 
       {formOpen && (
-        <div className="modal-overlay" onClick={() => setFormOpen(false)}>
+        <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editingStaticKey ? `Заметки: ${form.label}` : form.key ? `Редактировать: ${form.label}` : 'Новая группа'}</h3>
