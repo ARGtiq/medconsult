@@ -10,6 +10,7 @@ import './App.css'
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const ReferencePage = lazy(() => import('./components/ReferencePage'))
 const PatientsPage = lazy(() => import('./components/PatientsPage'))
+const HomePage = lazy(() => import('./components/HomePage'))
 
 const HIDDEN_FROM_NAV = ['preop_epicrisis', 'operation_protocol']
 
@@ -21,7 +22,7 @@ export default function App() {
       : templates[0]?.id
   )
   const [navOpen, setNavOpen] = useState(false)
-  const [page, setPage] = useState('visit') // 'visit' | 'settings'
+  const [page, setPage] = useState('home')
   const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
 
   function goToVisit() {
@@ -30,8 +31,15 @@ export default function App() {
     if (!fresh.find((t) => t.id === activeTemplateId)) {
       setActiveTemplateId(fresh[0]?.id)
     }
+    setPendingVisit(null)
     setPage('visit')
     setNavOpen(false)
+  }
+
+  function openDraftTemplate(template) {
+    setActiveTemplateId(template.id)
+    setPendingVisit(null)
+    setPage('visit')
   }
 
   function loadVisit(visit) {
@@ -63,6 +71,9 @@ export default function App() {
         </button>
 
         <nav className={navOpen ? 'template-tabs open' : 'template-tabs'}>
+          <button className={page === 'home' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('home'); setNavOpen(false) }}>
+            🏠 Главная
+          </button>
           <button className={page === 'visit' ? 'tab tab-page active' : 'tab tab-page'} onClick={goToVisit}>
             Приём
           </button>
@@ -116,7 +127,16 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {page === 'settings' ? (
+        {page === 'home' ? (
+          <Suspense fallback={<p className="settings-loading">Загрузка…</p>}>
+            <HomePage
+              onOpenDraft={openDraftTemplate}
+              onGoToVisit={goToVisit}
+              onGoToPatients={() => setPage('patients')}
+              onGoToSettings={() => setPage('settings')}
+            />
+          </Suspense>
+        ) : page === 'settings' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка настроек…</p>}>
             <SettingsPage />
           </Suspense>

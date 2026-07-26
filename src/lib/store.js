@@ -649,4 +649,11 @@ export const store = {
   clearDraft(templateId) {
     localStorage.removeItem(`medconsult_draft_${templateId}`)
   },
+
+  // черновики по всем шаблонам сразу — для домашнего экрана
+  getAllDrafts() {
+    return this.getTemplates()
+      .map((t) => ({ template: t, draft: this.getDraft(t.id) }))
+      .filter((d) => d.draft)
+  },
 }

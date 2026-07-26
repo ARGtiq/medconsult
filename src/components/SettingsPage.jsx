@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import TemplateEditor from './TemplateEditor'
 import AiSettings from './AiSettings'
 import DataExport from './DataExport'
 import ThemeSettings from './ThemeSettings'
@@ -7,14 +6,13 @@ import ChangelogModal from './ChangelogModal'
 import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
 
-function TemplatesTab() {
-  return <TemplateEditor />
-}
-
-function GeneralTab() {
+// Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
+// Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
+export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false)
   return (
-    <div className="settings-tab">
+    <div className="settings-tab settings-page-single">
+      <h2 className="guidelines-title">Настройки</h2>
       <div className="general-settings-block">
         <h4>Оформление</h4>
         <p className="settings-note-inline">Акцентный цвет интерфейса и тёмная тема.</p>
@@ -72,25 +70,6 @@ create policy "own secrets update" on medconsult_secrets for update
         </button>
         {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
       </div>
-    </div>
-  )
-}
-
-export default function SettingsPage() {
-  const [tab, setTab] = useState('templates')
-
-  return (
-    <div className="settings-page">
-      <div className="settings-tabs">
-        <button type="button" className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>
-          Шаблоны
-        </button>
-        <button type="button" className={tab === 'general' ? 'active' : ''} onClick={() => setTab('general')}>
-          Общие
-        </button>
-      </div>
-      {tab === 'templates' && <TemplatesTab />}
-      {tab === 'general' && <GeneralTab />}
     </div>
   )
 }

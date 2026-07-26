@@ -10,6 +10,7 @@ export default function DataExport() {
     a.download = `medconsult-export-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
+    localStorage.setItem('medconsult_last_backup', String(Date.now()))
   }
 
   function handleImport(e) {

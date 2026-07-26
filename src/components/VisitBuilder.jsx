@@ -21,6 +21,15 @@ function lowercaseFirst(s) {
   return s ? s.charAt(0).toLowerCase() + s.slice(1) : s
 }
 
+function sectionPreviewText(section, value) {
+  if (section.type === 'drugs') {
+    const drugs = value || []
+    return drugs.map((d) => [d.name, d.dosage].filter(Boolean).join(' ')).join(', ')
+  }
+  if (Array.isArray(value)) return value.join(', ')
+  return value || ''
+}
+
 function composeDefaultChipText(chip) {
   const parts = []
   ;(chip.modifierGroups || []).forEach((g) => {
@@ -58,6 +67,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [draftBannerVisible, setDraftBannerVisible] = useState(!!draft && !initialVisit)
   const [presets, setPresets] = useState(store.getPresets(template.id))
   const [saved, setSaved] = useState(false)
+  const [openSectionId, setOpenSectionId] = useState(template.sections[0]?.id || null)
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
@@ -313,14 +323,29 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
 
       <div className="visit-layout">
         <div className="visit-sections">
-          {template.sections.map((section) => (
-            <section key={section.id} className="section-block">
-              <div className="section-block-header">
-                <h3>{section.title}</h3>
+          {template.sections.map((section) => {
+            const isOpen = openSectionId === section.id
+            const preview = sectionPreviewText(section, sectionValues[section.id])
+            return (
+            <section key={section.id} className={isOpen ? 'section-block section-block-open' : 'section-block section-block-collapsed'}>
+              <div
+                className="section-block-header"
+                onClick={(e) => {
+                  if (e.target.closest('.section-clear-btn')) return
+                  setOpenSectionId(isOpen ? null : section.id)
+                }}
+              >
+                <h3>{preview && <span className="section-filled-check">✓</span>} {section.title}</h3>
                 <button type="button" className="section-clear-btn" onClick={() => clearSection(section)}>
                   Очистить
                 </button>
               </div>
+              {!isOpen ? (
+                <p className="section-collapsed-text" onClick={() => setOpenSectionId(section.id)}>
+                  {preview || 'Пусто — нажми, чтобы заполнить'}
+                </p>
+              ) : (
+              <>
               {section.hasDurationField && (
                 <div className="section-duration-row">
                   <label>Длительность</label>
@@ -491,8 +516,11 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                   />
                 </>
               )}
+              </>
+              )}
             </section>
-          ))}
+            )
+          })}
 
           <div className="visit-actions-row">
             <button type="button" className="btn-primary" onClick={saveVisit}>

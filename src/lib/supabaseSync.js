@@ -57,6 +57,7 @@ export async function pushToSupabase(syncCode) {
   })
   if (error) throw new Error(error.message)
   setLastSync({ direction: 'push', at: Date.now() })
+  localStorage.setItem('medconsult_last_backup', String(Date.now()))
 }
 
 export async function pullFromSupabase(syncCode) {
