@@ -404,8 +404,26 @@ function seedTemplates() {
   ]
 }
 
+// Крошечный pub-sub — чтобы после сохранения визита/пациента можно было
+// незаметно триггернуть фоновую инкрементальную отправку в Supabase
+// (см. lib/autoSync.js), не завязывая store.js напрямую на supabaseSync.js
+// (там и так уже есть обратная зависимость store -> нельзя по кругу).
+const listeners = {}
+
+function emit(event) {
+  ;(listeners[event] || []).forEach((cb) => cb())
+}
+
 export const store = {
   get: readAll,
+
+  on(event, callback) {
+    if (!listeners[event]) listeners[event] = []
+    listeners[event].push(callback)
+    return () => {
+      listeners[event] = listeners[event].filter((cb) => cb !== callback)
+    }
+  },
 
   // --- автоподсказки жалоб ---
   recordComplaint(text) {
@@ -501,6 +519,7 @@ export const store = {
     if (idx >= 0) state.patients[idx] = withStamp
     else state.patients.push({ ...withStamp, id: patient.id || crypto.randomUUID() })
     writeAll(state)
+    emit('patients')
     return state.patients
   },
 
@@ -512,6 +531,7 @@ export const store = {
     if (idx >= 0) state.visits[idx] = toSave
     else state.visits.push(toSave)
     writeAll(state)
+    emit('visits')
     return toSave
   },
 

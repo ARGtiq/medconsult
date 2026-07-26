@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getSupabaseConfig, setSupabaseConfig, isSupabaseConfigured } from '../lib/supabaseClient'
 import { store } from '../lib/store'
+import { isAutoSyncEnabled, setAutoSyncEnabled } from '../lib/autoSync'
 import {
   testSupabaseConnection,
   pushToSupabase,
@@ -49,6 +50,7 @@ export default function SupabaseSettings() {
   const [visitSyncBusy, setVisitSyncBusy] = useState(null)
   const [visitSyncResult, setVisitSyncResult] = useState({})
   const [visitSyncError, setVisitSyncError] = useState({})
+  const [autoSync, setAutoSync] = useState(isAutoSyncEnabled())
   const lastSync = getLastSync()
 
   const INCREMENTAL_ENTITIES = {
@@ -253,6 +255,17 @@ export default function SupabaseSettings() {
 
       <div className="visit-incremental-sync">
         <div className="visit-incremental-sync-label">Только изменённое (не весь список каждый раз)</div>
+        <label className="auto-sync-toggle">
+          <input
+            type="checkbox"
+            checked={autoSync}
+            onChange={(e) => {
+              setAutoSyncEnabled(e.target.checked)
+              setAutoSync(e.target.checked)
+            }}
+          />
+          Отправлять автоматически в фоне после сохранения визита/пациента
+        </label>
         {Object.entries(INCREMENTAL_ENTITIES).map(([entity, cfg]) => (
           <div key={entity} className="data-export-ns-row">
             <span>{cfg.label}</span>

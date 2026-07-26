@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import VisitBuilder from './components/VisitBuilder'
 import Footer from './components/Footer'
 import { store } from './lib/store'
@@ -24,6 +24,20 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [page, setPage] = useState('home')
   const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
+  const [syncStatus, setSyncStatus] = useState(null)
+
+  useEffect(() => {
+    let cleanup
+    // динамический импорт — чтобы код Supabase не грузился в основной чанк
+    // на первом экране, только когда реально понадобился фоновый синк
+    import('./lib/autoSync').then(({ initAutoSync }) => {
+      cleanup = initAutoSync((info) => {
+        setSyncStatus(info)
+        if (info.status === 'done') setTimeout(() => setSyncStatus(null), 2500)
+      })
+    })
+    return () => cleanup?.()
+  }, [])
 
   function goToVisit() {
     const fresh = store.getTemplates()
@@ -123,6 +137,8 @@ export default function App() {
 
         <div className="header-right">
           {!isSupabaseConfigured() && <span className="sync-badge">офлайн · только на этом устройстве</span>}
+          {syncStatus?.status === 'syncing' && <span className="sync-badge sync-badge-active">⟳ синхронизация…</span>}
+          {syncStatus?.status === 'error' && <span className="sync-badge sync-badge-error" title={syncStatus.error}>⚠ синк не удался</span>}
         </div>
       </header>
 
