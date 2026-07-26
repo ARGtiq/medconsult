@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react'
 import { getSupabaseConfig, setSupabaseConfig, isSupabaseConfigured } from '../lib/supabaseClient'
+import { store } from '../lib/store'
 import {
   testSupabaseConnection,
   pushToSupabase,
   pullFromSupabase,
+  pushNamespace,
+  pullNamespace,
   getLastSync,
   sendMagicLink,
   getCurrentUser,
   signOut,
   onAuthChange,
 } from '../lib/supabaseSync'
+
+const NAMESPACE_LABELS = {
+  clinical: 'Пациенты и визиты',
+  reference: 'Шаблоны, клинреки, лекарства, группы',
+  workspace: 'Пресеты визитов',
+  system: 'Багрепорты, настройки',
+}
 
 function formatTime(ts) {
   if (!ts) return ''
@@ -28,6 +38,10 @@ export default function SupabaseSettings() {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionOk, setActionOk] = useState('')
+  const [nsOpen, setNsOpen] = useState(false)
+  const [nsBusy, setNsBusy] = useState(null)
+  const [nsError, setNsError] = useState({})
+  const [nsOk, setNsOk] = useState({})
   const lastSync = getLastSync()
 
   useEffect(() => {
@@ -97,6 +111,35 @@ export default function SupabaseSettings() {
     }
   }
 
+  async function doPushNamespace(ns) {
+    setNsBusy(`push-${ns}`)
+    setNsError((p) => ({ ...p, [ns]: '' }))
+    setNsOk((p) => ({ ...p, [ns]: '' }))
+    try {
+      await pushNamespace(ns)
+      setNsOk((p) => ({ ...p, [ns]: 'Отправлено ✓' }))
+    } catch (e) {
+      setNsError((p) => ({ ...p, [ns]: e.message }))
+    } finally {
+      setNsBusy(null)
+    }
+  }
+
+  async function doPullNamespace(ns) {
+    if (!window.confirm(`Заменить локальный раздел «${NAMESPACE_LABELS[ns] || ns}» данными из облака?`)) return
+    setNsBusy(`pull-${ns}`)
+    setNsError((p) => ({ ...p, [ns]: '' }))
+    setNsOk((p) => ({ ...p, [ns]: '' }))
+    try {
+      await pullNamespace(ns)
+      setNsOk((p) => ({ ...p, [ns]: 'Загружено ✓ (перезагрузи страницу)' }))
+    } catch (e) {
+      setNsError((p) => ({ ...p, [ns]: e.message }))
+    } finally {
+      setNsBusy(null)
+    }
+  }
+
   return (
     <div className="supabase-settings">
       <form className="supabase-config-form" onSubmit={saveConfig}>
@@ -161,6 +204,39 @@ export default function SupabaseSettings() {
       </div>
       {actionError && <div className="ai-error">{actionError}</div>}
       {actionOk && <div className="ai-diagnostic ok">{actionOk}</div>}
+
+      <button type="button" className="data-export-toggle" onClick={() => setNsOpen((v) => !v)}>
+        {nsOpen ? '▾' : '▸'} Синхронизировать по разделам отдельно
+      </button>
+      {nsOpen && (
+        <div className="data-export-namespaces">
+          {store.getNamespaceNames().map((ns) => (
+            <div key={ns} className="data-export-ns-row">
+              <span>{NAMESPACE_LABELS[ns] || ns}</span>
+              <div className="data-export-ns-actions">
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={() => doPushNamespace(ns)}
+                  disabled={nsBusy !== null || !isSupabaseConfigured()}
+                >
+                  {nsBusy === `push-${ns}` ? '…' : 'Отправить'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={() => doPullNamespace(ns)}
+                  disabled={nsBusy !== null || !isSupabaseConfigured()}
+                >
+                  {nsBusy === `pull-${ns}` ? '…' : 'Загрузить'}
+                </button>
+              </div>
+              {nsError[ns] && <div className="ai-error">{nsError[ns]}</div>}
+              {nsOk[ns] && <div className="ai-diagnostic ok">{nsOk[ns]}</div>}
+            </div>
+          ))}
+        </div>
+      )}
       {lastSync && (
         <p className="settings-note-inline">
           Последняя синхронизация: {lastSync.direction === 'push' ? 'отправка' : 'загрузка'}, {formatTime(lastSync.at)}

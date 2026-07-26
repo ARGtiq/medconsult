@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '0.23.0',
+    date: '2026-07-26',
+    items: [
+      'Раздельные Supabase-таблицы по неймспейсам (medconsult_ns_clinical/reference/workspace/system) вместо одного medconsult_sync',
+      'Синхронизация по отдельным разделам (Настройки → Supabase → "по разделам") — можно отправить/загрузить только пациентов или только справочники',
+      'Обновлён SQL для настройки таблиц',
+    ],
+  },
+  {
     version: '0.22.0',
     date: '2026-07-26',
     items: [

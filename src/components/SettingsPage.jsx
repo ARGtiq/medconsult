@@ -34,19 +34,49 @@ export default function SettingsPage() {
         <SupabaseSettings />
         <details className="supabase-sql-details">
           <summary>SQL для настройки таблиц (один раз, в SQL Editor Supabase)</summary>
-          <pre className="supabase-sql-block">{`create table if not exists medconsult_sync (
+          <pre className="supabase-sql-block">{`-- Отдельная таблица на каждый неймспейс (clinical/reference/workspace/system) —
+-- та же логика, что и в разбивке localStorage. Повтори блок для всех четырёх.
+create table if not exists medconsult_ns_clinical (
   id uuid primary key,
   payload jsonb not null,
   updated_at timestamptz not null default now()
 );
-alter table medconsult_sync enable row level security;
-create policy "own row select" on medconsult_sync for select
-  using (auth.uid() = id);
-create policy "own row insert" on medconsult_sync for insert
-  with check (auth.uid() = id);
-create policy "own row update" on medconsult_sync for update
-  using (auth.uid() = id) with check (auth.uid() = id);
+alter table medconsult_ns_clinical enable row level security;
+create policy "own row select" on medconsult_ns_clinical for select using (auth.uid() = id);
+create policy "own row insert" on medconsult_ns_clinical for insert with check (auth.uid() = id);
+create policy "own row update" on medconsult_ns_clinical for update using (auth.uid() = id) with check (auth.uid() = id);
 
+create table if not exists medconsult_ns_reference (
+  id uuid primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table medconsult_ns_reference enable row level security;
+create policy "own row select" on medconsult_ns_reference for select using (auth.uid() = id);
+create policy "own row insert" on medconsult_ns_reference for insert with check (auth.uid() = id);
+create policy "own row update" on medconsult_ns_reference for update using (auth.uid() = id) with check (auth.uid() = id);
+
+create table if not exists medconsult_ns_workspace (
+  id uuid primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table medconsult_ns_workspace enable row level security;
+create policy "own row select" on medconsult_ns_workspace for select using (auth.uid() = id);
+create policy "own row insert" on medconsult_ns_workspace for insert with check (auth.uid() = id);
+create policy "own row update" on medconsult_ns_workspace for update using (auth.uid() = id) with check (auth.uid() = id);
+
+create table if not exists medconsult_ns_system (
+  id uuid primary key,
+  payload jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table medconsult_ns_system enable row level security;
+create policy "own row select" on medconsult_ns_system for select using (auth.uid() = id);
+create policy "own row insert" on medconsult_ns_system for insert with check (auth.uid() = id);
+create policy "own row update" on medconsult_ns_system for update using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Зашифрованные AI-ключи (для восстановления на другом устройстве) — отдельно, не привязано к неймспейсам
 create table if not exists medconsult_secrets (
   id uuid primary key,
   cipher text not null,
@@ -61,6 +91,10 @@ create policy "own secrets insert" on medconsult_secrets for insert
   with check (auth.uid() = id);
 create policy "own secrets update" on medconsult_secrets for update
   using (auth.uid() = id) with check (auth.uid() = id);`}</pre>
+          <p className="settings-note-inline">
+            Если раньше уже создавал таблицу <code>medconsult_sync</code> под старую версию — её можно удалить,
+            она больше не используется (данные теперь по отдельным таблицам-неймспейсам выше).
+          </p>
         </details>
       </div>
       <div className="general-settings-block">

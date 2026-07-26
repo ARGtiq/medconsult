@@ -1,7 +1,17 @@
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient'
 import { store } from './store'
 
-const TABLE = 'medconsult_sync'
+// Раньше вся база синкалась одним блобом в таблицу medconsult_sync.
+// Теперь — своя таблица на каждый неймспейс (medconsult_ns_clinical и т.п.),
+// той же формы, что и локальные ключи store.js. Даёт: можно синкать визиты
+// часто и отдельно от редко меняющихся справочников, конфликт при
+// одновременном редактировании на двух устройствах локальнее (не весь блоб
+// целиком), и точку, куда прицельно повесить шифрование — таблица clinical
+// самая чувствительная и растёт быстрее остальных.
+function tableFor(ns) {
+  return `medconsult_ns_${ns}`
+}
+
 const LAST_SYNC_KEY = 'medconsult_last_sync'
 
 export function getLastSync() {
@@ -16,9 +26,9 @@ function setLastSync(info) {
   localStorage.setItem(LAST_SYNC_KEY, JSON.stringify(info))
 }
 
-// Диагностика: проверяем, что клиент реально создан и запрос к таблице проходит.
-// Ошибка обычно означает, что таблица medconsult_sync ещё не создана в Supabase
-// (см. SQL в Настройки → Общие → Supabase), либо не настроен RLS.
+// Диагностика: проверяем, что клиент реально создан и запрос хотя бы к одной
+// из таблиц-неймспейсов проходит. Ошибка обычно означает, что таблицы ещё не
+// созданы в Supabase (см. SQL в Настройки → Общие → Supabase), либо не настроен RLS.
 export async function testSupabaseConnection() {
   const client = getSupabaseClient()
   if (!client) {
@@ -26,7 +36,7 @@ export async function testSupabaseConnection() {
   }
   const start = performance.now()
   try {
-    const { error } = await client.from(TABLE).select('id').limit(1)
+    const { error } = await client.from(tableFor('system')).select('id').limit(1)
     const latency = Math.round(performance.now() - start)
     if (error) return { ok: false, latency, error: error.message }
     return { ok: true, latency }
@@ -35,39 +45,49 @@ export async function testSupabaseConnection() {
   }
 }
 
-// id строки в облаке — либо auth.uid() залогиненного пользователя (предпочтительно,
-// тогда RLS реально разделяет данные между людьми), либо старый вариант с ручным
-// "кодом синхронизации" для тех, кто не хочет возиться с magic link.
-async function resolveRowId(client, syncCode) {
+async function requireUserId(client) {
   const { data } = await client.auth.getUser()
-  if (data?.user?.id) return data.user.id
-  if (syncCode?.trim()) return syncCode.trim()
-  throw new Error('Нужно либо войти по magic link, либо указать код синхронизации')
+  if (!data?.user?.id) throw new Error('Нужно сначала войти по magic link (см. блок выше)')
+  return data.user.id
 }
 
-export async function pushToSupabase(syncCode) {
+// --- push/pull одного неймспейса ---
+export async function pushNamespace(ns) {
   const client = getSupabaseClient()
   if (!client) throw new Error('Supabase не настроен')
-  const id = await resolveRowId(client, syncCode)
-  const payload = JSON.parse(store.exportAll())
-  const { error } = await client.from(TABLE).upsert({
+  const id = await requireUserId(client)
+  const payload = JSON.parse(store.exportNamespace(ns))
+  const { error } = await client.from(tableFor(ns)).upsert({
     id,
     payload,
     updated_at: new Date().toISOString(),
   })
   if (error) throw new Error(error.message)
+}
+
+export async function pullNamespace(ns) {
+  const client = getSupabaseClient()
+  if (!client) throw new Error('Supabase не настроен')
+  const id = await requireUserId(client)
+  const { data, error } = await client.from(tableFor(ns)).select('payload').eq('id', id).single()
+  if (error) throw new Error(error.message)
+  if (!data?.payload) throw new Error('Данные не найдены')
+  store.importNamespace(ns, JSON.stringify(data.payload))
+}
+
+// --- push/pull всех неймспейсов разом (обычная кнопка "Отправить/Загрузить") ---
+export async function pushToSupabase() {
+  for (const ns of store.getNamespaceNames()) {
+    await pushNamespace(ns)
+  }
   setLastSync({ direction: 'push', at: Date.now() })
   localStorage.setItem('medconsult_last_backup', String(Date.now()))
 }
 
-export async function pullFromSupabase(syncCode) {
-  const client = getSupabaseClient()
-  if (!client) throw new Error('Supabase не настроен')
-  const id = await resolveRowId(client, syncCode)
-  const { data, error } = await client.from(TABLE).select('payload').eq('id', id).single()
-  if (error) throw new Error(error.message)
-  if (!data?.payload) throw new Error('Данные не найдены')
-  store.importAll(JSON.stringify(data.payload))
+export async function pullFromSupabase() {
+  for (const ns of store.getNamespaceNames()) {
+    await pullNamespace(ns)
+  }
   setLastSync({ direction: 'pull', at: Date.now() })
 }
 
