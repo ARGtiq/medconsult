@@ -33,9 +33,12 @@ export default function PatientsPage({ onLoadVisit }) {
   const [selectedId, setSelectedId] = useState(null)
   const [editingField, setEditingField] = useState(null)
   const [editingText, setEditingText] = useState('')
+  const [mode, setMode] = useState('patients') // 'patients' | 'visitSearch'
+  const [visitQuery, setVisitQuery] = useState('')
 
   const filtered = patients.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
   const selected = patients.find((p) => p.id === selectedId) || null
+  const visitResults = mode === 'visitSearch' ? store.searchVisits(visitQuery) : []
 
   function refresh() {
     setPatients(store.getPatients())
@@ -63,6 +66,48 @@ export default function PatientsPage({ onLoadVisit }) {
     <div className="guidelines-page">
       <h2 className="guidelines-title">Пациенты</h2>
 
+      <div className="settings-tabs">
+        <button type="button" className={mode === 'patients' ? 'active' : ''} onClick={() => setMode('patients')}>
+          По пациентам
+        </button>
+        <button type="button" className={mode === 'visitSearch' ? 'active' : ''} onClick={() => setMode('visitSearch')}>
+          Поиск по всем визитам
+        </button>
+      </div>
+
+      {mode === 'visitSearch' && (
+        <div className="visit-search-block">
+          <input
+            type="text"
+            className="patients-search"
+            placeholder="Диагноз, жалоба, препарат… напр. «N40» или «тамсулозин»"
+            value={visitQuery}
+            onChange={(e) => setVisitQuery(e.target.value)}
+          />
+          <div className="visit-history-list">
+            {visitQuery.trim() && visitResults.length === 0 && <p className="empty-hint">Ничего не найдено.</p>}
+            {visitResults.map((v) => {
+              const { complaintsText, drugsText } = summarizeVisit(v)
+              return (
+                <div key={v.id} className="visit-history-card">
+                  <div className="visit-history-date">
+                    {formatDate(v.visitDate)} · {v.templateName} · <strong>{v.patientDisplayName}</strong>
+                  </div>
+                  {complaintsText && <div className="visit-history-line"><strong>Жалобы:</strong> {complaintsText}</div>}
+                  {drugsText && <div className="visit-history-line"><strong>Назначено:</strong> {drugsText}</div>}
+                  {onLoadVisit && (
+                    <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
+                      Открыть на приёме
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {mode === 'patients' && (
       <div className="patients-layout">
         <div className="patients-sidebar">
           <input
@@ -171,6 +216,7 @@ export default function PatientsPage({ onLoadVisit }) {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }

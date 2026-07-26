@@ -1,13 +1,15 @@
 // Простое персистентное хранилище поверх localStorage.
 // Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
 
+import { readClinicalSync, writeClinicalSync } from './clinicalLock'
+
 // Хранилище разложено по неймспейсам — отдельным ключам localStorage —
 // вместо одного большого блоба. Это не меняет внешний API store.js: все методы
 // ниже как читали/писали через readAll()/writeAll(state), так и продолжают,
 // просто эти две функции теперь физически читают/пишут в разные ключи.
 // Даёт: выборочный экспорт/импорт по смыслу, раздельную синхронизацию в Supabase
 // по неймспейсам (не гонять всё разом при любой мелкой правке), и точку, куда
-// прицельно повесить шифрование самых чувствительных данных (clinical).
+// прицельно повесить шифрование самых чувствительных данных (clinical) — см. clinicalLock.js.
 const OLD_KEY = 'medconsult_v1' // из версий до неймспейсов — мигрируется один раз и удаляется
 const TEMPLATES_SEED_VERSION = 8
 
@@ -38,6 +40,7 @@ function nsStorageKey(ns) {
 }
 
 function readNamespaceRaw(ns) {
+  if (ns === 'clinical') return readClinicalSync()
   try {
     const raw = localStorage.getItem(nsStorageKey(ns))
     return raw ? JSON.parse(raw) : {}
@@ -47,6 +50,10 @@ function readNamespaceRaw(ns) {
 }
 
 function writeNamespaceRaw(ns, data) {
+  if (ns === 'clinical') {
+    writeClinicalSync(data)
+    return
+  }
   localStorage.setItem(nsStorageKey(ns), JSON.stringify(data))
 }
 
@@ -490,8 +497,9 @@ export const store = {
   savePatient(patient) {
     const state = readAll()
     const idx = state.patients.findIndex((p) => p.id === patient.id)
-    if (idx >= 0) state.patients[idx] = patient
-    else state.patients.push({ ...patient, id: patient.id || crypto.randomUUID() })
+    const withStamp = { ...patient, updatedAt: Date.now() }
+    if (idx >= 0) state.patients[idx] = withStamp
+    else state.patients.push({ ...withStamp, id: patient.id || crypto.randomUUID() })
     writeAll(state)
     return state.patients
   },
@@ -519,8 +527,9 @@ export const store = {
   saveTemplate(template) {
     const state = readAll()
     const idx = state.templates.findIndex((t) => t.id === template.id)
-    if (idx >= 0) state.templates[idx] = template
-    else state.templates.push({ ...template, id: template.id || crypto.randomUUID() })
+    const withStamp = { ...template, updatedAt: Date.now() }
+    if (idx >= 0) state.templates[idx] = withStamp
+    else state.templates.push({ ...withStamp, id: template.id || crypto.randomUUID() })
     writeAll(state)
     return state.templates
   },
@@ -587,7 +596,7 @@ export const store = {
 
   saveGroupMeta(key, meta) {
     const state = readAll()
-    state.drugGroupMeta[key] = { ...(state.drugGroupMeta[key] || {}), ...meta }
+    state.drugGroupMeta[key] = { ...(state.drugGroupMeta[key] || {}), ...meta, updatedAt: Date.now() }
     writeAll(state)
     return state.drugGroupMeta
   },
@@ -600,7 +609,7 @@ export const store = {
   saveCustomGroup(key, group) {
     const state = readAll()
     const groupKey = key || slugifyGroupKey(group.label)
-    state.customDrugGroups[groupKey] = { ...(state.customDrugGroups[groupKey] || {}), ...group }
+    state.customDrugGroups[groupKey] = { ...(state.customDrugGroups[groupKey] || {}), ...group, updatedAt: Date.now() }
     writeAll(state)
     return state.customDrugGroups
   },
@@ -637,6 +646,38 @@ export const store = {
     if (!patientId) return []
     return readAll()
       .visits.filter((v) => v.patientId === patientId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  },
+
+  // Поиск по ВСЕМ визитам сразу (не только конкретного пациента) — по тексту
+  // диагноза/жалоб/анамнеза и по названиям назначенных препаратов. Возвращает
+  // визиты с уже подставленным именем пациента, отсортированные по дате.
+  searchVisits(query) {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    const state = readAll()
+    const patientsById = {}
+    state.patients.forEach((p) => {
+      patientsById[p.id] = p
+    })
+
+    function visitMatches(v) {
+      const parts = []
+      Object.values(v.sectionValues || {}).forEach((val) => {
+        if (typeof val === 'string') parts.push(val)
+        else if (Array.isArray(val)) {
+          val.forEach((item) => {
+            if (typeof item === 'string') parts.push(item)
+            else if (item && typeof item === 'object' && item.name) parts.push(item.name)
+          })
+        }
+      })
+      return parts.some((p) => p.toLowerCase().includes(q))
+    }
+
+    return state.visits
+      .filter(visitMatches)
+      .map((v) => ({ ...v, patientDisplayName: patientsById[v.patientId]?.name || v.patientName || 'без пациента' }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   },
 
@@ -698,7 +739,7 @@ export const store = {
   savePreset(templateId, name, sectionValues) {
     const state = readAll()
     if (!state.templatePresets[templateId]) state.templatePresets[templateId] = []
-    state.templatePresets[templateId].push({ id: crypto.randomUUID(), name, sectionValues })
+    state.templatePresets[templateId].push({ id: crypto.randomUUID(), name, sectionValues, updatedAt: Date.now() })
     writeAll(state)
     return state.templatePresets[templateId]
   },

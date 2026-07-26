@@ -691,6 +691,46 @@ body {
 .patients-field-value { cursor: pointer; font-size: 13.5px; }
 .patients-field-value:hover { text-decoration: underline; color: var(--teal); }
 
+.visit-search-block { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+
+.unlock-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+}
+.unlock-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+.unlock-box .brand { justify-content: center; margin-bottom: 16px; }
+.unlock-box h3 { margin: 0 0 6px; font-family: var(--font-display); }
+.unlock-box form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.unlock-box input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.clinical-lock-settings { display: flex; flex-direction: column; gap: 10px; }
+.clinical-lock-form { display: flex; flex-direction: column; gap: 8px; max-width: 300px; }
+.clinical-lock-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.clinical-lock-enabled-block { display: flex; flex-direction: column; gap: 8px; }
+.clinical-lock-actions { display: flex; gap: 8px; }
+
 .drug-brandnames-row { margin-top: 4px; font-size: 12px; }
 .drug-brandnames-value {
   cursor: pointer;

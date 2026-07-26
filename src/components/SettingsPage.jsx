@@ -5,6 +5,7 @@ import ThemeSettings from './ThemeSettings'
 import ChangelogModal from './ChangelogModal'
 import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
+import ClinicalLockSettings from './ClinicalLockSettings'
 
 // Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
 // Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
@@ -28,6 +29,10 @@ export default function SettingsPage() {
         <h4>Данные приложения</h4>
         <p className="settings-note-inline">Полный бэкап (пациенты, визиты, шаблоны, база лекарств) или перенос на другое устройство.</p>
         <DataExport />
+      </div>
+      <div className="general-settings-block">
+        <h4>Защита данных пациентов</h4>
+        <ClinicalLockSettings />
       </div>
       <div className="general-settings-block">
         <h4>Supabase (синхронизация между устройствами)</h4>
