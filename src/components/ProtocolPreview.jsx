@@ -19,6 +19,14 @@ function sectionToText(section, value, patient, sectionValues) {
     return lines.join('\n')
   }
 
+  if (section.type === 'study_protocol') {
+    const selectedKeys = value || []
+    return (section.studies || [])
+      .filter((s) => selectedKeys.includes(s.key))
+      .map((s) => sectionValues[`${section.id}_text_${s.key}`] || s.template)
+      .join('\n\n')
+  }
+
   let text = ''
   if (section.type === 'investigations' && Array.isArray(value)) text = value.join('\n')
   else if (Array.isArray(value)) text = value.join(', ')

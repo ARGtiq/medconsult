@@ -975,6 +975,18 @@ body {
 }
 .checkbox-item input { width: 16px; height: 16px; }
 
+.study-protocol-item { display: flex; flex-direction: column; gap: 6px; }
+.study-protocol-text {
+  width: 100%;
+  margin-left: 24px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
 /* Drug section */
 .drug-list {
   display: flex;

@@ -10,6 +10,7 @@ import GuidelineHub from './GuidelineHub'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import DurationPicker from './DurationPicker'
+import StudyProtocolSection from './StudyProtocolSection'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 import { extractCodesFromText } from '../data/mkb10'
@@ -27,6 +28,12 @@ function sectionPreviewText(section, value, sectionValues) {
   if (section.type === 'drugs') {
     const drugs = value || []
     text = drugs.map((d) => [d.name, d.dosage].filter(Boolean).join(' ')).join(', ')
+  } else if (section.type === 'study_protocol') {
+    const selectedKeys = value || []
+    text = (section.studies || [])
+      .filter((s) => selectedKeys.includes(s.key))
+      .map((s) => s.label)
+      .join(', ')
   } else if (Array.isArray(value)) {
     text = value.join(', ')
   } else {
@@ -53,7 +60,7 @@ function composeDefaultChipText(chip) {
 
 function blankSectionValues(template) {
   const init = {}
-  const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
+  const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox', 'study_protocol']
   template.sections.forEach((s) => {
     if (s.type === 'chips' || s.type === 'investigations') {
       init[s.id] = (s.chips || []).filter((c) => c.defaultSelected).map(composeDefaultChipText)
@@ -293,7 +300,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   }, [sectionValues[diagnosisSectionId]])
 
   function clearSection(section) {
-    const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox']
+    const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox', 'study_protocol']
     updateSection(section.id, arrayTypes.includes(section.type) ? [] : '')
     if (section.hasDurationField) updateSection(`${section.id}_duration`, '')
     if (section.hasFreeTextField) updateSection(`${section.id}_freetext`, '')
@@ -466,6 +473,22 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     )
                   })}
                 </div>
+              )}
+              {section.type === 'study_protocol' && (
+                <StudyProtocolSection
+                  section={section}
+                  values={sectionValues[section.id] || []}
+                  sectionValues={sectionValues}
+                  visitDate={visitDate}
+                  onToggle={(study, checked, textKey) => {
+                    const current = sectionValues[section.id] || []
+                    updateSection(section.id, checked ? [...current, study.key] : current.filter((k) => k !== study.key))
+                    if (checked && sectionValues[textKey] === undefined) {
+                      updateSection(textKey, study.template.replace('{date}', visitDate ? visitDate.split('-').reverse().join('.') : ''))
+                    }
+                  }}
+                  onTextChange={(textKey, text) => updateSection(textKey, text)}
+                />
               )}
               {section.type === 'select' && (
                 <select
