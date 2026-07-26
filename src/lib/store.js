@@ -519,6 +519,34 @@ export const store = {
     return readAll().visits.sort((a, b) => b.updatedAt - a.updatedAt)
   },
 
+  // --- инкрементальный синк визитов: только то, что изменилось ---
+  getVisitsChangedSince(ts) {
+    return readAll().visits.filter((v) => (v.updatedAt || 0) > (ts || 0))
+  },
+
+  // Сливает визиты из облака в локальные по id: если локальной версии нет —
+  // добавляет, если есть — берёт более свежую по updatedAt (просто перезапись
+  // локального пуще старого облачного не имеет смысла). Возвращает, сколько
+  // записей реально обновилось.
+  mergeVisitsFromCloud(cloudVisits) {
+    const state = readAll()
+    const byId = {}
+    state.visits.forEach((v) => {
+      byId[v.id] = v
+    })
+    let changed = 0
+    cloudVisits.forEach((cv) => {
+      const local = byId[cv.id]
+      if (!local || (cv.updatedAt || 0) > (local.updatedAt || 0)) {
+        byId[cv.id] = cv
+        changed++
+      }
+    })
+    state.visits = Object.values(byId)
+    writeAll(state)
+    return changed
+  },
+
   // --- шаблоны ---
   getTemplates() {
     return readAll().templates

@@ -91,6 +91,60 @@ export async function pullFromSupabase() {
   setLastSync({ direction: 'pull', at: Date.now() })
 }
 
+// --- Инкрементальный синк визитов: своя таблица (строка = один визит),
+// а не блок целиком, как в остальных неймспейсах. Отправляем/забираем только
+// то, что реально изменилось после последнего синка — не весь список визитов
+// каждый раз. Метки времени последнего синка — per-device, в localStorage,
+// не синхронизируются сами (у каждого устройства свой прогресс).
+const VISITS_TABLE = 'medconsult_visits'
+const LAST_VISIT_PUSH_KEY = 'medconsult_last_visit_push_at'
+const LAST_VISIT_PULL_KEY = 'medconsult_last_visit_pull_at'
+
+function getMark(key) {
+  return Number(localStorage.getItem(key) || 0)
+}
+function setMark(key, ts) {
+  localStorage.setItem(key, String(ts))
+}
+
+export async function pushVisitsIncremental() {
+  const client = getSupabaseClient()
+  if (!client) throw new Error('Supabase не настроен')
+  const userId = await requireUserId(client)
+  const since = getMark(LAST_VISIT_PUSH_KEY)
+  const changed = store.getVisitsChangedSince(since)
+  if (!changed.length) return { pushed: 0 }
+
+  const rows = changed.map((v) => ({
+    id: v.id,
+    user_id: userId,
+    data: v,
+    updated_at: new Date(v.updatedAt || Date.now()).toISOString(),
+  }))
+  const { error } = await client.from(VISITS_TABLE).upsert(rows)
+  if (error) throw new Error(error.message)
+  setMark(LAST_VISIT_PUSH_KEY, Date.now())
+  localStorage.setItem('medconsult_last_backup', String(Date.now()))
+  return { pushed: changed.length }
+}
+
+export async function pullVisitsIncremental() {
+  const client = getSupabaseClient()
+  if (!client) throw new Error('Supabase не настроен')
+  const userId = await requireUserId(client)
+  const since = getMark(LAST_VISIT_PULL_KEY)
+  const { data, error } = await client
+    .from(VISITS_TABLE)
+    .select('data, updated_at')
+    .eq('user_id', userId)
+    .gt('updated_at', new Date(since).toISOString())
+  if (error) throw new Error(error.message)
+  const rows = (data || []).map((r) => r.data)
+  const merged = store.mergeVisitsFromCloud(rows)
+  setMark(LAST_VISIT_PULL_KEY, Date.now())
+  return { pulled: rows.length, merged }
+}
+
 // --- Magic Link ---
 export async function sendMagicLink(email) {
   const client = getSupabaseClient()

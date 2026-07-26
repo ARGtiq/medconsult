@@ -1447,6 +1447,15 @@ body {
 .supabase-sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .supabase-settings code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
 
+.visit-incremental-sync {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.visit-incremental-sync-label { font-size: 12px; color: var(--ink-soft); }
+
 .supabase-config-form { display: flex; flex-direction: column; gap: 8px; }
 .supabase-config-form input {
   padding: 8px 10px;

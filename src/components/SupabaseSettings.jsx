@@ -7,6 +7,8 @@ import {
   pullFromSupabase,
   pushNamespace,
   pullNamespace,
+  pushVisitsIncremental,
+  pullVisitsIncremental,
   getLastSync,
   sendMagicLink,
   getCurrentUser,
@@ -42,7 +44,38 @@ export default function SupabaseSettings() {
   const [nsBusy, setNsBusy] = useState(null)
   const [nsError, setNsError] = useState({})
   const [nsOk, setNsOk] = useState({})
+  const [visitSyncBusy, setVisitSyncBusy] = useState(null)
+  const [visitSyncResult, setVisitSyncResult] = useState('')
+  const [visitSyncError, setVisitSyncError] = useState('')
   const lastSync = getLastSync()
+
+  async function doPushVisitsIncremental() {
+    setVisitSyncBusy('push')
+    setVisitSyncError('')
+    setVisitSyncResult('')
+    try {
+      const { pushed } = await pushVisitsIncremental()
+      setVisitSyncResult(pushed ? `Отправлено изменённых визитов: ${pushed}` : 'Изменений нет — всё уже синхронизировано')
+    } catch (e) {
+      setVisitSyncError(e.message)
+    } finally {
+      setVisitSyncBusy(null)
+    }
+  }
+
+  async function doPullVisitsIncremental() {
+    setVisitSyncBusy('pull')
+    setVisitSyncError('')
+    setVisitSyncResult('')
+    try {
+      const { pulled, merged } = await pullVisitsIncremental()
+      setVisitSyncResult(pulled ? `Загружено ${pulled}, обновлено локально: ${merged}` : 'Новых визитов в облаке нет')
+    } catch (e) {
+      setVisitSyncError(e.message)
+    } finally {
+      setVisitSyncBusy(null)
+    }
+  }
 
   useEffect(() => {
     getCurrentUser().then(setUser)
@@ -204,6 +237,30 @@ export default function SupabaseSettings() {
       </div>
       {actionError && <div className="ai-error">{actionError}</div>}
       {actionOk && <div className="ai-diagnostic ok">{actionOk}</div>}
+
+      <div className="visit-incremental-sync">
+        <div className="visit-incremental-sync-label">Визиты — только изменённое (не весь список)</div>
+        <div className="data-export-ns-actions">
+          <button
+            type="button"
+            className="btn-secondary btn-small"
+            onClick={doPushVisitsIncremental}
+            disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
+          >
+            {visitSyncBusy === 'push' ? '…' : 'Отправить изменённые'}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-small"
+            onClick={doPullVisitsIncremental}
+            disabled={visitSyncBusy !== null || !isSupabaseConfigured()}
+          >
+            {visitSyncBusy === 'pull' ? '…' : 'Забрать изменённые'}
+          </button>
+        </div>
+        {visitSyncError && <div className="ai-error">{visitSyncError}</div>}
+        {visitSyncResult && <div className="ai-diagnostic ok">{visitSyncResult}</div>}
+      </div>
 
       <button type="button" className="data-export-toggle" onClick={() => setNsOpen((v) => !v)}>
         {nsOpen ? '▾' : '▸'} Синхронизировать по разделам отдельно

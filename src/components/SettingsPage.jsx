@@ -81,6 +81,19 @@ create policy "own row select" on medconsult_ns_system for select using (auth.ui
 create policy "own row insert" on medconsult_ns_system for insert with check (auth.uid() = id);
 create policy "own row update" on medconsult_ns_system for update using (auth.uid() = id) with check (auth.uid() = id);
 
+-- Отдельная таблица визитов — построчный синк (только изменённое), не блоком целиком
+create table if not exists medconsult_visits (
+  id uuid primary key,
+  user_id uuid not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table medconsult_visits enable row level security;
+create policy "own visits select" on medconsult_visits for select using (auth.uid() = user_id);
+create policy "own visits insert" on medconsult_visits for insert with check (auth.uid() = user_id);
+create policy "own visits update" on medconsult_visits for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create index if not exists medconsult_visits_updated_at_idx on medconsult_visits (user_id, updated_at);
+
 -- Зашифрованные AI-ключи (для восстановления на другом устройстве) — отдельно, не привязано к неймспейсам
 create table if not exists medconsult_secrets (
   id uuid primary key,
