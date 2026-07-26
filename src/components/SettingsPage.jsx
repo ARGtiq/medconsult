@@ -6,11 +6,23 @@ import ChangelogModal from './ChangelogModal'
 import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
 import ClinicalLockSettings from './ClinicalLockSettings'
+import { store } from '../lib/store'
 
 // Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
 // Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
 export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [purgeResult, setPurgeResult] = useState('')
+
+  function handlePurge() {
+    const { visitsRemoved, patientsRemoved } = store.purgeOldTombstones(90)
+    setPurgeResult(
+      visitsRemoved || patientsRemoved
+        ? `Удалено окончательно: визитов ${visitsRemoved}, пациентов ${patientsRemoved}`
+        : 'Старых удалённых записей (>90 дней) не найдено'
+    )
+  }
+
   return (
     <div className="settings-tab settings-page-single">
       <h2 className="guidelines-title">Настройки</h2>
@@ -29,6 +41,17 @@ export default function SettingsPage() {
         <h4>Данные приложения</h4>
         <p className="settings-note-inline">Полный бэкап (пациенты, визиты, шаблоны, база лекарств) или перенос на другое устройство.</p>
         <DataExport />
+        <div className="tombstone-purge-block">
+          <p className="settings-note-inline">
+            Удалённые пациенты/визиты хранятся как метки ("tombstone"), а не стираются сразу — это нужно,
+            чтобы удаление долетело до других твоих устройств через синхронизацию. Раз в время старые метки
+            можно стереть окончательно и освободить место.
+          </p>
+          <button type="button" className="btn-secondary btn-small" onClick={handlePurge}>
+            Стереть метки удаления старше 90 дней
+          </button>
+          {purgeResult && <div className="ai-diagnostic ok">{purgeResult}</div>}
+        </div>
       </div>
       <div className="general-settings-block">
         <h4>Защита данных пациентов</h4>

@@ -51,6 +51,19 @@ export default function PatientsPage({ onLoadVisit }) {
     refresh()
   }
 
+  function removePatient(id, name) {
+    if (!window.confirm(`Удалить пациента «${name}»? Визиты останутся в базе, но пациент перестанет отображаться.`)) return
+    store.deletePatient(id)
+    refresh()
+    if (selectedId === id) setSelectedId(null)
+  }
+
+  function removeVisit(id) {
+    if (!window.confirm('Удалить этот визит из истории?')) return
+    store.deleteVisit(id)
+    refresh()
+  }
+
   function startEdit(field, current) {
     setEditingField(field)
     setEditingText(current || '')
@@ -95,11 +108,16 @@ export default function PatientsPage({ onLoadVisit }) {
                   </div>
                   {complaintsText && <div className="visit-history-line"><strong>Жалобы:</strong> {complaintsText}</div>}
                   {drugsText && <div className="visit-history-line"><strong>Назначено:</strong> {drugsText}</div>}
-                  {onLoadVisit && (
-                    <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
-                      Открыть на приёме
+                  <div className="visit-history-actions">
+                    {onLoadVisit && (
+                      <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
+                        Открыть на приёме
+                      </button>
+                    )}
+                    <button type="button" className="btn-secondary btn-danger btn-small" onClick={() => removeVisit(v.id)}>
+                      Удалить
                     </button>
-                  )}
+                  </div>
                 </div>
               )
             })}
@@ -139,6 +157,9 @@ export default function PatientsPage({ onLoadVisit }) {
               <div className="patients-detail-header">
                 <h3>{selected.name}</h3>
                 {selected.dob && <span className="patients-age-badge">{formatDate(selected.dob)} · {calcAge(selected.dob)} лет</span>}
+                <button type="button" className="btn-secondary btn-danger btn-small" onClick={() => removePatient(selected.id, selected.name)}>
+                  Удалить пациента
+                </button>
               </div>
 
               <div className="patients-field-row">
@@ -202,11 +223,16 @@ export default function PatientsPage({ onLoadVisit }) {
                       {complaintsText && <div className="visit-history-line"><strong>Жалобы:</strong> {complaintsText}</div>}
                       {drugsText && <div className="visit-history-line"><strong>Назначено:</strong> {drugsText}</div>}
                       {!complaintsText && !drugsText && <div className="visit-history-line empty-hint">Без деталей</div>}
-                      {onLoadVisit && (
-                        <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
-                          Открыть на приёме
+                      <div className="visit-history-actions">
+                        {onLoadVisit && (
+                          <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
+                            Открыть на приёме
+                          </button>
+                        )}
+                        <button type="button" className="btn-secondary btn-danger btn-small" onClick={() => removeVisit(v.id)}>
+                          Удалить
                         </button>
-                      )}
+                      </div>
                     </div>
                   )
                 })}

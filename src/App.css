@@ -948,6 +948,7 @@ body {
 
 .visit-history-card.clickable { cursor: pointer; }
 .visit-history-card.clickable:hover { border-color: var(--teal); }
+.visit-history-actions { display: flex; gap: 8px; margin-top: 8px; }
 
 .section-text-input {
   width: 100%;
@@ -1368,6 +1369,15 @@ body {
   font-size: 12.5px;
 }
 .data-export-ns-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.tombstone-purge-block {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 /* AI */
 .ai-settings-wrap { position: relative; }

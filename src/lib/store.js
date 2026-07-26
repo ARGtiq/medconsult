@@ -509,7 +509,7 @@ export const store = {
 
   // --- пациенты и аллергии ---
   getPatients() {
-    return readAll().patients
+    return readAll().patients.filter((p) => !p.deleted)
   },
 
   savePatient(patient) {
@@ -521,6 +521,18 @@ export const store = {
     writeAll(state)
     emit('patients')
     return state.patients
+  },
+
+  // Мягкое удаление (tombstone), не физическое — иначе другие устройства,
+  // синхронизировавшие пациента раньше, никогда не узнают, что его удалили,
+  // и он "воскреснет" при следующей загрузке из облака.
+  deletePatient(id) {
+    const state = readAll()
+    const idx = state.patients.findIndex((p) => p.id === id)
+    if (idx < 0) return
+    state.patients[idx] = { ...state.patients[idx], deleted: true, deletedAt: Date.now(), updatedAt: Date.now() }
+    writeAll(state)
+    emit('patients')
   },
 
   // --- визиты ---
@@ -535,11 +547,41 @@ export const store = {
     return toSave
   },
 
+  deleteVisit(id) {
+    const state = readAll()
+    const idx = state.visits.findIndex((v) => v.id === id)
+    if (idx < 0) return
+    state.visits[idx] = { ...state.visits[idx], deleted: true, deletedAt: Date.now(), updatedAt: Date.now() }
+    writeAll(state)
+    emit('visits')
+  },
+
   getVisits() {
-    return readAll().visits.sort((a, b) => b.updatedAt - a.updatedAt)
+    return readAll()
+      .visits.filter((v) => !v.deleted)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  },
+
+  // Физическая очистка старых меток удаления (по умолчанию старше 90 дней).
+  // К этому моменту синк уже наверняка донёс удаление до всех устройств —
+  // хранить tombstone вечно смысла нет, он просто занимает место.
+  purgeOldTombstones(daysOld = 90) {
+    const cutoff = Date.now() - daysOld * 24 * 60 * 60 * 1000
+    const state = readAll()
+    const beforeVisits = state.visits.length
+    const beforePatients = state.patients.length
+    state.visits = state.visits.filter((v) => !(v.deleted && (v.deletedAt || 0) < cutoff))
+    state.patients = state.patients.filter((p) => !(p.deleted && (p.deletedAt || 0) < cutoff))
+    writeAll(state)
+    return {
+      visitsRemoved: beforeVisits - state.visits.length,
+      patientsRemoved: beforePatients - state.patients.length,
+    }
   },
 
   // --- инкрементальный синк пациентов: та же логика, что у визитов ---
+  // ВАЖНО: без фильтра !deleted — синк должен видеть и передавать tombstones,
+  // иначе удаление не разъедется по устройствам
   getPatientsChangedSince(ts) {
     return readAll().patients.filter((p) => (p.updatedAt || 0) > (ts || 0))
   },
@@ -717,7 +759,7 @@ export const store = {
   getVisitsForPatient(patientId) {
     if (!patientId) return []
     return readAll()
-      .visits.filter((v) => v.patientId === patientId)
+      .visits.filter((v) => v.patientId === patientId && !v.deleted)
       .sort((a, b) => b.updatedAt - a.updatedAt)
   },
 
@@ -748,7 +790,7 @@ export const store = {
     }
 
     return state.visits
-      .filter(visitMatches)
+      .filter((v) => !v.deleted && visitMatches(v))
       .map((v) => ({ ...v, patientDisplayName: patientsById[v.patientId]?.name || v.patientName || 'без пациента' }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
   },

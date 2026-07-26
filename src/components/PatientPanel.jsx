@@ -16,6 +16,10 @@ function formatDate(iso) {
 }
 
 export default function PatientPanel({ patient, onChange, onLoadVisit }) {
+  const [, setRefreshTick] = useState(0)
+  function forceRefresh() {
+    setRefreshTick((t) => t + 1)
+  }
   const [patients, setPatients] = useState(store.getPatients())
   const [allergyInput, setAllergyInput] = useState('')
   const [medicationInput, setMedicationInput] = useState('')
@@ -145,6 +149,19 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
                   </div>
                 )}
                 {!complaintsText && !drugsText && <div className="visit-history-line empty-hint">Без деталей</div>}
+                <button
+                  type="button"
+                  className="btn-secondary btn-danger btn-small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (window.confirm('Удалить этот визит из истории?')) {
+                      store.deleteVisit(v.id)
+                      forceRefresh()
+                    }
+                  }}
+                >
+                  Удалить
+                </button>
               </div>
             )
           })}
