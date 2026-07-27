@@ -9,3 +9,13 @@ export function getGuidelineHubMode() {
 export function setGuidelineHubMode(mode) {
   localStorage.setItem(GUIDELINE_HUB_MODE_KEY, mode)
 }
+
+const WIZARD_BUTTON_HIDDEN_KEY = 'medconsult_wizard_button_hidden'
+
+export function isWizardButtonHidden() {
+  return localStorage.getItem(WIZARD_BUTTON_HIDDEN_KEY) === '1'
+}
+
+export function setWizardButtonHidden(hidden) {
+  localStorage.setItem(WIZARD_BUTTON_HIDDEN_KEY, hidden ? '1' : '0')
+}

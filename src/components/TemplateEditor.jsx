@@ -33,6 +33,17 @@ const TYPE_LABELS = {
   study_protocol: 'Протокол исследований (чекбокс + шаблон текста)',
 }
 
+const TYPE_ICONS = {
+  chips: '🏷️',
+  freeform: '📝',
+  text: '✏️',
+  checkbox: '☑️',
+  select: '🔽',
+  drugs: '💊',
+  investigations: '🔬',
+  study_protocol: '🩻',
+}
+
 // Роль — то, что умная логика (клинрек, живые теги) ищет в шаблоне вместо
 // угадывания по id секции. Список ролей ограничен типом секции, чтобы нельзя
 // было назначить "Диагноз" чипам, например.
@@ -99,6 +110,14 @@ function ChipEditor({ chip, onChange, onDelete }) {
           />
           по умолчанию
         </label>
+        <label className="chip-default-toggle" title="Если выключено — в текст попадут только выбранные уточнения, без названия самого чипа">
+          <input
+            type="checkbox"
+            checked={chip.showLabel !== false}
+            onChange={(e) => onChange({ ...chip, showLabel: e.target.checked })}
+          />
+          выводить название
+        </label>
         <button type="button" className="remove-btn" onClick={onDelete}>×</button>
       </div>
 
@@ -150,6 +169,7 @@ function OptionsListEditor({ optionsText, onChange }) {
 function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
   const [chipDragIdx, setChipDragIdx] = useState(null)
   const [chipDragOverIdx, setChipDragOverIdx] = useState(null)
+  const [collapsed, setCollapsed] = useState(false)
 
   function update(patch) {
     onChange({ ...section, ...patch })
@@ -182,6 +202,10 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
   return (
     <div className="section-editor-card">
       <div className="section-editor-top">
+        <button type="button" className="section-collapse-btn" onClick={() => setCollapsed((v) => !v)} title={collapsed ? 'Развернуть' : 'Свернуть'}>
+          {collapsed ? '▸' : '▾'}
+        </button>
+        <span className="section-type-icon" title={TYPE_LABELS[section.type]}>{TYPE_ICONS[section.type] || '▪️'}</span>
         <input
           className="section-editor-title"
           placeholder="Название секции"
@@ -214,6 +238,8 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
         <button type="button" className="remove-btn" onClick={onDelete}>×</button>
       </div>
 
+      {!collapsed && (
+      <>
       {usesChips && (
         <div className="chip-editor-list">
           {(section.chips || []).map((chip, idx) => (
@@ -286,6 +312,8 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
           Список исследований общий для всех шаблонов с такой секцией — редактируется в
           Справочник → Исследования, а не здесь.
         </p>
+      )}
+      </>
       )}
     </div>
   )
@@ -372,6 +400,7 @@ export default function TemplateEditor() {
         base.chips = (s.chips || []).map((chip) => ({
           text: chip.text,
           defaultSelected: !!chip.defaultSelected,
+          showLabel: chip.showLabel !== false,
           modifierGroups: (chip.modifierGroups || [])
             .map((g) => ({
               label: g.label,
@@ -428,6 +457,7 @@ export default function TemplateEditor() {
               onClick={() => selectTemplate(t)}
             >
               {t.name}
+              <span className="template-sidebar-count">{t.sections?.length || 0}</span>
             </button>
             <button
               type="button"

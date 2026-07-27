@@ -8,6 +8,8 @@ import Mkb10Picker from './Mkb10Picker'
 import GuidelinePanel from './GuidelinePanel'
 import GuidelineHub, { GuidelineHubPanel } from './GuidelineHub'
 import { getGuidelineHubMode } from '../lib/uiPrefs'
+import { isWizardButtonHidden } from '../lib/uiPrefs'
+import WizardModal from './WizardModal'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import AutoWidthInput from './AutoWidthInput'
@@ -94,6 +96,19 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [saved, setSaved] = useState(false)
   const [savedAsUpdate, setSavedAsUpdate] = useState(false)
   const [openSectionId, setOpenSectionId] = useState(template.sections[0]?.id || null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardStep, setWizardStep] = useState(0)
+
+  useEffect(() => {
+    if (!wizardOpen) return
+    const sectionId = template.sections[wizardStep]?.id
+    if (!sectionId) return
+    setOpenSectionId(sectionId)
+    setTimeout(() => {
+      document.getElementById(`section-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardOpen, wizardStep])
   const [hubOpen, setHubOpen] = useState(false)
   const [pendingEdit, setPendingEdit] = useState(null) // { sectionId, idx, text }
   const [pendingManualInput, setPendingManualInput] = useState('')
@@ -341,21 +356,6 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         </button>
       )}
 
-      {hubOpen && getGuidelineHubMode() === 'panel' && (
-        <GuidelineHubPanel
-          diagnosisText={sectionValues[diagnosisSectionId]}
-          onClose={() => setHubOpen(false)}
-          onInsertFormulation={insertDiagnosisFormulation}
-          onInsertComplaint={insertGuidelineComplaint}
-          onInsertClassificationLine={insertClassificationLine}
-          onInsertInvestigation={insertGuidelineInvestigation}
-          onInsertDrug={(drug) => {
-            if (recommendationsSection) insertGuidelineDrugSingle(recommendationsSection.id, drug)
-          }}
-          formulationTag={formulationTag}
-        />
-      )}
-
       <details className="patient-details-spoiler" open>
         <summary>Пациент {patient ? `— ${patient.name}` : ''}</summary>
         <div className="visit-top-row">
@@ -367,13 +367,40 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         </div>
       </details>
 
-      <div className="visit-layout">
+      {!isWizardButtonHidden() && (
+        <button
+          type="button"
+          className="wizard-trigger-btn"
+          onClick={() => {
+            setWizardStep(0)
+            setWizardOpen(true)
+          }}
+        >
+          🧭 Пошаговое заполнение
+        </button>
+      )}
+
+      <div className={hubOpen && getGuidelineHubMode() === 'panel' ? 'visit-layout visit-layout-with-hub' : 'visit-layout'}>
+        {hubOpen && getGuidelineHubMode() === 'panel' && (
+          <GuidelineHubPanel
+            diagnosisText={sectionValues[diagnosisSectionId]}
+            onClose={() => setHubOpen(false)}
+            onInsertFormulation={insertDiagnosisFormulation}
+            onInsertComplaint={insertGuidelineComplaint}
+            onInsertClassificationLine={insertClassificationLine}
+            onInsertInvestigation={insertGuidelineInvestigation}
+            onInsertDrug={(drug) => {
+              if (recommendationsSection) insertGuidelineDrugSingle(recommendationsSection.id, drug)
+            }}
+            formulationTag={formulationTag}
+          />
+        )}
         <div className="visit-sections">
           {template.sections.map((section) => {
             const isOpen = openSectionId === section.id
             const preview = sectionPreviewText(section, sectionValues[section.id], sectionValues)
             return (
-            <section key={section.id} className={isOpen ? 'section-block section-block-open' : 'section-block section-block-collapsed'}>
+            <section key={section.id} id={`section-${section.id}`} className={isOpen ? 'section-block section-block-open' : 'section-block section-block-collapsed'}>
               <div
                 className="section-block-header"
                 onClick={(e) => {
@@ -681,6 +708,16 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
             if (recommendationsSection) insertGuidelineDrugSingle(recommendationsSection.id, drug)
           }}
           formulationTag={formulationTag}
+        />
+      )}
+
+      {wizardOpen && (
+        <WizardModal
+          sections={template.sections}
+          stepIndex={wizardStep}
+          onStepChange={setWizardStep}
+          onClose={() => setWizardOpen(false)}
+          isStepFilled={(s) => !!sectionPreviewText(s, sectionValues[s.id], sectionValues)}
         />
       )}
 

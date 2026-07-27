@@ -7,7 +7,7 @@ import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
 import ClinicalLockSettings from './ClinicalLockSettings'
 import { store } from '../lib/store'
-import { getGuidelineHubMode, setGuidelineHubMode } from '../lib/uiPrefs'
+import { getGuidelineHubMode, setGuidelineHubMode, isWizardButtonHidden, setWizardButtonHidden } from '../lib/uiPrefs'
 
 // Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
 // Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [purgeResult, setPurgeResult] = useState('')
   const [hubMode, setHubMode] = useState(getGuidelineHubMode())
+  const [wizardHidden, setWizardHidden] = useState(isWizardButtonHidden())
 
   function handlePurge() {
     const { visitsRemoved, patientsRemoved } = store.purgeOldTombstones(90)
@@ -86,6 +87,20 @@ export default function SettingsPage() {
             Модальным окном
           </label>
         </div>
+      </div>
+      <div className="general-settings-block">
+        <h4>Пошаговое заполнение протокола</h4>
+        <label className="hub-mode-toggle-inline">
+          <input
+            type="checkbox"
+            checked={!wizardHidden}
+            onChange={(e) => {
+              setWizardButtonHidden(!e.target.checked)
+              setWizardHidden(!e.target.checked)
+            }}
+          />
+          Показывать кнопку "🧭 Пошаговое заполнение" на приёме
+        </label>
       </div>
       <div className="general-settings-block">
         <h4>Supabase (синхронизация между устройствами)</h4>

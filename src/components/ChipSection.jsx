@@ -135,7 +135,10 @@ export default function ChipSection({ section, values, onChange }) {
         const set = selections[k]
         if (set && set.size) parts.push(...Array.from(set))
       })
-    return parts.length ? `${builderChip.text} (${parts.join(', ')})` : builderChip.text
+    const showLabel = builderChip.showLabel !== false
+    if (!parts.length) return builderChip.text
+    if (!showLabel) return parts.join(', ')
+    return `${builderChip.text} (${parts.join(', ')})`
   }
 
   function insertAndClose() {
