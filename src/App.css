@@ -819,6 +819,23 @@ body {
   font-size: 14px;
   text-align: center;
 }
+.unlock-pin-input { letter-spacing: 6px; font-size: 20px; }
+.unlock-switch-mode {
+  border: none;
+  background: none;
+  color: var(--teal);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 10px;
+}
+
+.clinical-lock-pin-block {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.clinical-lock-pin-block h5 { margin: 0 0 8px; font-size: 13px; }
 
 .clinical-lock-settings { display: flex; flex-direction: column; gap: 10px; }
 .clinical-lock-form { display: flex; flex-direction: column; gap: 8px; max-width: 300px; }
@@ -2515,6 +2532,24 @@ body {
 }
 
 .guideline-source { font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
+
+.guideline-code-badge {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 400;
+}
+
+.guideline-multi-warning {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
 
 .guidelines-page { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
 .guidelines-title { font-family: var(--font-display); font-size: 20px; margin: 0; }

@@ -18,6 +18,7 @@ import StudyProtocolSection, { fillTemplate } from './StudyProtocolSection'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 import { extractCodesFromText } from '../data/mkb10'
+import { getGroupKeyForDrug, DRUG_GROUPS } from '../data/drugSafety'
 import { showToast } from '../lib/toast'
 import useEscapeToClose from '../lib/useEscapeToClose'
 
@@ -240,6 +241,20 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   function insertGuidelineDrugSingle(sectionId, drug) {
     const current = sectionValues[sectionId] || []
     if (current.some((d) => d.name.toLowerCase() === drug.name.toLowerCase())) return
+
+    const customGroups = store.getCustomGroups()
+    const sameGroupKey = getGroupKeyForDrug(drug.name, customGroups)
+    if (sameGroupKey) {
+      const sameGroupDrug = current.find((d) => getGroupKeyForDrug(d.name, customGroups) === sameGroupKey)
+      if (sameGroupDrug) {
+        const groupLabel = customGroups[sameGroupKey]?.label || DRUG_GROUPS[sameGroupKey]?.label || 'той же группы'
+        const proceed = window.confirm(
+          `Уже назначен «${sameGroupDrug.name}» (${groupLabel}) — точно нужен ещё и «${drug.name}»?`
+        )
+        if (!proceed) return
+      }
+    }
+
     const dbInfo = store.getDrugInfo(drug.name)
     updateSection(sectionId, [
       ...current,

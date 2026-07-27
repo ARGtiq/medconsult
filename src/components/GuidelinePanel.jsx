@@ -24,15 +24,25 @@ export default function GuidelinePanel({
 
   return (
     <div className={mode === 'complaints' ? 'guideline-panel guideline-panel-complaints' : 'guideline-panel'}>
+      {matches.length > 1 && (
+        <div className="guideline-multi-warning">
+          ⚠ Совпало несколько рекомендаций — обычно терапию определяет более тяжёлое состояние,
+          а не сумма схем обеих рекомендаций.
+        </div>
+      )}
       {matches.map((g) => {
         const isFormulationSource = formulationTag?.guidelineId === g.id
         const needsUpdate = isFormulationSource && formulationTag.guidelineUpdatedAt !== g.updatedAt
         const classificationLines = (g.classification || '').split('\n').map((l) => l.trim()).filter(Boolean)
+        const matchedCodes = (g.mkb10Codes || []).filter((c) => codes.includes(c.toUpperCase()))
 
         return (
           <details key={g.id} className="guideline-panel-item" open={matches.length === 1}>
             <summary>
               📋 {g.title}
+              {matchedCodes.length > 0 && (
+                <span className="guideline-code-badge">по коду {matchedCodes.join(', ')}</span>
+              )}
               {needsUpdate && <span className="guideline-update-flag">● обновилось в справочнике</span>}
             </summary>
 

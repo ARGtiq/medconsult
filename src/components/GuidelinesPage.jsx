@@ -8,6 +8,7 @@ function blankForm() {
   return {
     id: null,
     mkb10CodesText: '',
+    requireAllCodes: false,
     title: '',
     definition: '',
     classification: '',
@@ -118,6 +119,7 @@ export default function GuidelinesPage() {
     setForm({
       id: g.id,
       mkb10CodesText: (g.mkb10Codes || []).join(', '),
+      requireAllCodes: !!g.requireAllCodes,
       title: g.title || '',
       definition: g.definition || '',
       classification: g.classification || '',
@@ -231,6 +233,14 @@ export default function GuidelinesPage() {
             onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
           />
         </div>
+        <label className="hub-mode-toggle-inline">
+          <input
+            type="checkbox"
+            checked={form.requireAllCodes}
+            onChange={(e) => setForm({ ...form, requireAllCodes: e.target.checked })}
+          />
+          Показывать только когда есть ВСЕ эти коды сразу (для сочетаний — напр. цистит + вторичный пиелонефрит)
+        </label>
         {validationError && <div className="ai-error">{validationError}</div>}
         <AutoResizeTextarea
           placeholder="Определение (1-2 предложения)"

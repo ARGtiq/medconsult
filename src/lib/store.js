@@ -925,13 +925,17 @@ export const store = {
     return state.clinicalGuidelines
   },
 
-  // codes — массив кодов МКБ-10, извлечённых из текста диагноза (напр. ['N40', 'N41.1'])
+  // codes — массив кодов МКБ-10, извлечённых из текста диагноза (напр. ['N40', 'N41.1']).
+  // requireAllCodes у рекомендации ("для сочетаний", напр. цистит + вторичный пиелонефрит)
+  // — совпадает, только если в диагнозе есть ВСЕ её коды сразу, а не любой из них.
   getGuidelinesForCodes(codes) {
     if (!codes?.length) return []
     const norm = codes.map((c) => c.trim().toUpperCase())
-    return Object.values(readAll().clinicalGuidelines || {}).filter((g) =>
-      (g.mkb10Codes || []).some((gc) => norm.includes(gc.trim().toUpperCase()))
-    )
+    return Object.values(readAll().clinicalGuidelines || {}).filter((g) => {
+      const gCodes = (g.mkb10Codes || []).map((c) => c.trim().toUpperCase())
+      if (g.requireAllCodes) return gCodes.length > 0 && gCodes.every((gc) => norm.includes(gc))
+      return gCodes.some((gc) => norm.includes(gc))
+    })
   },
 
   // --- пресеты визита (типовые сценарии в один клик) ---
