@@ -135,13 +135,14 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
     const pt = printTemplates.find((t) => t.id === defaultId) || printTemplates[0] || null
 
     let html = ''
-    if (pt && (pt.clinicName || pt.doctorName || pt.contactInfo)) {
-      html += `<div class="print-letterhead">`
-      if (pt.clinicName) html += `<h1>${escapeHtml(pt.clinicName)}</h1>`
-      if (pt.doctorName) html += `<p>${escapeHtml(pt.doctorName)}</p>`
-      if (pt.contactInfo) html += `<p>${escapeHtml(pt.contactInfo)}</p>`
-      html += `</div>`
-    }
+    // headerHtml/footerHtml — новый rich-text формат; clinicName/doctorName/
+    // contactInfo/footerText — фоллбэк на шаблоны, созданные до его появления
+    const headerHtml = pt?.headerHtml || (pt && [pt.clinicName, pt.doctorName, pt.contactInfo].filter(Boolean).length
+      ? `<h2>${escapeHtml(pt.clinicName || '')}</h2><p>${escapeHtml(pt.doctorName || '')}</p><p>${escapeHtml(pt.contactInfo || '')}</p>`
+      : '')
+    const footerHtml = pt?.footerHtml || (pt?.footerText ? `<p>${escapeHtml(pt.footerText)}</p>` : '')
+
+    if (headerHtml) html += `<div class="print-letterhead">${headerHtml}</div>`
 
     html += `<div class="print-meta">`
     if (patient?.name) html += `<p><strong>Пациент:</strong> ${escapeHtml(patient.name)}</p>`
@@ -154,9 +155,7 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
       html += `<div class="print-section"><h3>${escapeHtml(s.title)}</h3><div>${escapeHtml(text)}</div></div>`
     })
 
-    if (pt?.footerText) {
-      html += `<div class="print-footer">${escapeHtml(pt.footerText)}</div>`
-    }
+    if (footerHtml) html += `<div class="print-footer">${footerHtml}</div>`
 
     printHtml(html, `Протокол — ${patient?.name || 'без пациента'}`)
   }

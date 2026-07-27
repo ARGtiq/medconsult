@@ -67,6 +67,14 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
         </div>
 
         <div className="home-card">
+          <h4>Быстрые действия</h4>
+          <div className="home-actions">
+            <button type="button" className="btn-primary" onClick={onGoToVisit}>+ Новый приём</button>
+            <button type="button" className="btn-secondary" onClick={onGoToPatients}>+ Пациенты</button>
+          </div>
+        </div>
+
+        <div className="home-card">
           <h4>Последние визиты</h4>
           {visits.length === 0 && <p className="empty-hint">Визитов ещё не было.</p>}
           <div className="home-draft-list">
@@ -95,14 +103,6 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
               Все пациенты →
             </button>
           )}
-        </div>
-
-        <div className="home-card">
-          <h4>Быстрые действия</h4>
-          <div className="home-actions">
-            <button type="button" className="btn-primary" onClick={onGoToVisit}>+ Новый приём</button>
-            <button type="button" className="btn-secondary" onClick={onGoToPatients}>+ Пациенты</button>
-          </div>
         </div>
 
         <div className="home-card">

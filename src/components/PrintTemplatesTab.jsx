@@ -1,11 +1,25 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import AutoResizeTextarea from './AutoResizeTextarea'
+import RichTextEditor from './RichTextEditor'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { showToast } from '../lib/toast'
 
 function blankForm() {
-  return { id: null, name: '', clinicName: '', doctorName: '', contactInfo: '', footerText: '' }
+  return { id: null, name: '', headerHtml: '', footerHtml: '' }
+}
+
+// Собирает html шапки из старых полей (clinicName/doctorName/contactInfo),
+// если это ещё старый шаблон печати, созданный до появления rich-text —
+// чтобы существующие настройки не потерялись при обновлении.
+function legacyHeaderHtml(t) {
+  if (t.headerHtml) return t.headerHtml
+  const lines = [t.clinicName, t.doctorName, t.contactInfo].filter(Boolean)
+  if (!lines.length) return ''
+  return `<h2>${lines[0]}</h2>` + lines.slice(1).map((l) => `<p>${l}</p>`).join('')
+}
+
+function legacyFooterHtml(t) {
+  return t.footerHtml || (t.footerText ? `<p>${t.footerText}</p>` : '')
 }
 
 export default function PrintTemplatesTab() {
@@ -26,7 +40,7 @@ export default function PrintTemplatesTab() {
   }
 
   function openEdit(t) {
-    setForm(t)
+    setForm({ id: t.id, name: t.name, headerHtml: legacyHeaderHtml(t), footerHtml: legacyFooterHtml(t) })
     setFormOpen(true)
   }
 
@@ -58,9 +72,9 @@ export default function PrintTemplatesTab() {
   return (
     <div className="settings-tab">
       <p className="settings-note-inline">
-        Шапка и подпись, которые добавляются к протоколу при печати/сохранении в PDF: название клиники,
-        врач, контакты, текст под подписью. Можно завести несколько (например, для разных мест приёма) —
-        отмеченный звёздочкой используется по умолчанию.
+        Полноценный редактор — жирный/курсив/заголовки/выравнивание/списки, как в обычном текстовом
+        редакторе. Шапка ставится перед протоколом при печати, подпись — после. Можно завести несколько
+        шаблонов (например, для разных мест приёма) — отмеченный звёздочкой используется по умолчанию.
       </p>
 
       <button type="button" className="btn-primary" onClick={openNew}>
@@ -69,7 +83,7 @@ export default function PrintTemplatesTab() {
 
       {formOpen && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className="modal-box print-template-modal">
             <div className="modal-header">
               <h3>{form.id ? `Редактировать: ${form.name}` : 'Новый шаблон печати'}</h3>
               <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
@@ -83,26 +97,21 @@ export default function PrintTemplatesTab() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
               {validationError && <div className="ai-error">{validationError}</div>}
-              <input
-                placeholder="Название клиники/кабинета"
-                value={form.clinicName}
-                onChange={(e) => setForm({ ...form, clinicName: e.target.value })}
+
+              <label className="print-template-field-label">Шапка документа</label>
+              <RichTextEditor
+                value={form.headerHtml}
+                onChange={(html) => setForm({ ...form, headerHtml: html })}
+                placeholder="Название клиники, ФИО врача, контакты — форматируй как нужно…"
               />
-              <input
-                placeholder="ФИО врача"
-                value={form.doctorName}
-                onChange={(e) => setForm({ ...form, doctorName: e.target.value })}
+
+              <label className="print-template-field-label">Подпись / текст под протоколом</label>
+              <RichTextEditor
+                value={form.footerHtml}
+                onChange={(html) => setForm({ ...form, footerHtml: html })}
+                placeholder="Напр. «Подпись врача: _____»"
               />
-              <input
-                placeholder="Контакты (телефон/адрес)"
-                value={form.contactInfo}
-                onChange={(e) => setForm({ ...form, contactInfo: e.target.value })}
-              />
-              <AutoResizeTextarea
-                placeholder="Текст под протоколом (напр. «Подпись врача: _____»)"
-                value={form.footerText}
-                onChange={(e) => setForm({ ...form, footerText: e.target.value })}
-              />
+
               <div className="drug-form-actions">
                 <button type="submit" className="btn-primary">Сохранить</button>
               </div>
@@ -129,8 +138,7 @@ export default function PrintTemplatesTab() {
               </button>
               <button type="button" className="remove-btn" onClick={() => remove(t.id)}>×</button>
             </div>
-            {t.clinicName && <div className="drug-db-line">{t.clinicName}</div>}
-            {t.doctorName && <div className="drug-db-line">{t.doctorName}</div>}
+            <div className="drug-db-line print-template-preview" dangerouslySetInnerHTML={{ __html: legacyHeaderHtml(t) }} />
           </div>
         ))}
         {templates.length === 0 && <p className="empty-hint">Пока пусто — без шаблона печать выйдет без шапки, просто текст протокола.</p>}
