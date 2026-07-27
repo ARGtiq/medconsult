@@ -23,6 +23,12 @@ export default function App() {
   )
   const [navOpen, setNavOpen] = useState(false)
   const [page, setPage] = useState('home')
+  const [referenceTab, setReferenceTab] = useState('guidelines')
+
+  function goToReference(tab) {
+    setReferenceTab(tab || 'guidelines')
+    setPage('guidelines')
+  }
   const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
   const [syncStatus, setSyncStatus] = useState(null)
 
@@ -148,7 +154,7 @@ export default function App() {
             <HomePage
               onOpenDraft={openDraftTemplate}
               onLoadVisit={loadVisit}
-              onGoToReference={() => setPage('guidelines')}
+              onGoToReference={goToReference}
               onGoToVisit={goToVisit}
               onGoToPatients={() => setPage('patients')}
               onGoToSettings={() => setPage('settings')}
@@ -160,7 +166,7 @@ export default function App() {
           </Suspense>
         ) : page === 'guidelines' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка справочника…</p>}>
-            <ReferencePage />
+            <ReferencePage key={referenceTab} initialTab={referenceTab} />
           </Suspense>
         ) : page === 'patients' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка пациентов…</p>}>

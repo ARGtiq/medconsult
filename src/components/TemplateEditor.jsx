@@ -283,8 +283,8 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
       {section.type === 'drugs' && <p className="settings-note-inline">Секция назначений: автоподсказки, аллергии, взаимодействия — без доп. настройки.</p>}
       {section.type === 'study_protocol' && (
         <p className="settings-note-inline">
-          Список исследований и шаблоны текста для них пока задаются только в коде (src/lib/store.js →
-          секция "studies" шаблона "Протокол исследований"), редактор списка исследований ещё не реализован.
+          Список исследований общий для всех шаблонов с такой секцией — редактируется в
+          Справочник → Исследования, а не здесь.
         </p>
       )}
     </div>

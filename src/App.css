@@ -976,6 +976,78 @@ body {
 .checkbox-item input { width: 16px; height: 16px; }
 
 .study-protocol-item { display: flex; flex-direction: column; gap: 6px; }
+.study-protocol-item-header { display: flex; align-items: center; gap: 10px; }
+.study-ref-toggle {
+  border: none;
+  background: none;
+  color: var(--teal);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.study-ref-sheet {
+  background: var(--teal-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-left: 24px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.study-ref-sheet p { margin: 0 0 6px; }
+.study-ref-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.study-ref-table td { padding: 2px 6px 2px 0; vertical-align: top; }
+.study-ref-table td:first-child { color: var(--ink-soft); white-space: nowrap; }
+
+.study-protocol-body { margin-left: 24px; display: flex; flex-direction: column; gap: 8px; }
+.study-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  width: fit-content;
+}
+.study-mode-toggle button {
+  border: none;
+  background: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.study-mode-toggle button.active { background: var(--teal); color: white; }
+
+.study-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.study-field-row { display: flex; flex-direction: column; gap: 3px; }
+.study-field-label { font-size: 11.5px; color: var(--ink-soft); }
+.study-field-row input {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+
+.study-category-block { margin-bottom: 14px; }
+.study-category-block:last-child { margin-bottom: 0; }
+
+.study-field-editor-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-left: 8px;
+}
+.study-field-editor-row input {
+  flex: 1;
+  min-width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
 .study-protocol-text {
   width: 100%;
   margin-left: 24px;

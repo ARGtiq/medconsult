@@ -10,7 +10,7 @@ import GuidelineHub from './GuidelineHub'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import DurationPicker from './DurationPicker'
-import StudyProtocolSection from './StudyProtocolSection'
+import StudyProtocolSection, { fillTemplate } from './StudyProtocolSection'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 import { extractCodesFromText } from '../data/mkb10'
@@ -30,7 +30,8 @@ function sectionPreviewText(section, value, sectionValues) {
     text = drugs.map((d) => [d.name, d.dosage].filter(Boolean).join(' ')).join(', ')
   } else if (section.type === 'study_protocol') {
     const selectedKeys = value || []
-    text = (section.studies || [])
+    text = store
+      .getAllStudies()
       .filter((s) => selectedKeys.includes(s.key))
       .map((s) => s.label)
       .join(', ')
@@ -484,10 +485,12 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     const current = sectionValues[section.id] || []
                     updateSection(section.id, checked ? [...current, study.key] : current.filter((k) => k !== study.key))
                     if (checked && sectionValues[textKey] === undefined) {
-                      updateSection(textKey, study.template.replace('{date}', visitDate ? visitDate.split('-').reverse().join('.') : ''))
+                      updateSection(textKey, fillTemplate(study.template, visitDate, {}))
                     }
                   }}
                   onTextChange={(textKey, text) => updateSection(textKey, text)}
+                  onFieldsChange={(fieldsKey, values) => updateSection(fieldsKey, values)}
+                  onModeChange={(modeKey, mode) => updateSection(modeKey, mode)}
                 />
               )}
               {section.type === 'select' && (

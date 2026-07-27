@@ -11,14 +11,18 @@ function daysSince(ts) {
   return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24))
 }
 
+function byRecent(list) {
+  return [...list].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+}
+
 export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onGoToSettings, onLoadVisit, onGoToReference }) {
   const drafts = store.getAllDrafts()
   const visits = store.getVisits().slice(0, 5)
-  const patients = store.getPatients()
-  const templates = store.getTemplates()
-  const guidelines = Object.keys(store.getGuidelines())
-  const drugs = Object.keys(store.getDrugInfoAll())
-  const groups = Object.keys(store.getCustomGroups())
+  const patients = byRecent(store.getPatients())
+  const templates = byRecent(store.getTemplates())
+  const guidelines = byRecent(Object.values(store.getGuidelines()))
+  const drugs = byRecent(Object.values(store.getDrugInfoAll()))
+  const groups = byRecent(Object.values(store.getCustomGroups()))
   const emptyDrugs = store.getEmptyDrugEntries()
   const lastBackup = Number(localStorage.getItem('medconsult_last_backup') || 0)
   const backupStale = daysSince(lastBackup) >= 7
@@ -41,7 +45,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           В базе лекарств {emptyDrugs.length} {emptyDrugs.length === 1 ? 'карточка создана' : 'карточек создано'} автоматически
           и ещё не заполнена (только название): {emptyDrugs.slice(0, 5).map((d) => d.name).join(', ')}
           {emptyDrugs.length > 5 ? '…' : ''} — стоит дополнить дозой и группой.
-          <button type="button" onClick={onGoToReference}>Открыть Справочник</button>
+          <button type="button" onClick={() => onGoToReference('drugs')}>Открыть Лекарства</button>
         </div>
       )}
 
@@ -64,12 +68,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           {visits.length === 0 && <p className="empty-hint">Визитов ещё не было.</p>}
           <div className="home-draft-list">
             {visits.map((v) => (
-              <button
-                type="button"
-                key={v.id}
-                className="home-draft-item"
-                onClick={() => onLoadVisit && onLoadVisit(v)}
-              >
+              <button type="button" key={v.id} className="home-draft-item" onClick={() => onLoadVisit && onLoadVisit(v)}>
                 <strong>{v.patientName}</strong>
                 <span>{v.templateName} · {formatDateTime(v.updatedAt)}</span>
               </button>
@@ -78,21 +77,85 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
         </div>
 
         <div className="home-card">
+          <h4>Пациенты ({patients.length})</h4>
+          {patients.length === 0 && <p className="empty-hint">Пациентов пока нет.</p>}
+          <div className="home-draft-list">
+            {patients.slice(0, 5).map((p) => (
+              <button type="button" key={p.id} className="home-draft-item" onClick={onGoToPatients}>
+                <strong>{p.name}</strong>
+                <span>{p.dob ? `ДР ${p.dob.split('-').reverse().join('.')}` : 'без даты рождения'}</span>
+              </button>
+            ))}
+          </div>
+          {patients.length > 5 && (
+            <button type="button" className="btn-secondary btn-small" onClick={onGoToPatients}>
+              Все пациенты →
+            </button>
+          )}
+        </div>
+
+        <div className="home-card">
           <h4>Быстрые действия</h4>
           <div className="home-actions">
             <button type="button" className="btn-primary" onClick={onGoToVisit}>+ Новый приём</button>
-            <button type="button" className="btn-secondary" onClick={onGoToPatients}>Пациенты ({patients.length})</button>
+            <button type="button" className="btn-secondary" onClick={onGoToPatients}>+ Пациенты</button>
           </div>
         </div>
 
         <div className="home-card">
-          <h4>Справочник</h4>
-          <div className="home-actions">
-            <button type="button" className="btn-secondary" onClick={onGoToReference}>Шаблоны ({templates.length})</button>
-            <button type="button" className="btn-secondary" onClick={onGoToReference}>Клинрекомендации ({guidelines.length})</button>
-            <button type="button" className="btn-secondary" onClick={onGoToReference}>Лекарства ({drugs.length})</button>
-            <button type="button" className="btn-secondary" onClick={onGoToReference}>Свои группы ({groups.length})</button>
+          <h4>Шаблоны ({templates.length})</h4>
+          {templates.length === 0 && <p className="empty-hint">Шаблонов нет.</p>}
+          <div className="home-draft-list">
+            {templates.slice(0, 4).map((t) => (
+              <button type="button" key={t.id} className="home-draft-item" onClick={() => onGoToReference('templates')}>
+                <strong>{t.name}</strong>
+                <span>{t.sections?.length || 0} секций</span>
+              </button>
+            ))}
           </div>
+          <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('templates')}>Открыть →</button>
+        </div>
+
+        <div className="home-card">
+          <h4>Клинические рекомендации ({guidelines.length})</h4>
+          {guidelines.length === 0 && <p className="empty-hint">Пока пусто.</p>}
+          <div className="home-draft-list">
+            {guidelines.slice(0, 4).map((g) => (
+              <button type="button" key={g.id} className="home-draft-item" onClick={() => onGoToReference('guidelines')}>
+                <strong>{g.title}</strong>
+                <span>{(g.mkb10Codes || []).join(', ')}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('guidelines')}>Открыть →</button>
+        </div>
+
+        <div className="home-card">
+          <h4>Лекарства ({drugs.length})</h4>
+          {drugs.length === 0 && <p className="empty-hint">Пока пусто.</p>}
+          <div className="home-draft-list">
+            {drugs.slice(0, 4).map((d) => (
+              <button type="button" key={d.name} className="home-draft-item" onClick={() => onGoToReference('drugs')}>
+                <strong>{d.name}</strong>
+                <span>{d.dosage || 'без дозы'}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('drugs')}>Открыть →</button>
+        </div>
+
+        <div className="home-card">
+          <h4>Свои группы лекарств ({groups.length})</h4>
+          {groups.length === 0 && <p className="empty-hint">Пока пусто.</p>}
+          <div className="home-draft-list">
+            {groups.slice(0, 4).map((g) => (
+              <button type="button" key={g.label} className="home-draft-item" onClick={() => onGoToReference('groups')}>
+                <strong>{g.label}</strong>
+                <span>{(g.drugs || []).length} препаратов</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('groups')}>Открыть →</button>
         </div>
       </div>
     </div>

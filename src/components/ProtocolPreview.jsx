@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { polishNarrative } from '../lib/openrouter'
+import { store } from '../lib/store'
 
 function sectionToText(section, value, patient, sectionValues) {
   const durationValue = sectionValues[`${section.id}_duration`]
@@ -21,7 +22,8 @@ function sectionToText(section, value, patient, sectionValues) {
 
   if (section.type === 'study_protocol') {
     const selectedKeys = value || []
-    return (section.studies || [])
+    return store
+      .getAllStudies()
       .filter((s) => selectedKeys.includes(s.key))
       .map((s) => sectionValues[`${section.id}_text_${s.key}`] || s.template)
       .join('\n\n')

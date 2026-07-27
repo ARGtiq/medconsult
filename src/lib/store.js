@@ -2,6 +2,7 @@
 // Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
 
 import { readClinicalSync, writeClinicalSync } from './clinicalLock'
+import { BUILTIN_STUDIES } from '../data/studyProtocols'
 
 // Хранилище разложено по неймспейсам — отдельным ключам localStorage —
 // вместо одного большого блоба. Это не меняет внешний API store.js: все методы
@@ -11,7 +12,7 @@ import { readClinicalSync, writeClinicalSync } from './clinicalLock'
 // по неймспейсам (не гонять всё разом при любой мелкой правке), и точку, куда
 // прицельно повесить шифрование самых чувствительных данных (clinical) — см. clinicalLock.js.
 const OLD_KEY = 'medconsult_v1' // из версий до неймспейсов — мигрируется один раз и удаляется
-const TEMPLATES_SEED_VERSION = 9
+const TEMPLATES_SEED_VERSION = 10
 
 const NAMESPACES = {
   // медицинские данные пациентов — самое чувствительное и быстрорастущее
@@ -28,6 +29,7 @@ const NAMESPACES = {
     'complaintSuggestions',
     'complaintDrugLinks',
     'diagnosisDrugLinks',
+    'customStudies',
   ],
   // рабочие заготовки, не жалко потерять
   workspace: ['templatePresets'],
@@ -119,6 +121,9 @@ function defaultState() {
     complaintDrugLinks: {},
     // "код||препарат" -> { code, drug, weight, lastUsedAt }
     diagnosisDrugLinks: {},
+    // свои исследования (объединяются со встроенными из data/studyProtocols.js):
+    // key -> { key, label, category, template, fields[], referenceNotes }
+    customStudies: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
     // сохранённые визиты (черновики/готовые протоколы)
@@ -405,55 +410,10 @@ function seedTemplates() {
       id: 'study_protocol',
       name: 'Протокол исследований',
       sections: [
-        { id: 'diagnosis', title: 'Диагноз / направительный вопрос', type: 'freeform', role: 'diagnosis' },
         {
           id: 'studies',
           title: 'Проведённые исследования',
           type: 'study_protocol',
-          studies: [
-            {
-              key: 'uroflowmetry',
-              label: 'Урофлоуметрия',
-              template:
-                'Урофлоуметрия от {date}: Qmax — __ мл/с, Qavg — __ мл/с, время мочеиспускания — __ с, объём мочеиспускания — __ мл, объём остаточной мочи — __ мл. Кривая мочеиспускания: __.',
-            },
-            {
-              key: 'kidneys_us',
-              label: 'УЗИ почек',
-              template:
-                'УЗИ почек от {date}: почки расположены типично. Правая — __×__ мм, левая — __×__ мм. Контуры ровные, чёткие. Паренхима толщиной __ мм, эхогенность не изменена. ЧЛС не расширена. Конкременты/образования не выявлены.',
-            },
-            {
-              key: 'bladder_us',
-              label: 'УЗИ мочевого пузыря',
-              template:
-                'УЗИ мочевого пузыря от {date}: объём мочевого пузыря — __ мл, стенки не утолщены, содержимое анэхогенное, дополнительных образований не выявлено. Объём остаточной мочи — __ мл.',
-            },
-            {
-              key: 'trus',
-              label: 'ТРУЗИ (трансректальное УЗИ простаты)',
-              template:
-                'ТРУЗИ предстательной железы от {date}: предстательная железа расположена типично, объём — __ см³ (__×__×__ мм), контуры ровные, чёткие, эхоструктура однородная, очаговых изменений не выявлено. Семенные пузырьки не изменены.',
-            },
-            {
-              key: 'scrotum_us',
-              label: 'УЗИ органов мошонки',
-              template:
-                'УЗИ органов мошонки от {date}: яички расположены в мошонке. Правое — __×__×__ мм, левое — __×__×__ мм, эхоструктура однородная, придатки не увеличены, свободная жидкость в оболочках не определяется. Кровоток при ЦДК симметричный, не изменён.',
-            },
-            {
-              key: 'ta_prostate',
-              label: 'ТА УЗИ простаты (трансабдоминальное)',
-              template:
-                'Трансабдоминальное УЗИ предстательной железы от {date}: объём предстательной железы — __ см³, контуры ровные, эхоструктура однородная/неоднородная, очаговых изменений не выявлено. Объём остаточной мочи — __ мл.',
-            },
-            {
-              key: 'penile_doppler',
-              label: 'Допплерография сосудов полового члена',
-              template:
-                'Допплерография сосудов полового члена от {date}: пиковая систолическая скорость (PSV) — __ см/с, конечная диастолическая скорость (EDV) — __ см/с, индекс резистентности (RI) — __. Данных за васкулогенную эректильную дисфункцию __ выявлено.',
-            },
-          ],
         },
         { id: 'conclusion', title: 'Общее заключение', type: 'freeform' },
       ],
@@ -758,6 +718,37 @@ export const store = {
     return Object.values(readAll().drugDatabase).filter(
       (d) => !d.dosage && !d.frequency && !d.duration && !d.group
     )
+  },
+
+  // --- исследования (встроенные + свои) ---
+  getAllStudies() {
+    const custom = readAll().customStudies || {}
+    // своё исследование с тем же key, что встроенное, переопределяет его —
+    // так можно поправить шаблон/нормы built-in исследования, не трогая код
+    const byKey = {}
+    BUILTIN_STUDIES.forEach((s) => {
+      byKey[s.key] = s
+    })
+    Object.values(custom).forEach((s) => {
+      byKey[s.key] = s
+    })
+    return Object.values(byKey)
+  },
+
+  saveCustomStudy(study) {
+    const state = readAll()
+    state.customStudies = state.customStudies || {}
+    const key = study.key || study.label.trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_')
+    state.customStudies[key] = { ...study, key, updatedAt: Date.now() }
+    writeAll(state)
+    return state.customStudies
+  },
+
+  deleteCustomStudy(key) {
+    const state = readAll()
+    delete state.customStudies[key]
+    writeAll(state)
+    return state.customStudies
   },
 
   getDrugInfo(name) {
