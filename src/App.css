@@ -694,6 +694,17 @@ body {
   cursor: pointer;
 }
 
+.wizard-highlight {
+  outline: 3px solid var(--teal);
+  outline-offset: 3px;
+  animation: wizard-pulse 1.6s ease-in-out infinite;
+  scroll-margin-top: 16px;
+}
+@keyframes wizard-pulse {
+  0%, 100% { outline-color: var(--teal); }
+  50% { outline-color: rgba(15, 110, 95, 0.35); }
+}
+
 .guideline-hub-box { max-width: min(640px, calc(100vw - 32px)); }
 .guideline-hub-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .guideline-hub-section:last-child { border-bottom: none; margin-bottom: 0; }

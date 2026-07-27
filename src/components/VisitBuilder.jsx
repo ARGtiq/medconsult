@@ -415,7 +415,15 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
             const isOpen = openSectionId === section.id
             const preview = sectionPreviewText(section, sectionValues[section.id], sectionValues)
             return (
-            <section key={section.id} id={`section-${section.id}`} className={isOpen ? 'section-block section-block-open' : 'section-block section-block-collapsed'}>
+            <section
+              key={section.id}
+              id={`section-${section.id}`}
+              className={[
+                'section-block',
+                isOpen ? 'section-block-open' : 'section-block-collapsed',
+                wizardOpen && template.sections[wizardStep]?.id === section.id ? 'wizard-highlight' : '',
+              ].filter(Boolean).join(' ')}
+            >
               <div
                 className="section-block-header"
                 onClick={(e) => {

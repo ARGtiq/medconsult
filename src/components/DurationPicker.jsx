@@ -33,7 +33,9 @@ export default function DurationPicker({ value, onChange }) {
         placeholder="3 или «много»"
         onChange={(e) => {
           const v = e.target.value
-          if (v.toLowerCase() === 'много' || v === '' || /^\d*$/.test(v)) setAmount(v)
+          const isDigits = /^\d*$/.test(v)
+          const isTypingMnogo = 'много'.startsWith(v.toLowerCase()) // разрешаем набирать буквами постепенно
+          if (isDigits || isTypingMnogo) setAmount(v)
         }}
       />
       <select className="duration-picker-unit" value={unit} onChange={(e) => setUnit(e.target.value)}>
