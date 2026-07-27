@@ -6,9 +6,11 @@ import ProtocolPreview from './ProtocolPreview'
 import PatientPanel from './PatientPanel'
 import Mkb10Picker from './Mkb10Picker'
 import GuidelinePanel from './GuidelinePanel'
-import GuidelineHub from './GuidelineHub'
+import GuidelineHub, { GuidelineHubPanel } from './GuidelineHub'
+import { getGuidelineHubMode } from '../lib/uiPrefs'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import AutoWidthInput from './AutoWidthInput'
 import DurationPicker from './DurationPicker'
 import StudyProtocolSection, { fillTemplate } from './StudyProtocolSection'
 import { store } from '../lib/store'
@@ -93,6 +95,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [savedAsUpdate, setSavedAsUpdate] = useState(false)
   const [openSectionId, setOpenSectionId] = useState(template.sections[0]?.id || null)
   const [hubOpen, setHubOpen] = useState(false)
+  const [pendingEdit, setPendingEdit] = useState(null) // { sectionId, idx, text }
+  const [pendingManualInput, setPendingManualInput] = useState('')
   const [diagnosisSuggestion, setDiagnosisSuggestion] = useState('')
   const [diagnosisLoading, setDiagnosisLoading] = useState(false)
   const [diagnosisError, setDiagnosisError] = useState('')
@@ -101,7 +105,6 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [staleGuidelinePrompt, setStaleGuidelinePrompt] = useState(null) // список guidelineInsertions, ставших неактуальными
   useEscapeToClose(() => confirmRemoveStaleGuideline(false), !!staleGuidelinePrompt)
   const prevCodesRef = useRef(null)
-  const autoFilledRef = useRef(new Set())
   const firstRender = useRef(true)
 
   // Секции находятся по явной роли (задаётся в редакторе шаблонов), а не по
@@ -273,49 +276,6 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     setStaleGuidelinePrompt(null)
   }
 
-  // Автоподстановка из клинрека: если у совпавшей рекомендации есть клиническая
-  // картина/обследования, а соответствующее поле визита ещё пустое — подставляем
-  // без клика по кнопке. "Только если пусто" и только один раз на рекомендацию,
-  // чтобы не переписывать то, что врач уже удалил вручную.
-  useEffect(() => {
-    const codes = extractCodesFromText(sectionValues[diagnosisSectionId])
-    if (!codes.length) return
-    const matches = store.getGuidelinesForCodes(codes)
-    if (!matches.length) return
-
-    setSectionValues((prev) => {
-      let next = prev
-      let changed = false
-
-      matches.forEach((g) => {
-        const complaintsKey = `${g.id}:complaints`
-        if ((g.clinicalPicture || []).length && !(prev[complaintsSectionId] || []).length && !autoFilledRef.current.has(complaintsKey)) {
-          autoFilledRef.current.add(complaintsKey)
-          if (!changed) next = { ...next }
-          next[complaintsSectionId] = g.clinicalPicture.map(lowercaseFirst)
-          changed = true
-        }
-
-        if (pendingInvestigationsKey) {
-          const invKey = `${g.id}:pending-investigations`
-          if (
-            (g.investigations || []).length &&
-            !(prev[pendingInvestigationsKey] || []).length &&
-            !autoFilledRef.current.has(invKey)
-          ) {
-            autoFilledRef.current.add(invKey)
-            if (!changed) next = { ...next }
-            next[pendingInvestigationsKey] = [...g.investigations]
-            changed = true
-          }
-        }
-      })
-
-      return changed ? next : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionValues[diagnosisSectionId]])
-
   function clearSection(section) {
     const arrayTypes = ['drugs', 'chips', 'investigations', 'checkbox', 'study_protocol']
     updateSection(section.id, arrayTypes.includes(section.type) ? [] : '')
@@ -379,6 +339,21 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         <button type="button" className="guideline-hub-badge" onClick={() => setHubOpen(true)}>
           📋 Есть рекомендация по диагнозу: {matchedGuidelines.map((g) => g.title).join(', ')}
         </button>
+      )}
+
+      {hubOpen && getGuidelineHubMode() === 'panel' && (
+        <GuidelineHubPanel
+          diagnosisText={sectionValues[diagnosisSectionId]}
+          onClose={() => setHubOpen(false)}
+          onInsertFormulation={insertDiagnosisFormulation}
+          onInsertComplaint={insertGuidelineComplaint}
+          onInsertClassificationLine={insertClassificationLine}
+          onInsertInvestigation={insertGuidelineInvestigation}
+          onInsertDrug={(drug) => {
+            if (recommendationsSection) insertGuidelineDrugSingle(recommendationsSection.id, drug)
+          }}
+          formulationTag={formulationTag}
+        />
       )}
 
       <details className="patient-details-spoiler" open>
@@ -571,24 +546,83 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     <div className="pending-investigations-block">
                       <div className="pending-investigations-label">Дообследование</div>
                       <div className="selected-values">
-                        {(sectionValues[`${section.id}_pending_investigations`] || []).map((item, idx) => (
-                          <span key={`${item}-${idx}`} className="selected-chip">
-                            {item}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const key = `${section.id}_pending_investigations`
-                                updateSection(key, sectionValues[key].filter((_, i) => i !== idx))
-                              }}
-                              aria-label="Удалить"
+                        {(sectionValues[`${section.id}_pending_investigations`] || []).map((item, idx) => {
+                          const key = `${section.id}_pending_investigations`
+                          const isEditing = pendingEdit?.sectionId === section.id && pendingEdit?.idx === idx
+                          if (isEditing) {
+                            return (
+                              <form
+                                key={`${item}-${idx}`}
+                                className="selected-chip-edit"
+                                onSubmit={(e) => {
+                                  e.preventDefault()
+                                  const clean = pendingEdit.text.trim()
+                                  if (clean) {
+                                    updateSection(key, sectionValues[key].map((v, i) => (i === idx ? clean : v)))
+                                  }
+                                  setPendingEdit(null)
+                                }}
+                              >
+                                <AutoWidthInput
+                                  value={pendingEdit.text}
+                                  onChange={(e) => setPendingEdit({ ...pendingEdit, text: e.target.value })}
+                                  onBlur={() => {
+                                    const clean = pendingEdit.text.trim()
+                                    if (clean) {
+                                      updateSection(key, sectionValues[key].map((v, i) => (i === idx ? clean : v)))
+                                    }
+                                    setPendingEdit(null)
+                                  }}
+                                />
+                              </form>
+                            )
+                          }
+                          return (
+                            <span
+                              key={`${item}-${idx}`}
+                              className="selected-chip"
+                              onClick={() => setPendingEdit({ sectionId: section.id, idx, text: item })}
+                              title="Нажми, чтобы отредактировать"
                             >
-                              ×
-                            </button>
-                          </span>
-                        ))}
+                              {item}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  updateSection(key, sectionValues[key].filter((_, i) => i !== idx))
+                                }}
+                                aria-label="Удалить"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
+                  <form
+                    className="free-input-row pending-investigations-add"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const clean = pendingManualInput.trim()
+                      if (!clean) return
+                      const key = `${section.id}_pending_investigations`
+                      const current = sectionValues[key] || []
+                      if (!current.includes(clean)) updateSection(key, [...current, clean])
+                      setPendingManualInput('')
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={pendingManualInput}
+                      placeholder="Добавить дообследование вручную…"
+                      onChange={(e) => setPendingManualInput(e.target.value)}
+                    />
+                    <button type="submit" className="btn-secondary">
+                      Добавить
+                    </button>
+                  </form>
                   <DrugSection
                     complaints={complaints}
                     diagnosisText={sectionValues[diagnosisSectionId]}
@@ -635,7 +669,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
         </div>
       </div>
 
-      {hubOpen && (
+      {hubOpen && getGuidelineHubMode() === 'modal' && (
         <GuidelineHub
           diagnosisText={sectionValues[diagnosisSectionId]}
           onClose={() => setHubOpen(false)}

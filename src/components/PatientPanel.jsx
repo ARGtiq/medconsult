@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
-import { getAllergyAutocompleteList } from '../data/drugSafety'
+import { getAllergyAutocompleteList, DRUG_GROUPS } from '../data/drugSafety'
 import { showToast } from '../lib/toast'
 
 function summarizeVisit(v) {
@@ -67,6 +67,13 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
     return years
   }
 
+  function isKnownGroupLabel(text) {
+    const norm = text.trim().toLowerCase()
+    const builtinLabels = Object.values(DRUG_GROUPS).map((g) => g.label.toLowerCase())
+    const customLabels = Object.values(store.getCustomGroups()).map((g) => g.label.toLowerCase())
+    return [...builtinLabels, ...customLabels].includes(norm)
+  }
+
   function addAllergy(directValue) {
     const clean = (directValue ?? allergyInput).trim()
     if (!clean || !patient) return
@@ -74,6 +81,12 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
     store.savePatient(updated)
     onChange(updated)
     setAllergyInput('')
+    // аллергия обычно указывает конкретный препарат — регистрируем в базе,
+    // чтобы он подтягивался в автоподсказки; названия групп (напр. "пенициллины")
+    // не препараты, их не создаём
+    if (!isKnownGroupLabel(clean) && !store.getDrugInfo(clean)) {
+      store.saveDrugInfo({ name: clean })
+    }
   }
 
   function removeAllergy(idx) {

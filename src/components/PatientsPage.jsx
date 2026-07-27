@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { showToast } from '../lib/toast'
+import { DRUG_GROUPS } from '../data/drugSafety'
+
+function isKnownGroupLabel(text) {
+  const norm = text.trim().toLowerCase()
+  const builtinLabels = Object.values(DRUG_GROUPS).map((g) => g.label.toLowerCase())
+  const customLabels = Object.values(store.getCustomGroups()).map((g) => g.label.toLowerCase())
+  return [...builtinLabels, ...customLabels].includes(norm)
+}
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -198,7 +206,11 @@ export default function PatientsPage({ onLoadVisit }) {
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
                     onBlur={() => {
-                      updatePatient({ allergies: editingText.split(',').map((s) => s.trim()).filter(Boolean) })
+                      const allergies = editingText.split(',').map((s) => s.trim()).filter(Boolean)
+                      allergies.forEach((a) => {
+                        if (!isKnownGroupLabel(a) && !store.getDrugInfo(a)) store.saveDrugInfo({ name: a })
+                      })
+                      updatePatient({ allergies })
                       setEditingField(null)
                     }}
                     placeholder="через запятую"

@@ -589,6 +589,19 @@ body {
 }
 .guideline-hub-badge:hover { background: #d9ede7; }
 
+.guideline-hub-panel {
+  background: var(--panel);
+  border: 1px solid var(--teal);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.guideline-hub-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.guideline-hub-panel-header h4 { margin: 0; font-family: var(--font-display); font-size: 15px; }
+
+.hub-mode-toggle { display: flex; flex-direction: column; gap: 8px; }
+.hub-mode-toggle label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+
 .guideline-hub-box { max-width: min(640px, calc(100vw - 32px)); }
 .guideline-hub-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .guideline-hub-section:last-child { border-bottom: none; margin-bottom: 0; }
@@ -1113,6 +1126,8 @@ body {
   cursor: pointer;
   font-size: 14px;
 }
+
+.btn-ai-busy { opacity: 0.75; cursor: wait; }
 
 .toast-stack {
   position: fixed;

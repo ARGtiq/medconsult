@@ -7,12 +7,14 @@ import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
 import ClinicalLockSettings from './ClinicalLockSettings'
 import { store } from '../lib/store'
+import { getGuidelineHubMode, setGuidelineHubMode } from '../lib/uiPrefs'
 
 // Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
 // Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
 export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [purgeResult, setPurgeResult] = useState('')
+  const [hubMode, setHubMode] = useState(getGuidelineHubMode())
 
   function handlePurge() {
     const { visitsRemoved, patientsRemoved } = store.purgeOldTombstones(90)
@@ -56,6 +58,34 @@ export default function SettingsPage() {
       <div className="general-settings-block">
         <h4>Защита данных пациентов</h4>
         <ClinicalLockSettings />
+      </div>
+      <div className="general-settings-block">
+        <h4>Клинические рекомендации на приёме</h4>
+        <p className="settings-note-inline">Как открывается панель "📋 Есть рекомендация по диагнозу" по клику.</p>
+        <div className="hub-mode-toggle">
+          <label>
+            <input
+              type="radio"
+              checked={hubMode === 'panel'}
+              onChange={() => {
+                setGuidelineHubMode('panel')
+                setHubMode('panel')
+              }}
+            />
+            Блоком на странице приёма (по умолчанию)
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={hubMode === 'modal'}
+              onChange={() => {
+                setGuidelineHubMode('modal')
+                setHubMode('modal')
+              }}
+            />
+            Модальным окном
+          </label>
+        </div>
       </div>
       <div className="general-settings-block">
         <h4>Supabase (синхронизация между устройствами)</h4>

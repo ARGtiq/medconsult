@@ -423,8 +423,13 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
                     </div>
 
                     <div className="ai-menu-wrap">
-                      <button type="button" className="btn-ai btn-small" onClick={() => setAiMenuFor(aiMenuFor === idx ? null : idx)}>
-                        AI-проверки ▾
+                      <button
+                        type="button"
+                        className={aiAllergyLoading === idx || aiAnalogsLoading === idx ? 'btn-ai btn-small btn-ai-busy' : 'btn-ai btn-small'}
+                        onClick={() => setAiMenuFor(aiMenuFor === idx ? null : idx)}
+                        disabled={aiAllergyLoading === idx || aiAnalogsLoading === idx}
+                      >
+                        {aiAllergyLoading === idx || aiAnalogsLoading === idx ? '⏳ Выполняю…' : 'AI-проверки ▾'}
                       </button>
                       {aiMenuFor === idx && (
                         <div className="ai-menu-dropdown">
