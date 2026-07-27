@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
+import OnboardingChecklist from './OnboardingChecklist'
 
 function formatDateTime(ts) {
   if (!ts) return ''
@@ -31,6 +32,8 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
   return (
     <div className="guidelines-page">
       <h2 className="guidelines-title">Главная</h2>
+
+      <OnboardingChecklist onGoToSettings={onGoToSettings} onGoToVisit={onGoToVisit} />
 
       {backupStale && !dismissedBackup && (
         <div className="draft-banner">

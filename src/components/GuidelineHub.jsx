@@ -1,4 +1,5 @@
 import GuidelinePanel from './GuidelinePanel'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 // Единая точка входа в клинрек — модалка со всеми режимами сразу
 // (жалобы/диагноз/рекомендации), вместо того чтобы искать нужную врезку
@@ -14,6 +15,7 @@ export default function GuidelineHub({
   onInsertDrug,
   formulationTag,
 }) {
+  useEscapeToClose(onClose)
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box guideline-hub-box" onClick={(e) => e.stopPropagation()}>

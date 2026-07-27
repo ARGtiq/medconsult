@@ -4,6 +4,7 @@ import DrugsTab from './DrugsTab'
 import DrugGroupsTab from './DrugGroupsTab'
 import TemplateEditor from './TemplateEditor'
 import StudiesTab from './StudiesTab'
+import PrintTemplatesTab from './PrintTemplatesTab'
 
 export default function ReferencePage({ initialTab }) {
   const [tab, setTab] = useState(initialTab || 'guidelines')
@@ -28,12 +29,16 @@ export default function ReferencePage({ initialTab }) {
         <button type="button" className={tab === 'studies' ? 'active' : ''} onClick={() => setTab('studies')}>
           Исследования
         </button>
+        <button type="button" className={tab === 'print' ? 'active' : ''} onClick={() => setTab('print')}>
+          Печать
+        </button>
       </div>
       {tab === 'templates' && <TemplateEditor />}
       {tab === 'guidelines' && <GuidelinesPage />}
       {tab === 'drugs' && <DrugsTab />}
       {tab === 'groups' && <DrugGroupsTab />}
       {tab === 'studies' && <StudiesTab />}
+      {tab === 'print' && <PrintTemplatesTab />}
     </div>
   )
 }

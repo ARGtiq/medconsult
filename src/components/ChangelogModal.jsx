@@ -1,6 +1,8 @@
 import { CHANGELOG } from '../data/changelog'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 export default function ChangelogModal({ onClose }) {
+  useEscapeToClose(onClose)
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>

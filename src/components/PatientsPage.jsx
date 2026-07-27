@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
+import { showToast } from '../lib/toast'
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -52,16 +53,30 @@ export default function PatientsPage({ onLoadVisit }) {
   }
 
   function removePatient(id, name) {
-    if (!window.confirm(`Удалить пациента «${name}»? Визиты останутся в базе, но пациент перестанет отображаться.`)) return
     store.deletePatient(id)
     refresh()
     if (selectedId === id) setSelectedId(null)
+    showToast(`Пациент «${name}» удалён`, {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.undeletePatient(id)
+        refresh()
+      },
+    })
   }
 
   function removeVisit(id) {
-    if (!window.confirm('Удалить этот визит из истории?')) return
     store.deleteVisit(id)
     refresh()
+    showToast('Визит удалён', {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.undeleteVisit(id)
+        refresh()
+      },
+    })
   }
 
   function startEdit(field, current) {
@@ -146,12 +161,20 @@ export default function PatientsPage({ onLoadVisit }) {
                 {p.name}
               </button>
             ))}
-            {filtered.length === 0 && <p className="empty-hint">Пациенты не найдены.</p>}
+            {filtered.length === 0 && patients.length > 0 && <p className="empty-hint">По этому запросу никого не нашлось.</p>}
+            {patients.length === 0 && (
+              <p className="empty-hint">
+                Пациентов пока нет. Они появляются автоматически, когда на приёме вводишь имя пациента.
+              </p>
+            )}
           </div>
         </div>
 
         <div className="patients-detail">
-          {!selected && <p className="empty-hint">Выбери пациента слева, чтобы увидеть карточку.</p>}
+          {!selected && patients.length > 0 && <p className="empty-hint">Выбери пациента слева, чтобы увидеть карточку.</p>}
+          {!selected && patients.length === 0 && (
+            <p className="empty-hint">Как только заведёшь первого пациента на приёме — его карточка появится здесь.</p>
+          )}
           {selected && (
             <>
               <div className="patients-detail-header">

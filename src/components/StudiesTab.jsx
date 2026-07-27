@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 function blankField() {
   return { key: '', label: '', unit: '', normal: '' }
@@ -26,6 +27,8 @@ export default function StudiesTab() {
   const [studies, setStudies] = useState(store.getAllStudies())
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  useEscapeToClose(() => setFormOpen(false), formOpen)
   const builtinKeys = new Set(BUILTIN_STUDIES.map((s) => s.key))
 
   function refresh() {
@@ -63,7 +66,11 @@ export default function StudiesTab() {
 
   function save(e) {
     e.preventDefault()
-    if (!form.label.trim() || !form.template.trim()) return
+    if (!form.label.trim() || !form.template.trim()) {
+      setValidationError('Заполни название и шаблон текста')
+      return
+    }
+    setValidationError('')
     const key = form.key || slugifyKey(form.label)
     const fields = form.fields.filter((f) => f.key.trim() && f.label.trim())
     store.saveCustomStudy({ ...form, key, fields })
@@ -101,6 +108,8 @@ export default function StudiesTab() {
             <form className="drug-form" onSubmit={save}>
               <div className="drug-form-row">
                 <input
+                  autoFocus
+                  className={validationError && !form.label.trim() ? 'input-error' : ''}
                   placeholder="Название исследования"
                   value={form.label}
                   onChange={(e) => setForm({ ...form, label: e.target.value })}
@@ -110,6 +119,7 @@ export default function StudiesTab() {
                   <option value="lab">Лабораторное</option>
                 </select>
               </div>
+              {validationError && <div className="ai-error">{validationError}</div>}
 
               <AutoResizeTextarea
                 placeholder="Шаблон текста, напр. «УЗИ почек от {date}: правая почка — {rightSize} мм...»"

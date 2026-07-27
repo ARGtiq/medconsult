@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -11,6 +12,7 @@ const EVIDENCE_OPTIONS = [
 ]
 
 export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
+  useEscapeToClose(onClose)
   const [form, setForm] = useState({
     name: drugName,
     dosage: '',

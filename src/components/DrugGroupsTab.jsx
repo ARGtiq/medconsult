@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 function blankGroupForm() {
   return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '' }
@@ -13,6 +14,8 @@ export default function DrugGroupsTab() {
   const [editingStaticKey, setEditingStaticKey] = useState(null)
   const [crossList, setCrossList] = useState(store.getCrossReactivity())
   const [crossForm, setCrossForm] = useState({ groupA: '', groupB: '', note: '' })
+  const [labelError, setLabelError] = useState(false)
+  useEscapeToClose(() => setFormOpen(false), formOpen)
 
   const allGroupOptions = [
     ...Object.entries(DRUG_GROUPS).map(([key, g]) => ({ key, label: g.label })),
@@ -82,7 +85,11 @@ export default function DrugGroupsTab() {
 
   function save(e) {
     e.preventDefault()
-    if (!form.label.trim()) return
+    if (!form.label.trim()) {
+      setLabelError(true)
+      return
+    }
+    setLabelError(false)
 
     const meta = {
       crossAllergyNote: form.crossAllergyNote,
@@ -138,9 +145,14 @@ export default function DrugGroupsTab() {
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
           <input
+            autoFocus
+            className={labelError ? 'input-error' : ''}
             placeholder="Название группы"
             value={form.label}
-            onChange={(e) => setForm({ ...form, label: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, label: e.target.value })
+              setLabelError(false)
+            }}
             disabled={!!editingStaticKey}
           />
         </div>

@@ -14,6 +14,8 @@ import StudyProtocolSection, { fillTemplate } from './StudyProtocolSection'
 import { store } from '../lib/store'
 import { suggestDiagnosis } from '../lib/openrouter'
 import { extractCodesFromText } from '../data/mkb10'
+import { showToast } from '../lib/toast'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -97,6 +99,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
   const [formulationTag, setFormulationTag] = useState(null) // {guidelineId, guidelineUpdatedAt} — живой тег формулировки диагноза
   const [guidelineInsertions, setGuidelineInsertions] = useState([]) // [{guidelineId, guidelineTitle, sectionId, type, items}]
   const [staleGuidelinePrompt, setStaleGuidelinePrompt] = useState(null) // список guidelineInsertions, ставших неактуальными
+  useEscapeToClose(() => confirmRemoveStaleGuideline(false), !!staleGuidelinePrompt)
   const prevCodesRef = useRef(null)
   const autoFilledRef = useRef(new Set())
   const firstRender = useRef(true)
@@ -133,6 +136,19 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient, visitDate, sectionValues])
+
+  // Ctrl/Cmd+S — сохранить визит, не отходя от клавиатуры
+  useEffect(() => {
+    function handler(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        saveVisit(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient, visitDate, sectionValues, template.id])
 
   function discardDraft() {
     store.clearDraft(template.id)
@@ -327,6 +343,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
       sectionValues,
     })
     store.clearDraft(template.id)
+    showToast(targetId ? 'Визит обновлён' : 'Визит сохранён', { type: 'success' })
     setSaved(true)
     setSavedAsUpdate(!!targetId)
     setTimeout(() => setSaved(false), 1500)

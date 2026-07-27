@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { polishNarrative } from '../lib/openrouter'
 import { store } from '../lib/store'
+import { printHtml, escapeHtml } from '../lib/print'
 
 function sectionToText(section, value, patient, sectionValues) {
   const durationValue = sectionValues[`${section.id}_duration`]
@@ -128,6 +129,38 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
     }
   }
 
+  function handlePrint() {
+    const printTemplates = store.getPrintTemplates()
+    const defaultId = store.getDefaultPrintTemplateId()
+    const pt = printTemplates.find((t) => t.id === defaultId) || printTemplates[0] || null
+
+    let html = ''
+    if (pt && (pt.clinicName || pt.doctorName || pt.contactInfo)) {
+      html += `<div class="print-letterhead">`
+      if (pt.clinicName) html += `<h1>${escapeHtml(pt.clinicName)}</h1>`
+      if (pt.doctorName) html += `<p>${escapeHtml(pt.doctorName)}</p>`
+      if (pt.contactInfo) html += `<p>${escapeHtml(pt.contactInfo)}</p>`
+      html += `</div>`
+    }
+
+    html += `<div class="print-meta">`
+    if (patient?.name) html += `<p><strong>Пациент:</strong> ${escapeHtml(patient.name)}</p>`
+    if (visitDate) html += `<p><strong>Дата консультации:</strong> ${escapeHtml(formatDate(visitDate))}</p>`
+    html += `</div>`
+
+    template.sections.forEach((s) => {
+      const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues)
+      if (!text) return
+      html += `<div class="print-section"><h3>${escapeHtml(s.title)}</h3><div>${escapeHtml(text)}</div></div>`
+    })
+
+    if (pt?.footerText) {
+      html += `<div class="print-footer">${escapeHtml(pt.footerText)}</div>`
+    }
+
+    printHtml(html, `Протокол — ${patient?.name || 'без пациента'}`)
+  }
+
   return (
     <div className="protocol-preview">
       <div className="preview-header">
@@ -145,6 +178,9 @@ export default function ProtocolPreview({ template, sectionValues, patient, visi
           </button>
           <button type="button" className="btn-secondary" onClick={() => copyToClipboard(fullText)}>
             {copied ? 'Скопировано ✓' : 'Копировать всё'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={handlePrint}>
+            🖨 Печать / PDF
           </button>
         </div>
       </div>

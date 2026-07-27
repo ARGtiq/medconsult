@@ -1,6 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import VisitBuilder from './components/VisitBuilder'
 import Footer from './components/Footer'
+import ToastContainer from './components/ToastContainer'
+import GlobalSearch from './components/GlobalSearch'
 import { store } from './lib/store'
 import { isSupabaseConfigured } from './lib/supabaseClient'
 import './App.css'
@@ -31,6 +33,18 @@ export default function App() {
   }
   const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
   const [syncStatus, setSyncStatus] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  useEffect(() => {
+    function handler(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     let cleanup
@@ -142,6 +156,9 @@ export default function App() {
         </nav>
 
         <div className="header-right">
+          <button type="button" className="global-search-trigger" onClick={() => setSearchOpen(true)} title="Поиск (Ctrl/Cmd+K)">
+            🔍
+          </button>
           {!isSupabaseConfigured() && <span className="sync-badge">офлайн · только на этом устройстве</span>}
           {syncStatus?.status === 'syncing' && <span className="sync-badge sync-badge-active">⟳ синхронизация…</span>}
           {syncStatus?.status === 'error' && <span className="sync-badge sync-badge-error" title={syncStatus.error}>⚠ синк не удался</span>}
@@ -180,6 +197,16 @@ export default function App() {
       </main>
 
       <Footer />
+      <ToastContainer />
+      {searchOpen && (
+        <GlobalSearch
+          onClose={() => setSearchOpen(false)}
+          onOpenPatient={() => setPage('patients')}
+          onOpenVisit={(v) => loadVisit(v)}
+          onOpenGuideline={() => goToReference('guidelines')}
+          onOpenDrug={() => goToReference('drugs')}
+        />
+      )}
     </div>
   )
 }

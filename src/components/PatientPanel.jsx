@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import { getAllergyAutocompleteList } from '../data/drugSafety'
+import { showToast } from '../lib/toast'
 
 function summarizeVisit(v) {
   const complaints = v.sectionValues?.complaints
@@ -165,10 +166,16 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
                   className="btn-secondary btn-danger btn-small"
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (window.confirm('Удалить этот визит из истории?')) {
-                      store.deleteVisit(v.id)
-                      forceRefresh()
-                    }
+                    store.deleteVisit(v.id)
+                    forceRefresh()
+                    showToast('Визит удалён', {
+                      type: 'success',
+                      actionLabel: 'Отменить',
+                      onAction: () => {
+                        store.undeleteVisit(v.id)
+                        forceRefresh()
+                      },
+                    })
                   }}
                 >
                   Удалить

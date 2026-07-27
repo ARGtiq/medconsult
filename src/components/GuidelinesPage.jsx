@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractGuidelineInfo } from '../lib/openrouter'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 function blankForm() {
   return {
@@ -103,6 +104,8 @@ export default function GuidelinesPage() {
   const [guidelines, setGuidelines] = useState(store.getGuidelines())
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  useEscapeToClose(() => setFormOpen(false), formOpen)
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -152,7 +155,11 @@ export default function GuidelinesPage() {
 
   function save(e) {
     e.preventDefault()
-    if (!form.title.trim() || !form.mkb10CodesText.trim()) return
+    if (!form.title.trim() || !form.mkb10CodesText.trim()) {
+      setValidationError('Заполни хотя бы название и коды МКБ-10')
+      return
+    }
+    setValidationError('')
     const mkb10Codes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
     const investigations = form.investigationsText.split(',').map((s) => s.trim()).filter(Boolean)
     const clinicalPicture = form.clinicalPictureText.split(',').map((s) => s.trim()).filter(Boolean)
@@ -211,16 +218,20 @@ export default function GuidelinesPage() {
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
           <input
+            autoFocus
+            className={validationError && !form.title.trim() ? 'input-error' : ''}
             placeholder="Название состояния"
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
           />
           <input
+            className={validationError && !form.mkb10CodesText.trim() ? 'input-error' : ''}
             placeholder="Коды МКБ-10 через запятую (напр. N10, N39.0)"
             value={form.mkb10CodesText}
             onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
           />
         </div>
+        {validationError && <div className="ai-error">{validationError}</div>}
         <AutoResizeTextarea
           placeholder="Определение (1-2 предложения)"
           value={form.definition}

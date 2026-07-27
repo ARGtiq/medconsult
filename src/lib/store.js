@@ -34,7 +34,7 @@ const NAMESPACES = {
   // рабочие заготовки, не жалко потерять
   workspace: ['templatePresets'],
   // метаданные самого приложения, не медицинские
-  system: ['bugReports', 'defaultTemplateId'],
+  system: ['bugReports', 'defaultTemplateId', 'printTemplates', 'defaultPrintTemplateId'],
 }
 
 function nsStorageKey(ns) {
@@ -150,6 +150,9 @@ function defaultState() {
     templatePresets: {},
     // id шаблона, который открывается по умолчанию на вкладке "Приём"
     defaultTemplateId: null,
+    // шаблоны печати (шапка/подпись): id -> { name, clinicName, doctorName, contactInfo, footerText }
+    printTemplates: {},
+    defaultPrintTemplateId: null,
     templatesSeedVersion: TEMPLATES_SEED_VERSION,
   }
 }
@@ -552,6 +555,15 @@ export const store = {
     emit('patients')
   },
 
+  undeletePatient(id) {
+    const state = readAll()
+    const idx = state.patients.findIndex((p) => p.id === id)
+    if (idx < 0) return
+    state.patients[idx] = { ...state.patients[idx], deleted: false, updatedAt: Date.now() }
+    writeAll(state)
+    emit('patients')
+  },
+
   // --- визиты ---
   saveVisit(visit) {
     const state = readAll()
@@ -569,6 +581,15 @@ export const store = {
     const idx = state.visits.findIndex((v) => v.id === id)
     if (idx < 0) return
     state.visits[idx] = { ...state.visits[idx], deleted: true, deletedAt: Date.now(), updatedAt: Date.now() }
+    writeAll(state)
+    emit('visits')
+  },
+
+  undeleteVisit(id) {
+    const state = readAll()
+    const idx = state.visits.findIndex((v) => v.id === id)
+    if (idx < 0) return
+    state.visits[idx] = { ...state.visits[idx], deleted: false, updatedAt: Date.now() }
     writeAll(state)
     emit('visits')
   },
@@ -941,6 +962,38 @@ export const store = {
   setDefaultTemplateId(id) {
     const state = readAll()
     state.defaultTemplateId = id
+    writeAll(state)
+  },
+
+  // --- шаблоны печати (шапка/подпись документа) ---
+  getPrintTemplates() {
+    return Object.values(readAll().printTemplates || {})
+  },
+
+  savePrintTemplate(template) {
+    const state = readAll()
+    state.printTemplates = state.printTemplates || {}
+    const id = template.id || crypto.randomUUID()
+    state.printTemplates[id] = { ...template, id, updatedAt: Date.now() }
+    writeAll(state)
+    return state.printTemplates
+  },
+
+  deletePrintTemplate(id) {
+    const state = readAll()
+    delete state.printTemplates[id]
+    if (state.defaultPrintTemplateId === id) state.defaultPrintTemplateId = null
+    writeAll(state)
+    return state.printTemplates
+  },
+
+  getDefaultPrintTemplateId() {
+    return readAll().defaultPrintTemplateId
+  },
+
+  setDefaultPrintTemplateId(id) {
+    const state = readAll()
+    state.defaultPrintTemplateId = id
     writeAll(state)
   },
 

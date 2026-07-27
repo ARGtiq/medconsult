@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { APP_VERSION } from '../data/version'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 export default function BugReportModal({ onClose }) {
   const [description, setDescription] = useState('')
   const [steps, setSteps] = useState('')
   const [saved, setSaved] = useState(false)
+  useEscapeToClose(onClose)
 
   function submit(e) {
     e.preventDefault()
@@ -28,7 +30,7 @@ export default function BugReportModal({ onClose }) {
         <form onSubmit={submit} className="bug-report-form">
           <label>
             Что пошло не так?
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} required />
+            <textarea autoFocus value={description} onChange={(e) => setDescription(e.target.value)} rows={3} required />
           </label>
           <label>
             Как воспроизвести (по шагам, если знаешь)

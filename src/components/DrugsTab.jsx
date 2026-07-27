@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
+import useEscapeToClose from '../lib/useEscapeToClose'
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -36,14 +37,21 @@ export default function DrugsTab() {
   const [extractError, setExtractError] = useState('')
   const [brandLoading, setBrandLoading] = useState(false)
   const [brandError, setBrandError] = useState('')
+  useEscapeToClose(() => setFormOpen(false), formOpen)
 
   function refresh() {
     setDrugs({ ...store.getDrugInfoAll() })
   }
 
+  const [nameError, setNameError] = useState(false)
+
   function saveForm(e) {
     e.preventDefault()
-    if (!form.name.trim()) return
+    if (!form.name.trim()) {
+      setNameError(true)
+      return
+    }
+    setNameError(false)
     store.saveDrugInfo(form)
     setForm(blankForm())
     setFormOpen(false)
@@ -110,9 +118,14 @@ export default function DrugsTab() {
       <form className="drug-form" onSubmit={saveForm}>
         <div className="drug-form-row">
           <input
+            autoFocus
+            className={nameError ? 'input-error' : ''}
             placeholder="Название (МНН)"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, name: e.target.value })
+              setNameError(false)
+            }}
           />
           <input
             placeholder="Группа"
