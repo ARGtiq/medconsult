@@ -3,6 +3,9 @@ import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import FillProgressBar from './FillProgressBar'
+
+const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -28,10 +31,13 @@ function blankForm() {
   }
 }
 
-export default function DrugsTab() {
+export default function DrugsTab({ initialItemId }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
-  const [form, setForm] = useState(blankForm())
-  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState(() => {
+    const preset = initialItemId ? store.getDrugInfo(initialItemId) : null
+    return preset ? { ...blankForm(), ...preset } : blankForm()
+  })
+  const [formOpen, setFormOpen] = useState(!!initialItemId)
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -240,6 +246,7 @@ export default function DrugsTab() {
                 {d.evidenceLevel && <span className="drug-db-evidence">{EVIDENCE_OPTIONS.find((o) => o.value === d.evidenceLevel)?.label}</span>}
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
+              <FillProgressBar item={d} fields={DRUG_FILL_FIELDS} />
               {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
               {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
               {d.duration && <div className="drug-db-line">Длительность курса: {d.duration}</div>}

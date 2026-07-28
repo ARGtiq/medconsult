@@ -26,9 +26,11 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false)
   const [page, setPage] = useState('home')
   const [referenceTab, setReferenceTab] = useState('guidelines')
+  const [referenceItemId, setReferenceItemId] = useState(null)
 
-  function goToReference(tab) {
+  function goToReference(tab, itemId) {
     setReferenceTab(tab || 'guidelines')
+    setReferenceItemId(itemId || null)
     setPage('guidelines')
   }
   const [pendingVisit, setPendingVisit] = useState(null) // визит из истории пациента, который нужно загрузить
@@ -183,7 +185,7 @@ export default function App() {
           </Suspense>
         ) : page === 'guidelines' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка справочника…</p>}>
-            <ReferencePage key={referenceTab} initialTab={referenceTab} />
+            <ReferencePage key={`${referenceTab}-${referenceItemId || ''}`} initialTab={referenceTab} initialItemId={referenceItemId} />
           </Suspense>
         ) : page === 'patients' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка пациентов…</p>}>

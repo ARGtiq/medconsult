@@ -13,19 +13,20 @@ const EVIDENCE_OPTIONS = [
 
 export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
   useEscapeToClose(onClose)
+  const existing = store.getDrugInfo(drugName)
   const [form, setForm] = useState({
     name: drugName,
-    dosage: '',
-    frequency: '',
-    duration: '',
-    sideEffects: '',
-    group: '',
-    brandNames: '',
-    interactions: '',
-    contraindications: '',
-    monitoring: '',
-    mkb10Codes: '',
-    evidenceLevel: '',
+    dosage: existing?.dosage || '',
+    frequency: existing?.frequency || '',
+    duration: existing?.duration || '',
+    sideEffects: existing?.sideEffects || '',
+    group: existing?.group || '',
+    brandNames: existing?.brandNames || '',
+    interactions: existing?.interactions || '',
+    contraindications: existing?.contraindications || '',
+    monitoring: existing?.monitoring || '',
+    mkb10Codes: existing?.mkb10Codes || '',
+    evidenceLevel: existing?.evidenceLevel || '',
   })
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
@@ -70,7 +71,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
     <div className="modal-overlay">
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Добавить «{drugName}» в базу</h3>
+          <h3>{existing ? `Редактировать «${drugName}»` : `Добавить «${drugName}» в базу`}</h3>
           <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
         <form className="drug-form" onSubmit={save}>

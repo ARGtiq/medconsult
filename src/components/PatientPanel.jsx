@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
 import { getAllergyAutocompleteList, DRUG_GROUPS } from '../data/drugSafety'
 import { showToast } from '../lib/toast'
+import AddDrugToDbModal from './AddDrugToDbModal'
 
 function summarizeVisit(v) {
   const complaints = v.sectionValues?.complaints
@@ -32,6 +33,7 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allergyInput])
   const [medicationInput, setMedicationInput] = useState('')
+  const [editingDrugName, setEditingDrugName] = useState(null)
   const [showList, setShowList] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -261,9 +263,20 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
           <div className="allergy-block-label">Принимает в данный момент</div>
           <div className="allergy-chips">
             {(patient.currentMedications || []).map((m) => (
-              <span key={m} className="selected-chip medication-chip">
+              <span
+                key={m}
+                className="selected-chip medication-chip"
+                onClick={() => setEditingDrugName(m)}
+                title="Нажми, чтобы открыть карточку препарата"
+              >
                 {m}
-                <button type="button" onClick={() => removeMedication(patient.currentMedications.indexOf(m))}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeMedication(patient.currentMedications.indexOf(m))
+                  }}
+                >
                   ×
                 </button>
               </span>
@@ -288,6 +301,9 @@ export default function PatientPanel({ patient, onChange, onLoadVisit }) {
           </form>
           <div className="settings-note-inline">Автоматически попадёт в «Анамнез жизни» финального протокола.</div>
         </div>
+      )}
+      {editingDrugName && (
+        <AddDrugToDbModal drugName={editingDrugName} onClose={() => setEditingDrugName(null)} onSaved={() => {}} />
       )}
     </div>
   )

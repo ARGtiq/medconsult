@@ -319,10 +319,10 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
   )
 }
 
-export default function TemplateEditor() {
+export default function TemplateEditor({ initialSelectedId }) {
   const [templates, setTemplates] = useState(store.getTemplates())
-  const [selectedId, setSelectedId] = useState(templates[0]?.id || null)
-  const [draft, setDraft] = useState(() => templates[0] || blankTemplate())
+  const [selectedId, setSelectedId] = useState(initialSelectedId || templates[0]?.id || null)
+  const [draft, setDraft] = useState(() => templates.find((t) => t.id === initialSelectedId) || templates[0] || blankTemplate())
   const [savedFlag, setSavedFlag] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)

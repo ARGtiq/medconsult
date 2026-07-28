@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import FillProgressBar from './FillProgressBar'
+
+const GROUP_FILL_FIELDS = ['crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
 
 function blankGroupForm() {
-  return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '' }
+  return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '', basedOn: '' }
 }
 
 export default function DrugGroupsTab() {
@@ -73,6 +76,7 @@ export default function DrugGroupsTab() {
       sideEffects: group.sideEffects || '',
       contraindications: group.contraindications || '',
       mkb10Codes: group.mkb10Codes || '',
+      basedOn: group.basedOn || '',
     })
     setFormOpen(true)
   }
@@ -81,6 +85,17 @@ export default function DrugGroupsTab() {
     setEditingStaticKey(null)
     setForm(blankGroupForm())
     setFormOpen(true)
+  }
+
+  function applyBasedOn(key) {
+    const source = key.startsWith('__custom__')
+      ? customGroups[key.replace('__custom__', '')]
+      : DRUG_GROUPS[key]
+    setForm((prev) => ({
+      ...prev,
+      basedOn: key,
+      drugsText: source ? source.drugs.join(', ') : prev.drugsText,
+    }))
   }
 
   function save(e) {
@@ -105,7 +120,7 @@ export default function DrugGroupsTab() {
       store.saveGroupMeta(editingStaticKey, meta)
     } else {
       const drugs = form.drugsText.split(',').map((s) => s.trim()).filter(Boolean)
-      store.saveCustomGroup(form.key, { label: form.label, drugs, ...meta })
+      store.saveCustomGroup(form.key, { label: form.label, drugs, basedOn: form.basedOn || '', ...meta })
     }
 
     refresh()
@@ -156,6 +171,17 @@ export default function DrugGroupsTab() {
             disabled={!!editingStaticKey}
           />
         </div>
+        {!form.key && !editingStaticKey && (
+          <select value={form.basedOn} onChange={(e) => applyBasedOn(e.target.value)}>
+            <option value="">Начать с чистого листа</option>
+            {Object.entries(DRUG_GROUPS).map(([key, g]) => (
+              <option key={key} value={key}>На основе: {g.label}</option>
+            ))}
+            {Object.entries(customGroups).map(([key, g]) => (
+              <option key={key} value={`__custom__${key}`}>На основе: {g.label}</option>
+            ))}
+          </select>
+        )}
         <textarea
           placeholder="Препараты группы через запятую (МНН)"
           value={form.drugsText}
@@ -198,7 +224,7 @@ export default function DrugGroupsTab() {
       )}
 
       <div className="drug-db-list">
-        <h4>Встроенные группы</h4>
+        <h4>Группы лекарств ({staticEntries.length + customEntries.length})</h4>
         {staticEntries.map(([key, g]) => {
           const override = store.getGroupMeta(key) || {}
           const builtin = getBuiltinGroupMeta(key) || {}
@@ -214,7 +240,9 @@ export default function DrugGroupsTab() {
                 <strong className="drug-db-card-name" onClick={() => editStaticGroup(key)} title="Нажми, чтобы отредактировать заметки">
                   {g.label}
                 </strong>
+                <span className="drug-db-group">встроенная</span>
               </div>
+              <FillProgressBar item={meta} fields={GROUP_FILL_FIELDS} />
               <div className="drug-db-line">Препараты: {g.drugs.join(', ')}</div>
               {meta.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {meta.crossAllergyNote}</div>}
               {meta.sideEffects && <div className="drug-db-line">Побочные: {meta.sideEffects}</div>}
@@ -223,18 +251,16 @@ export default function DrugGroupsTab() {
             </div>
           )
         })}
-      </div>
-
-      <div className="drug-db-list">
-        <h4>Свои группы ({customEntries.length})</h4>
         {customEntries.map(([key, g]) => (
           <div key={key} className="drug-db-card">
             <div className="drug-db-card-top">
               <strong className="drug-db-card-name" onClick={() => editCustomGroup(key, g)} title="Нажми, чтобы редактировать">
                 {g.label}
               </strong>
+              {g.basedOn && <span className="drug-db-group">на основе: {groupLabel(g.basedOn.replace('__custom__', ''))}</span>}
               <button type="button" className="remove-btn" onClick={() => removeCustom(key)}>×</button>
             </div>
+            <FillProgressBar item={g} fields={GROUP_FILL_FIELDS} />
             <div className="drug-db-line">Препараты: {(g.drugs || []).join(', ')}</div>
             {g.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {g.crossAllergyNote}</div>}
             {g.sideEffects && <div className="drug-db-line">Побочные: {g.sideEffects}</div>}
@@ -242,7 +268,7 @@ export default function DrugGroupsTab() {
             {g.mkb10Codes && <div className="drug-db-line">МКБ-10: {g.mkb10Codes}</div>}
           </div>
         ))}
-        {customEntries.length === 0 && <p className="empty-hint">Пока нет своих групп.</p>}
+        {staticEntries.length + customEntries.length === 0 && <p className="empty-hint">Пока нет групп.</p>}
       </div>
 
       <div className="cross-reactivity-block">

@@ -6,7 +6,7 @@ import TemplateEditor from './TemplateEditor'
 import StudiesTab from './StudiesTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
 
-export default function ReferencePage({ initialTab }) {
+export default function ReferencePage({ initialTab, initialItemId }) {
   const [tab, setTab] = useState(initialTab || 'guidelines')
 
   return (
@@ -33,9 +33,9 @@ export default function ReferencePage({ initialTab }) {
           Печать
         </button>
       </div>
-      {tab === 'templates' && <TemplateEditor />}
+      {tab === 'templates' && <TemplateEditor initialSelectedId={initialTab === 'templates' ? initialItemId : null} />}
       {tab === 'guidelines' && <GuidelinesPage />}
-      {tab === 'drugs' && <DrugsTab />}
+      {tab === 'drugs' && <DrugsTab initialItemId={initialTab === 'drugs' ? initialItemId : null} />}
       {tab === 'groups' && <DrugGroupsTab />}
       {tab === 'studies' && <StudiesTab />}
       {tab === 'print' && <PrintTemplatesTab />}

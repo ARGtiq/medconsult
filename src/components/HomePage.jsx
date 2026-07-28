@@ -110,7 +110,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           {templates.length === 0 && <p className="empty-hint">Шаблонов нет.</p>}
           <div className="home-draft-list">
             {templates.slice(0, 4).map((t) => (
-              <button type="button" key={t.id} className="home-draft-item" onClick={() => onGoToReference('templates')}>
+              <button type="button" key={t.id} className="home-draft-item" onClick={() => onGoToReference('templates', t.id)}>
                 <strong>{t.name}</strong>
                 <span>{t.sections?.length || 0} секций</span>
               </button>
@@ -138,7 +138,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
           {drugs.length === 0 && <p className="empty-hint">Пока пусто.</p>}
           <div className="home-draft-list">
             {drugs.slice(0, 4).map((d) => (
-              <button type="button" key={d.name} className="home-draft-item" onClick={() => onGoToReference('drugs')}>
+              <button type="button" key={d.name} className="home-draft-item" onClick={() => onGoToReference('drugs', d.name)}>
                 <strong>{d.name}</strong>
                 <span>{d.dosage || 'без дозы'}</span>
               </button>

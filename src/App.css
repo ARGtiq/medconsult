@@ -247,7 +247,7 @@ body {
 
 .header-block .field-preview-body { white-space: pre-line; font-size: 13.5px; }
 
-.allergy-block { margin-top: 12px; }
+.allergy-block { margin-top: 18px; }
 
 .allergy-block-label {
   font-size: 12.5px;
@@ -275,7 +275,7 @@ body {
   color: var(--teal);
   border: 1px solid rgba(15, 110, 95, 0.25);
 }
-.medication-block { margin-top: 12px; }
+.medication-block { margin-top: 18px; }
 
 /* Layout: sections + preview */
 .visit-layout {
@@ -698,8 +698,21 @@ body {
   outline: 3px solid var(--teal);
   outline-offset: 3px;
   animation: wizard-pulse 1.6s ease-in-out infinite;
-  scroll-margin-top: 16px;
+  scroll-margin-top: 140px;
 }
+
+.fill-progress { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.fill-progress-track {
+  flex: 1;
+  max-width: 120px;
+  height: 5px;
+  background: var(--paper);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fill-progress-bar { height: 100%; background: var(--amber); border-radius: 999px; }
+.fill-progress-bar.full { background: var(--teal); }
+.fill-progress-label { font-size: 10.5px; color: var(--ink-soft); }
 @keyframes wizard-pulse {
   0%, 100% { outline-color: var(--teal); }
   50% { outline-color: rgba(15, 110, 95, 0.35); }
@@ -989,17 +1002,16 @@ body {
 }
 
 .selected-chip {
-  background: none;
-  border: none;
-  border-radius: 4px;
-  padding: 2px 3px;
-  font-size: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
-.selected-chip:hover { background: var(--paper); text-decoration: underline; }
-.selected-chip:not(:last-child)::after { content: ','; color: var(--ink); margin-right: 2px; }
+.selected-chip:hover { border-color: var(--teal); }
 
 .selected-chip button {
   border: none;

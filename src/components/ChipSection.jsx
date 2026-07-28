@@ -90,26 +90,14 @@ export default function ChipSection({ section, values, onChange }) {
 
   // Пытаемся распознать "боль внизу живота (острая, поясничная область)"
   // и восстановить, какой чип и какие опции в каких группах были выбраны.
+  // Клик по уже вставленному чипу — всегда простое текстовое редактирование,
+  // независимо от того, был ли у исходного чипа конструктор с уточнениями.
+  // Конструктор с группами открывается только при выборе НОВОГО чипа
+  // (см. startBuilder) — для правки уже вставленного проще и предсказуемее
+  // редактировать как обычный текст.
   function startEditStructured(idx) {
-    const text = values[idx]
-    const match = section.chips?.find((c) => text === c.text || text.startsWith(`${c.text} (`))
-    if (!match || !match.modifierGroups?.length) {
-      setPlainEditIdx(idx)
-      setPlainEditText(text)
-      return
-    }
-    const inner = text.startsWith(`${match.text} (`) ? text.slice(match.text.length + 2, -1) : ''
-    const chosenParts = inner
-      ? inner.split(',').map((s) => s.trim())
-      : []
-    const restored = {}
-    match.modifierGroups.forEach((group, gIdx) => {
-      const found = group.options.filter((opt) => chosenParts.includes(opt))
-      if (found.length) restored[gIdx] = new Set(found)
-    })
-    setBuilderChip(match)
-    setSelections(restored)
-    setEditIdx(idx)
+    setPlainEditIdx(idx)
+    setPlainEditText(values[idx])
   }
 
   function cancelBuilder() {

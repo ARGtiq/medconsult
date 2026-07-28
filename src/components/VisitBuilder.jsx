@@ -105,9 +105,14 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
     const sectionId = template.sections[wizardStep]?.id
     if (!sectionId) return
     setOpenSectionId(sectionId)
-    setTimeout(() => {
-      document.getElementById(`section-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 50)
+    // ждём, пока браузер реально отрисует раскрытую секцию (аккордеон мог
+    // разворачивать большой блок вроде "Жалоб") — фиксированный таймаут
+    // иногда срабатывал раньше, чем layout пересчитался, и скролл промахивался
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(`section-${sectionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wizardOpen, wizardStep])
   const [hubOpen, setHubOpen] = useState(false)
