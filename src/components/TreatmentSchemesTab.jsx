@@ -5,6 +5,7 @@ import ScenarioEditor, { blankScenario } from './ScenarioEditor'
 import FillProgressBar from './FillProgressBar'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { showToast } from '../lib/toast'
+import { getAllMkb10 } from '../data/mkb10'
 
 const SCHEME_FILL_FIELDS = ['category', 'tagsText', 'nonDrugTherapy', 'redFlags', 'source']
 
@@ -14,6 +15,7 @@ function blankForm() {
     name: '',
     category: '',
     tagsText: '',
+    mkb10CodesText: '',
     phases: [blankScenario()],
     nonDrugTherapy: '',
     redFlags: '',
@@ -35,10 +37,28 @@ function registerSchemeDrugsInDb(phases) {
   })
 }
 
-export default function TreatmentSchemesTab() {
+function presetForm(s) {
+  return {
+    id: s.id,
+    name: s.name,
+    category: s.category || '',
+    tagsText: (s.tags || []).join(', '),
+    mkb10CodesText: (s.mkb10Codes || []).join(', '),
+    phases: s.phases?.length ? s.phases : [blankScenario()],
+    nonDrugTherapy: s.nonDrugTherapy || '',
+    redFlags: s.redFlags || '',
+    source: s.source || '',
+    sourceYear: s.sourceYear || '',
+  }
+}
+
+export default function TreatmentSchemesTab({ initialItemId }) {
   const [schemes, setSchemes] = useState(store.getTreatmentSchemes())
-  const [form, setForm] = useState(blankForm())
-  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState(() => {
+    const preset = initialItemId ? store.getTreatmentSchemes().find((s) => s.id === initialItemId) : null
+    return preset ? presetForm(preset) : blankForm()
+  })
+  const [formOpen, setFormOpen] = useState(!!initialItemId)
   const [validationError, setValidationError] = useState('')
   useEscapeToClose(() => setFormOpen(false), formOpen)
 
@@ -52,17 +72,7 @@ export default function TreatmentSchemesTab() {
   }
 
   function openEdit(s) {
-    setForm({
-      id: s.id,
-      name: s.name,
-      category: s.category || '',
-      tagsText: (s.tags || []).join(', '),
-      phases: s.phases?.length ? s.phases : [blankScenario()],
-      nonDrugTherapy: s.nonDrugTherapy || '',
-      redFlags: s.redFlags || '',
-      source: s.source || '',
-      sourceYear: s.sourceYear || '',
-    })
+    setForm(presetForm(s))
     setFormOpen(true)
   }
 
@@ -86,10 +96,11 @@ export default function TreatmentSchemesTab() {
     }
     setValidationError('')
     const tags = form.tagsText.split(',').map((t) => t.trim()).filter(Boolean)
+    const mkb10Codes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
     const phases = form.phases
       .map((p) => ({ ...p, drugs: p.drugs.filter((d) => d.name.trim()) }))
       .filter((p) => p.name.trim() && p.drugs.length)
-    store.saveTreatmentScheme({ ...form, tags, phases })
+    store.saveTreatmentScheme({ ...form, tags, mkb10Codes, phases })
     registerSchemeDrugsInDb(phases)
     refresh()
     setFormOpen(false)
@@ -144,6 +155,17 @@ export default function TreatmentSchemesTab() {
                 value={form.tagsText}
                 onChange={(e) => setForm({ ...form, tagsText: e.target.value })}
               />
+              <input
+                list="mkb10-suggestions"
+                placeholder="Коды МКБ-10 через запятую (необязательно — для подсветки совпадения на приёме)"
+                value={form.mkb10CodesText}
+                onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
+              />
+              <datalist id="mkb10-suggestions">
+                {getAllMkb10().map((m) => (
+                  <option key={m.code} value={m.code}>{m.label}</option>
+                ))}
+              </datalist>
 
               <div className="scenarios-block">
                 <div className="scenarios-block-label">Фазы (последовательность во времени)</div>

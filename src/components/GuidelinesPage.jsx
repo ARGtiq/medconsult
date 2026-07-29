@@ -4,6 +4,7 @@ import { extractGuidelineInfo } from '../lib/openrouter'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import ScenarioEditor, { blankScenario, blankDrugRow } from './ScenarioEditor'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import { getAllMkb10 } from '../data/mkb10'
 
 function blankForm() {
   return {
@@ -52,10 +53,34 @@ function registerScenarioDrugsInDb(scenarios) {
   })
 }
 
-export default function GuidelinesPage() {
+function presetForm(g) {
+  return {
+    id: g.id,
+    mkb10CodesText: (g.mkb10Codes || []).join(', '),
+    requireAllCodes: !!g.requireAllCodes,
+    title: g.title || '',
+    definition: g.definition || '',
+    classification: g.classification || '',
+    diagnosisFormulation: g.diagnosisFormulation || '',
+    diagnosisCriteria: g.diagnosisCriteria || '',
+    investigationsText: (g.investigations || []).join(', '),
+    clinicalPictureText: (g.clinicalPicture || []).join(', '),
+    scenarios: g.scenarios?.length ? g.scenarios : [],
+    nonDrugTherapy: g.nonDrugTherapy || '',
+    redFlags: g.redFlags || '',
+    additionalInfo: g.additionalInfo || '',
+    source: g.source || '',
+    sourceYear: g.sourceYear || '',
+  }
+}
+
+export default function GuidelinesPage({ initialItemId }) {
   const [guidelines, setGuidelines] = useState(store.getGuidelines())
-  const [form, setForm] = useState(blankForm())
-  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState(() => {
+    const preset = initialItemId ? store.getGuideline(initialItemId) : null
+    return preset ? presetForm(preset) : blankForm()
+  })
+  const [formOpen, setFormOpen] = useState(!!initialItemId)
   const [validationError, setValidationError] = useState('')
   useEscapeToClose(() => setFormOpen(false), formOpen)
   const [instructionText, setInstructionText] = useState('')
@@ -67,24 +92,7 @@ export default function GuidelinesPage() {
   }
 
   function edit(g) {
-    setForm({
-      id: g.id,
-      mkb10CodesText: (g.mkb10Codes || []).join(', '),
-      requireAllCodes: !!g.requireAllCodes,
-      title: g.title || '',
-      definition: g.definition || '',
-      classification: g.classification || '',
-      diagnosisFormulation: g.diagnosisFormulation || '',
-      diagnosisCriteria: g.diagnosisCriteria || '',
-      investigationsText: (g.investigations || []).join(', '),
-      clinicalPictureText: (g.clinicalPicture || []).join(', '),
-      scenarios: g.scenarios?.length ? g.scenarios : [],
-      nonDrugTherapy: g.nonDrugTherapy || '',
-      redFlags: g.redFlags || '',
-      additionalInfo: g.additionalInfo || '',
-      source: g.source || '',
-      sourceYear: g.sourceYear || '',
-    })
+    setForm(presetForm(g))
     setFormOpen(true)
   }
 
@@ -178,11 +186,17 @@ export default function GuidelinesPage() {
             onChange={(e) => setForm({ ...form, title: e.target.value })}
           />
           <input
+            list="mkb10-suggestions"
             className={validationError && !form.mkb10CodesText.trim() ? 'input-error' : ''}
             placeholder="Коды МКБ-10 через запятую (напр. N10, N39.0)"
             value={form.mkb10CodesText}
             onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
           />
+          <datalist id="mkb10-suggestions">
+            {getAllMkb10().map((m) => (
+              <option key={m.code} value={m.code}>{m.label}</option>
+            ))}
+          </datalist>
         </div>
         <label className="hub-mode-toggle-inline">
           <input

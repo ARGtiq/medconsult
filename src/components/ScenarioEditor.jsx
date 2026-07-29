@@ -70,13 +70,18 @@ export default function ScenarioEditor({ scenario, onChange, onDelete, label = '
       <div className="scenario-drug-rows">
         {scenario.drugs.map((d, idx) => (
           <div key={idx} className="scenario-drug-row">
-            <input placeholder="Препарат" value={d.name} onChange={(e) => updateDrug(idx, { name: e.target.value })} />
+            <input placeholder="Препарат" list="scenario-drug-names" value={d.name} onChange={(e) => updateDrug(idx, { name: e.target.value })} />
             <input placeholder="Доза, напр. 500 мг 2 р/сут" value={d.dose} onChange={(e) => updateDrug(idx, { dose: e.target.value })} />
             <input placeholder="Длительность, напр. 7-10 дней" value={d.duration} onChange={(e) => updateDrug(idx, { duration: e.target.value })} />
             <button type="button" className="remove-btn" onClick={() => removeDrug(idx)}>×</button>
           </div>
         ))}
       </div>
+      <datalist id="scenario-drug-names">
+        {Object.keys(store.getDrugInfoAll()).map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
       <button type="button" className="btn-secondary btn-small" onClick={addDrug}>+ Препарат</button>
     </div>
   )

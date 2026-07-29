@@ -38,12 +38,12 @@ export default function ReferencePage({ initialTab, initialItemId }) {
         </button>
       </div>
       {tab === 'templates' && <TemplateEditor initialSelectedId={initialTab === 'templates' ? initialItemId : null} />}
-      {tab === 'guidelines' && <GuidelinesPage />}
+      {tab === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
       {tab === 'drugs' && <DrugsTab initialItemId={initialTab === 'drugs' ? initialItemId : null} />}
       {tab === 'groups' && <DrugGroupsTab />}
       {tab === 'studies' && <StudiesTab />}
       {tab === 'print' && <PrintTemplatesTab />}
-      {tab === 'schemes' && <TreatmentSchemesTab />}
+      {tab === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
     </div>
   )
 }

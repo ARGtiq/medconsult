@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
+import { extractDrugInfo, suggestBrandNames, shortenText } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
+import AutoResizeTextarea from './AutoResizeTextarea'
+import { parseDrugGroups } from '../data/drugSafety'
+import { getAllMkb10 } from '../data/mkb10'
 
 const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
 
@@ -50,6 +53,21 @@ export default function DrugsTab({ initialItemId }) {
   }
 
   const [nameError, setNameError] = useState(false)
+  const [shortening, setShortening] = useState(null)
+  const [filterGroup, setFilterGroup] = useState('')
+  const [filterMkb, setFilterMkb] = useState('')
+
+  async function runShorten(field) {
+    setShortening(field)
+    try {
+      const result = await shortenText(form[field])
+      setForm((prev) => ({ ...prev, [field]: result }))
+    } catch {
+      // тихо игнорируем — текст просто останется как был, поле не заблокировано
+    } finally {
+      setShortening(null)
+    }
+  }
 
   function saveForm(e) {
     e.preventDefault()
@@ -133,11 +151,23 @@ export default function DrugsTab({ initialItemId }) {
               setNameError(false)
             }}
           />
-          <input
-            placeholder="Группа"
-            value={form.group}
-            onChange={(e) => setForm({ ...form, group: e.target.value })}
-          />
+          <div className="drug-form-groups-field">
+            <input
+              placeholder="Группы через запятую, официальную — в [квадратных скобках]"
+              value={form.group}
+              onChange={(e) => setForm({ ...form, group: e.target.value })}
+            />
+            {form.group && (
+              <div className="drug-groups-preview">
+                {parseDrugGroups(form.group).map((g, i) => (
+                  <span key={i} className={g.official ? 'drug-group-pill official' : 'drug-group-pill'}>
+                    {g.official && <span className="drug-group-pill-tag">офиц.</span>}
+                    {g.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className="drug-form-row">
           <input
@@ -168,36 +198,59 @@ export default function DrugsTab({ initialItemId }) {
         </div>
         {brandError && <div className="ai-error">{brandError}</div>}
 
-        <textarea
-          placeholder="Основные побочные эффекты"
-          value={form.sideEffects}
-          onChange={(e) => setForm({ ...form, sideEffects: e.target.value })}
-          rows={2}
-        />
-        <textarea
-          placeholder="Взаимодействия с другими препаратами"
-          value={form.interactions}
-          onChange={(e) => setForm({ ...form, interactions: e.target.value })}
-          rows={2}
-        />
-        <textarea
-          placeholder="Противопоказания"
-          value={form.contraindications}
-          onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
-          rows={2}
-        />
-        <textarea
+        <div className="drug-form-field-with-ai">
+          <AutoResizeTextarea
+            placeholder="Основные побочные эффекты"
+            value={form.sideEffects}
+            onChange={(e) => setForm({ ...form, sideEffects: e.target.value })}
+          />
+          {form.sideEffects && (
+            <button type="button" className="btn-secondary btn-small" disabled={shortening === 'sideEffects'} onClick={() => runShorten('sideEffects')}>
+              {shortening === 'sideEffects' ? 'Сокращаю…' : '🤖 Сократить с AI'}
+            </button>
+          )}
+        </div>
+        <div className="drug-form-field-with-ai">
+          <AutoResizeTextarea
+            placeholder="Взаимодействия с другими препаратами"
+            value={form.interactions}
+            onChange={(e) => setForm({ ...form, interactions: e.target.value })}
+          />
+          {form.interactions && (
+            <button type="button" className="btn-secondary btn-small" disabled={shortening === 'interactions'} onClick={() => runShorten('interactions')}>
+              {shortening === 'interactions' ? 'Сокращаю…' : '🤖 Сократить с AI'}
+            </button>
+          )}
+        </div>
+        <div className="drug-form-field-with-ai">
+          <AutoResizeTextarea
+            placeholder="Противопоказания"
+            value={form.contraindications}
+            onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
+          />
+          {form.contraindications && (
+            <button type="button" className="btn-secondary btn-small" disabled={shortening === 'contraindications'} onClick={() => runShorten('contraindications')}>
+              {shortening === 'contraindications' ? 'Сокращаю…' : '🤖 Сократить с AI'}
+            </button>
+          )}
+        </div>
+        <AutoResizeTextarea
           placeholder="Мониторинг / обследования на фоне приёма (напр. ПСА каждые 3 мес, функция печени)"
           value={form.monitoring}
           onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
-          rows={2}
         />
         <div className="drug-form-row">
           <input
+            list="mkb10-suggestions"
             placeholder="Коды МКБ-10 через запятую (напр. N40, N41.1)"
             value={form.mkb10Codes}
             onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
           />
+          <datalist id="mkb10-suggestions">
+            {getAllMkb10().map((m) => (
+              <option key={m.code} value={m.code}>{m.label}</option>
+            ))}
+          </datalist>
           <select value={form.evidenceLevel} onChange={(e) => setForm({ ...form, evidenceLevel: e.target.value })}>
             {EVIDENCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -234,15 +287,60 @@ export default function DrugsTab({ initialItemId }) {
 
       <div className="drug-db-list">
         <h4>База препаратов ({Object.keys(drugs).length})</h4>
-        {Object.values(drugs)
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((d) => (
+        {(() => {
+          const allDrugs = Object.values(drugs)
+          const allGroupLabels = [...new Set(allDrugs.flatMap((d) => parseDrugGroups(d.group).map((g) => g.label)))].sort()
+          const allMkbCodes = [
+            ...new Set(allDrugs.flatMap((d) => (d.mkb10Codes || '').split(',').map((c) => c.trim()).filter(Boolean))),
+          ].sort()
+          const filtered = allDrugs.filter((d) => {
+            const groupsOfDrug = parseDrugGroups(d.group).map((g) => g.label)
+            const matchesGroup = !filterGroup || groupsOfDrug.includes(filterGroup)
+            const matchesMkb = !filterMkb || (d.mkb10Codes || '').split(',').map((c) => c.trim()).includes(filterMkb)
+            return matchesGroup && matchesMkb
+          })
+
+          return (
+            <>
+              {(allGroupLabels.length > 0 || allMkbCodes.length > 0) && (
+                <div className="drug-db-filters">
+                  {allGroupLabels.length > 0 && (
+                    <select value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
+                      <option value="">Все группы</option>
+                      {allGroupLabels.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  )}
+                  {allMkbCodes.length > 0 && (
+                    <select value={filterMkb} onChange={(e) => setFilterMkb(e.target.value)}>
+                      <option value="">Все коды МКБ-10</option>
+                      {allMkbCodes.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
+                  {(filterGroup || filterMkb) && (
+                    <button type="button" className="btn-secondary btn-small" onClick={() => { setFilterGroup(''); setFilterMkb('') }}>
+                      Сбросить
+                    </button>
+                  )}
+                </div>
+              )}
+              {filtered
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((d) => (
             <div key={d.name} className="drug-db-card">
               <div className="drug-db-card-top">
                 <strong className="drug-db-card-name" onClick={() => editExisting(d)} title="Нажми, чтобы редактировать">
                   {d.name}
                 </strong>
-                {d.group && <span className="drug-db-group">{d.group}</span>}
+                {parseDrugGroups(d.group).map((g, i) => (
+                  <span key={i} className={g.official ? 'drug-group-pill official' : 'drug-group-pill'}>
+                    {g.official && <span className="drug-group-pill-tag">офиц.</span>}
+                    {g.label}
+                  </span>
+                ))}
                 {d.evidenceLevel && <span className="drug-db-evidence">{EVIDENCE_OPTIONS.find((o) => o.value === d.evidenceLevel)?.label}</span>}
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
@@ -257,7 +355,11 @@ export default function DrugsTab({ initialItemId }) {
               {d.contraindications && <div className="drug-db-line">Противопоказания: {d.contraindications}</div>}
               {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}
             </div>
-          ))}
+              ))}
+              {filtered.length === 0 && <p className="empty-hint">Ничего не найдено по этому фильтру.</p>}
+            </>
+          )
+        })()}
         {Object.keys(drugs).length === 0 && <p className="empty-hint">Пока пусто — добавь первый препарат выше.</p>}
       </div>
     </div>

@@ -123,6 +123,11 @@ export function addCustomCode(code, label) {
   localStorage.setItem(CUSTOM_KEY, JSON.stringify(list))
 }
 
+export function removeCustomCode(code) {
+  const list = getCustomCodes().filter((c) => c.code !== code)
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(list))
+}
+
 export function getAllMkb10() {
   return [...MKB10_SEED, ...getCustomCodes()]
 }

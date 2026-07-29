@@ -694,7 +694,10 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     onInsertInvestigation={insertGuidelineInvestigation}
                     onInsertDrug={(drug) => insertGuidelineDrugSingle(section.id, drug)}
                   />
-                  <TreatmentSchemeSearch onApplyPhase={(drugs) => drugs.forEach((d) => insertGuidelineDrugSingle(section.id, d))} />
+                  <TreatmentSchemeSearch
+                    diagnosisText={sectionValues[diagnosisSectionId]}
+                    onApplyPhase={(drugs) => drugs.forEach((d) => insertGuidelineDrugSingle(section.id, d))}
+                  />
                 </>
               )}
               </>

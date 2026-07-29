@@ -90,6 +90,13 @@ async function callAI(systemPrompt, userPrompt) {
   return provider === 'google' ? callGoogleProvider(systemPrompt, userPrompt) : callOpenRouterProvider(systemPrompt, userPrompt)
 }
 
+export async function shortenText(text) {
+  return callAI(
+    'Сократи текст до самого важного, без потери клинического смысла — короткими пунктами через запятую, не переписывая факты. Не добавляй ничего, чего нет в исходном тексте. Ответь только сокращённым текстом, без преамбулы.',
+    text
+  )
+}
+
 export async function testAiConnection() {
   const start = performance.now()
   try {

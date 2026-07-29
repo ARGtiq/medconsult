@@ -12,6 +12,7 @@ import './App.css'
 const SettingsPage = lazy(() => import('./components/SettingsPage'))
 const ReferencePage = lazy(() => import('./components/ReferencePage'))
 const PatientsPage = lazy(() => import('./components/PatientsPage'))
+const Mkb10Page = lazy(() => import('./components/Mkb10Page'))
 const HomePage = lazy(() => import('./components/HomePage'))
 
 const HIDDEN_FROM_NAV = ['preop_epicrisis', 'operation_protocol']
@@ -152,6 +153,9 @@ export default function App() {
           <button className={page === 'patients' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('patients'); setNavOpen(false) }}>
             🧑 Пациенты
           </button>
+          <button className={page === 'mkb10' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('mkb10'); setNavOpen(false) }}>
+            🩺 МКБ-10
+          </button>
           <button className={page === 'settings' ? 'tab tab-page active' : 'tab tab-page'} onClick={() => { setPage('settings'); setNavOpen(false) }}>
             ⚙ Настройки
           </button>
@@ -190,6 +194,15 @@ export default function App() {
         ) : page === 'patients' ? (
           <Suspense fallback={<p className="settings-loading">Загрузка пациентов…</p>}>
             <PatientsPage onLoadVisit={loadVisit} />
+          </Suspense>
+        ) : page === 'mkb10' ? (
+          <Suspense fallback={<p className="settings-loading">Загрузка МКБ-10…</p>}>
+            <Mkb10Page
+              onOpenGuideline={(id) => goToReference('guidelines', id)}
+              onOpenDrug={(name) => goToReference('drugs', name)}
+              onOpenScheme={(id) => goToReference('schemes', id)}
+              onLoadVisit={loadVisit}
+            />
           </Suspense>
         ) : activeTemplate ? (
           <VisitBuilder key={builderKey} template={activeTemplate} initialVisit={pendingVisit} onLoadVisit={loadVisit} />

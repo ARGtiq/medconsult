@@ -809,6 +809,21 @@ export const store = {
     )
   },
 
+  // --- перекрёстные ссылки для страницы МКБ-10: что связано с этим кодом ---
+  getDrugsForMkbCode(code) {
+    const norm = code.trim().toUpperCase()
+    return Object.values(readAll().drugDatabase || {}).filter((d) =>
+      (d.mkb10Codes || '').split(',').map((c) => c.trim().toUpperCase()).includes(norm)
+    )
+  },
+
+  getTreatmentSchemesForMkbCode(code) {
+    const norm = code.trim().toUpperCase()
+    return Object.values(readAll().treatmentSchemes || {}).filter((s) =>
+      (s.mkb10Codes || []).some((c) => c.trim().toUpperCase() === norm)
+    )
+  },
+
   getDrugInfo(name) {
     const state = readAll()
     return state.drugDatabase[name.trim().toLowerCase()] || null

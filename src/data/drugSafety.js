@@ -275,3 +275,21 @@ export function getAlternatives(drugName, customGroups = {}) {
 export function getGroupKeyForDrug(drugName, customGroups = {}) {
   return findGroupByDrug(drugName, customGroups)
 }
+
+// У препарата в поле "Группа" может быть несколько названий через запятую —
+// обычно неофициальное фармакологическое описание ("ксантиноксидазы
+// ингибитор") плюс официальное название группы в квадратных скобках
+// ("[Средства, влияющие на обмен мочевой кислоты]", как в справочниках
+// вроде РЛС/Видаль). Разбираем строку на отдельные пункты и помечаем,
+// какой из них официальный.
+export function parseDrugGroups(text) {
+  if (!text) return []
+  return text
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const bracketMatch = s.match(/^\[(.+)\]$/)
+      return bracketMatch ? { label: bracketMatch[1].trim(), official: true } : { label: s, official: false }
+    })
+}

@@ -1,20 +1,34 @@
 import { useState, useMemo } from 'react'
 import { store } from '../lib/store'
+import { extractCodesFromText } from '../data/mkb10'
 
 // Схема лечения не привязана к коду МКБ (в отличие от клинрека) — поэтому
 // точка входа не автоматическая, а поиск по названию/тегу прямо в разделе
 // "Рекомендации". Нашёл — выбрал фазу (если их несколько) — применил.
-export default function TreatmentSchemeSearch({ onApplyPhase }) {
+// Код МКБ у схемы — необязательный, но если указан и совпадает с диагнозом —
+// на самой кнопке появляется подсказка, что для этого диагноза уже есть схема.
+export default function TreatmentSchemeSearch({ onApplyPhase, diagnosisText }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activePhase, setActivePhase] = useState({}) // schemeId -> idx
 
   const results = useMemo(() => (query.trim() ? store.searchTreatmentSchemes(query) : []), [query])
 
+  const matchingSchemes = useMemo(() => {
+    const codes = extractCodesFromText(diagnosisText)
+    if (!codes.length) return []
+    return store.getTreatmentSchemes().filter((s) => (s.mkb10Codes || []).some((c) => codes.includes(c.toUpperCase())))
+  }, [diagnosisText])
+
   if (!open) {
     return (
       <button type="button" className="scheme-search-trigger" onClick={() => setOpen(true)}>
         📋 Схемы лечения
+        {matchingSchemes.length > 0 && (
+          <span className="scheme-match-badge" title={matchingSchemes.map((s) => s.name).join(', ')}>
+            есть подходящая: {matchingSchemes[0].name}
+          </span>
+        )}
       </button>
     )
   }
