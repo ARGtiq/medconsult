@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractGuidelineInfo } from '../lib/openrouter'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import ScenarioEditor, { blankScenario, blankDrugRow } from './ScenarioEditor'
 import useEscapeToClose from '../lib/useEscapeToClose'
 
 function blankForm() {
@@ -23,14 +24,6 @@ function blankForm() {
     source: '',
     sourceYear: '',
   }
-}
-
-function blankScenario() {
-  return { name: '', drugs: [blankDrugRow()] }
-}
-
-function blankDrugRow() {
-  return { name: '', dose: '', duration: '' }
 }
 
 function isStale(sourceYear) {
@@ -57,48 +50,6 @@ function registerScenarioDrugsInDb(scenarios) {
       }
     })
   })
-}
-
-function ScenarioEditor({ scenario, onChange, onDelete }) {
-  function update(patch) {
-    onChange({ ...scenario, ...patch })
-  }
-
-  function updateDrug(idx, patch) {
-    update({ drugs: scenario.drugs.map((d, i) => (i === idx ? { ...d, ...patch } : d)) })
-  }
-
-  function addDrug() {
-    update({ drugs: [...scenario.drugs, blankDrugRow()] })
-  }
-
-  function removeDrug(idx) {
-    update({ drugs: scenario.drugs.filter((_, i) => i !== idx) })
-  }
-
-  return (
-    <div className="scenario-editor">
-      <div className="scenario-editor-top">
-        <input
-          placeholder="Название сценария, напр. «Нетяжёлое течение, перорально»"
-          value={scenario.name}
-          onChange={(e) => update({ name: e.target.value })}
-        />
-        <button type="button" className="remove-btn" onClick={onDelete}>×</button>
-      </div>
-      <div className="scenario-drug-rows">
-        {scenario.drugs.map((d, idx) => (
-          <div key={idx} className="scenario-drug-row">
-            <input placeholder="Препарат" value={d.name} onChange={(e) => updateDrug(idx, { name: e.target.value })} />
-            <input placeholder="Доза, напр. 500 мг 2 р/сут" value={d.dose} onChange={(e) => updateDrug(idx, { dose: e.target.value })} />
-            <input placeholder="Длительность, напр. 7-10 дней" value={d.duration} onChange={(e) => updateDrug(idx, { duration: e.target.value })} />
-            <button type="button" className="remove-btn" onClick={() => removeDrug(idx)}>×</button>
-          </div>
-        ))}
-      </div>
-      <button type="button" className="btn-secondary btn-small" onClick={addDrug}>+ Препарат в сценарий</button>
-    </div>
-  )
 }
 
 export default function GuidelinesPage() {

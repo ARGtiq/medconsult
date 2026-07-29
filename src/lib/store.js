@@ -30,6 +30,7 @@ const NAMESPACES = {
     'complaintDrugLinks',
     'diagnosisDrugLinks',
     'customStudies',
+    'treatmentSchemes',
   ],
   // рабочие заготовки, не жалко потерять
   workspace: ['templatePresets'],
@@ -124,6 +125,10 @@ function defaultState() {
     // свои исследования (объединяются со встроенными из data/studyProtocols.js):
     // key -> { key, label, category, template, fields[], referenceNotes }
     customStudies: {},
+    // схемы лечения — самостоятельные, не привязаны к коду МКБ насильно:
+    // id -> { name, category, tags[], phases: [{name, drugs:[{name,dose,duration}]}],
+    //   nonDrugTherapy, redFlags, source, sourceYear, updatedAt }
+    treatmentSchemes: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
     // сохранённые визиты (черновики/готовые протоколы)
@@ -770,6 +775,38 @@ export const store = {
     delete state.customStudies[key]
     writeAll(state)
     return state.customStudies
+  },
+
+  // --- схемы лечения (самостоятельные, не привязаны к коду МКБ) ---
+  getTreatmentSchemes() {
+    return Object.values(readAll().treatmentSchemes || {})
+  },
+
+  saveTreatmentScheme(scheme) {
+    const state = readAll()
+    state.treatmentSchemes = state.treatmentSchemes || {}
+    const id = scheme.id || crypto.randomUUID()
+    state.treatmentSchemes[id] = { ...scheme, id, updatedAt: Date.now() }
+    writeAll(state)
+    return state.treatmentSchemes
+  },
+
+  deleteTreatmentScheme(id) {
+    const state = readAll()
+    delete state.treatmentSchemes[id]
+    writeAll(state)
+    return state.treatmentSchemes
+  },
+
+  searchTreatmentSchemes(query) {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return Object.values(readAll().treatmentSchemes || {}).filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.category || '').toLowerCase().includes(q) ||
+        (s.tags || []).some((t) => t.toLowerCase().includes(q))
+    )
   },
 
   getDrugInfo(name) {

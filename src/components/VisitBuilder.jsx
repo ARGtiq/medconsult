@@ -10,6 +10,7 @@ import GuidelineHub, { GuidelineHubPanel } from './GuidelineHub'
 import { getGuidelineHubMode } from '../lib/uiPrefs'
 import { isWizardButtonHidden } from '../lib/uiPrefs'
 import WizardModal from './WizardModal'
+import TreatmentSchemeSearch from './TreatmentSchemeSearch'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import AutoWidthInput from './AutoWidthInput'
@@ -693,6 +694,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     onInsertInvestigation={insertGuidelineInvestigation}
                     onInsertDrug={(drug) => insertGuidelineDrugSingle(section.id, drug)}
                   />
+                  <TreatmentSchemeSearch onApplyPhase={(drugs) => drugs.forEach((d) => insertGuidelineDrugSingle(section.id, d))} />
                 </>
               )}
               </>

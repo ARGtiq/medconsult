@@ -24,6 +24,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
   const guidelines = byRecent(Object.values(store.getGuidelines()))
   const drugs = byRecent(Object.values(store.getDrugInfoAll()))
   const groups = byRecent(Object.values(store.getCustomGroups()))
+  const schemes = byRecent(store.getTreatmentSchemes())
   const emptyDrugs = store.getEmptyDrugEntries()
   const lastBackup = Number(localStorage.getItem('medconsult_last_backup') || 0)
   const backupStale = daysSince(lastBackup) >= 7
@@ -159,6 +160,20 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
             ))}
           </div>
           <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('groups')}>Открыть →</button>
+        </div>
+
+        <div className="home-card">
+          <h4>Схемы лечения ({schemes.length})</h4>
+          {schemes.length === 0 && <p className="empty-hint">Пока пусто.</p>}
+          <div className="home-draft-list">
+            {schemes.slice(0, 4).map((s) => (
+              <button type="button" key={s.id} className="home-draft-item" onClick={() => onGoToReference('schemes')}>
+                <strong>{s.name}</strong>
+                <span>{(s.phases || []).length} {(s.phases || []).length === 1 ? 'фаза' : 'фазы'}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn-secondary btn-small" onClick={() => onGoToReference('schemes')}>Открыть →</button>
         </div>
       </div>
     </div>
