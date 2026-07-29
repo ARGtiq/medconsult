@@ -10,7 +10,8 @@ import { extractCodesFromText } from '../data/mkb10'
 export default function TreatmentSchemeSearch({ onApplyPhase, diagnosisText }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [activePhase, setActivePhase] = useState({}) // schemeId -> idx
+  const [activeSubtype, setActiveSubtype] = useState({}) // schemeId -> idx
+  const [activePhase, setActivePhase] = useState({}) // `${schemeId}:${subtypeIdx}` -> idx
 
   const results = useMemo(() => (query.trim() ? store.searchTreatmentSchemes(query) : []), [query])
 
@@ -50,33 +51,57 @@ export default function TreatmentSchemeSearch({ onApplyPhase, diagnosisText }) {
       {query.trim() && results.length === 0 && <p className="empty-hint">Ничего не найдено.</p>}
 
       {results.map((s) => {
-        const selectedIdx = activePhase[s.id] ?? 0
-        const phase = s.phases?.[selectedIdx]
+        const hasSubtypes = s.subtypes?.length > 0
+        const selectedSubIdx = activeSubtype[s.id] ?? 0
+        const subtype = hasSubtypes ? s.subtypes[selectedSubIdx] : null
+        const phaseKey = hasSubtypes ? `${s.id}:${selectedSubIdx}` : s.id
+        const phasesList = hasSubtypes ? subtype?.phases : s.phases
+        const selectedPhaseIdx = activePhase[phaseKey] ?? 0
+        const phase = phasesList?.[selectedPhaseIdx]
+
         return (
           <div key={s.id} className="scheme-search-result">
             <div className="scheme-search-result-title">{s.name}</div>
             {s.category && <div className="guideline-panel-text-muted">{s.category}</div>}
-            {(s.phases || []).length > 1 && (
+
+            {hasSubtypes && (
               <div className="scenario-tabs">
-                {s.phases.map((p, i) => (
+                {s.subtypes.map((v, i) => (
                   <button
                     type="button"
                     key={i}
-                    className={i === selectedIdx ? 'scenario-tab active' : 'scenario-tab'}
-                    onClick={() => setActivePhase((prev) => ({ ...prev, [s.id]: i }))}
+                    className={i === selectedSubIdx ? 'scenario-tab active' : 'scenario-tab'}
+                    onClick={() => setActiveSubtype((prev) => ({ ...prev, [s.id]: i }))}
+                  >
+                    {v.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(phasesList || []).length > 1 && (
+              <div className="scenario-tabs">
+                {phasesList.map((p, i) => (
+                  <button
+                    type="button"
+                    key={i}
+                    className={i === selectedPhaseIdx ? 'scenario-tab active' : 'scenario-tab'}
+                    onClick={() => setActivePhase((prev) => ({ ...prev, [phaseKey]: i }))}
                   >
                     {p.name}
                   </button>
                 ))}
               </div>
             )}
+
             {phase && (
               <>
                 <ul className="guideline-drug-list">
                   {phase.drugs.map((d, i) => (
                     <li key={i}>
                       {d.name}
-                      {d.dose ? ` — ${d.dose}` : ''}
+                      {d.dosage ? ` — ${d.dosage}` : ''}
+                      {d.frequency ? ` ${d.frequency}` : ''}
                       {d.duration ? `, ${d.duration}` : ''}
                     </li>
                   ))}

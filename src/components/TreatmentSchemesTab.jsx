@@ -5,9 +5,13 @@ import ScenarioEditor, { blankScenario } from './ScenarioEditor'
 import FillProgressBar from './FillProgressBar'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { showToast } from '../lib/toast'
-import { getAllMkb10 } from '../data/mkb10'
+import Mkb10CodesInput from './Mkb10CodesInput'
 
 const SCHEME_FILL_FIELDS = ['category', 'tagsText', 'nonDrugTherapy', 'redFlags', 'source']
+
+function blankSubtype() {
+  return { name: '', phases: [blankScenario()] }
+}
 
 function blankForm() {
   return {
@@ -16,7 +20,9 @@ function blankForm() {
     category: '',
     tagsText: '',
     mkb10CodesText: '',
+    hasSubtypes: false,
     phases: [blankScenario()],
+    subtypes: [blankSubtype()],
     nonDrugTherapy: '',
     redFlags: '',
     source: '',
@@ -24,27 +30,51 @@ function blankForm() {
   }
 }
 
-// Как и препараты из клинрека — препараты схемы попадают в базу лекарств
-// автоматически, если их там ещё нет.
-function registerSchemeDrugsInDb(phases) {
+// Собирает все фазы схемы в один плоский список — не важно, лежат они прямо
+// в схеме или разложены по подтипам (напр. ЗППП: гонококк/хламидии/трихомонада —
+// разные подтипы одного названия, но каждый со своими препаратами).
+function allPhasesOf(scheme) {
+  if (scheme.subtypes?.length) return scheme.subtypes.flatMap((v) => v.phases || [])
+  return scheme.phases || []
+}
+
+// Каждый препарат из схемы попадает в базу лекарств автоматически, если его
+// там ещё нет; код(ы) МКБ схемы (если указаны) тоже подмешиваются в поле
+// "МКБ-10" препарата — так он найдётся на странице МКБ-10 по коду сам.
+function registerSchemeDrugsInDb(phases, mkb10Codes = []) {
   phases.forEach((p) => {
     p.drugs.forEach((d) => {
       if (!d.name?.trim()) return
-      if (!store.getDrugInfo(d.name)) {
-        store.saveDrugInfo({ name: d.name.trim(), dosage: d.dose || '', duration: d.duration || '', evidenceLevel: 'guideline' })
+      const existing = store.getDrugInfo(d.name)
+      if (!existing) {
+        store.saveDrugInfo({
+          name: d.name.trim(),
+          dosage: d.dosage || '',
+          frequency: d.frequency || '',
+          duration: d.duration || '',
+          mkb10Codes: mkb10Codes.join(', '),
+          evidenceLevel: 'guideline',
+        })
+      } else if (mkb10Codes.length) {
+        const existingCodes = new Set((existing.mkb10Codes || '').split(',').map((c) => c.trim()).filter(Boolean))
+        mkb10Codes.forEach((c) => existingCodes.add(c))
+        store.saveDrugInfo({ ...existing, mkb10Codes: [...existingCodes].join(', ') })
       }
     })
   })
 }
 
 function presetForm(s) {
+  const hasSubtypes = !!s.subtypes?.length
   return {
     id: s.id,
     name: s.name,
     category: s.category || '',
     tagsText: (s.tags || []).join(', '),
     mkb10CodesText: (s.mkb10Codes || []).join(', '),
-    phases: s.phases?.length ? s.phases : [blankScenario()],
+    hasSubtypes,
+    phases: !hasSubtypes && s.phases?.length ? s.phases : [blankScenario()],
+    subtypes: hasSubtypes ? s.subtypes : [blankSubtype()],
     nonDrugTherapy: s.nonDrugTherapy || '',
     redFlags: s.redFlags || '',
     source: s.source || '',
@@ -76,16 +106,35 @@ export default function TreatmentSchemesTab({ initialItemId }) {
     setFormOpen(true)
   }
 
+  // --- фазы (когда подтипов нет) ---
   function addPhase() {
     setForm({ ...form, phases: [...form.phases, blankScenario()] })
   }
-
   function updatePhase(idx, phase) {
     setForm({ ...form, phases: form.phases.map((p, i) => (i === idx ? phase : p)) })
   }
-
   function removePhase(idx) {
     setForm({ ...form, phases: form.phases.filter((_, i) => i !== idx) })
+  }
+
+  // --- подтипы ---
+  function addSubtype() {
+    setForm({ ...form, subtypes: [...form.subtypes, blankSubtype()] })
+  }
+  function updateSubtype(idx, patch) {
+    setForm({ ...form, subtypes: form.subtypes.map((v, i) => (i === idx ? { ...v, ...patch } : v)) })
+  }
+  function removeSubtype(idx) {
+    setForm({ ...form, subtypes: form.subtypes.filter((_, i) => i !== idx) })
+  }
+  function addSubtypePhase(subIdx) {
+    updateSubtype(subIdx, { phases: [...form.subtypes[subIdx].phases, blankScenario()] })
+  }
+  function updateSubtypePhase(subIdx, phaseIdx, phase) {
+    updateSubtype(subIdx, { phases: form.subtypes[subIdx].phases.map((p, i) => (i === phaseIdx ? phase : p)) })
+  }
+  function removeSubtypePhase(subIdx, phaseIdx) {
+    updateSubtype(subIdx, { phases: form.subtypes[subIdx].phases.filter((_, i) => i !== phaseIdx) })
   }
 
   function save(e) {
@@ -97,20 +146,57 @@ export default function TreatmentSchemesTab({ initialItemId }) {
     setValidationError('')
     const tags = form.tagsText.split(',').map((t) => t.trim()).filter(Boolean)
     const mkb10Codes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
-    const phases = form.phases
-      .map((p) => ({ ...p, drugs: p.drugs.filter((d) => d.name.trim()) }))
-      .filter((p) => p.name.trim() && p.drugs.length)
-    store.saveTreatmentScheme({ ...form, tags, mkb10Codes, phases })
-    registerSchemeDrugsInDb(phases)
+    const cleanPhases = (phases) =>
+      phases.map((p) => ({ ...p, drugs: p.drugs.filter((d) => d.name.trim()) })).filter((p) => p.name.trim() && p.drugs.length)
+
+    let toSave
+    if (form.hasSubtypes) {
+      const subtypes = form.subtypes
+        .map((v) => ({ name: v.name, phases: cleanPhases(v.phases) }))
+        .filter((v) => v.name.trim() && v.phases.length)
+      toSave = { ...form, tags, mkb10Codes, subtypes, phases: [] }
+    } else {
+      toSave = { ...form, tags, mkb10Codes, phases: cleanPhases(form.phases), subtypes: [] }
+    }
+
+    store.saveTreatmentScheme(toSave)
+    registerSchemeDrugsInDb(allPhasesOf(toSave), mkb10Codes)
     refresh()
     setFormOpen(false)
     showToast('Схема лечения сохранена', { type: 'success' })
   }
 
   function remove(id) {
+    const scheme = schemes.find((s) => s.id === id)
     store.deleteTreatmentScheme(id)
     refresh()
-    showToast('Схема лечения удалена', { type: 'success' })
+    showToast('Схема лечения удалена', {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.saveTreatmentScheme(scheme)
+        refresh()
+      },
+    })
+  }
+
+  function renderPhasesEditor(phases, onUpdate, onRemove, onAdd) {
+    return (
+      <div className="scenarios-block">
+        <div className="scenarios-block-label">Фазы (последовательность во времени)</div>
+        {phases.map((p, idx) => (
+          <ScenarioEditor
+            key={idx}
+            scenario={p}
+            onChange={(ph) => onUpdate(idx, ph)}
+            onDelete={() => onRemove(idx)}
+            label="фазы"
+            allowSchemeFill={false}
+          />
+        ))}
+        <button type="button" className="btn-secondary btn-small" onClick={onAdd}>+ Фаза</button>
+      </div>
+    )
   }
 
   return (
@@ -118,9 +204,11 @@ export default function TreatmentSchemesTab({ initialItemId }) {
       <p className="settings-note-inline">
         Схема лечения — не привязана к коду МКБ насильно (в отличие от клинических рекомендаций), можно
         переиспользовать в разных ситуациях. Фазы — это последовательность во времени ("неделя 1-2: препарат А,
-        неделя 3-4: препарат Б"), а не взаимоисключающий выбор. На приёме ищется по названию/тегу прямо в
-        разделе "Рекомендации". Схему можно подставить и внутрь сценария клинической рекомендации — см. форму
-        клинрека, кнопка "Подставить из схемы лечения".
+        неделя 3-4: препарат Б"), а не взаимоисключающий выбор. <strong>Подтипы</strong> — наоборот, взаимоисключающий
+        выбор внутри одного названия (напр. "ЗППП" → подтип "гонококк" / "хламидии" / "трихомонада", или
+        "эрадикация H. pylori" → подтип "стандартная" / "при аллергии на пенициллины") — так можно не плодить
+        отдельные записи под каждый вариант одного и того же случая. На приёме ищется по названию/тегу прямо
+        в разделе "Рекомендации".
       </p>
 
       <button type="button" className="btn-primary" onClick={openNew}>
@@ -155,32 +243,43 @@ export default function TreatmentSchemesTab({ initialItemId }) {
                 value={form.tagsText}
                 onChange={(e) => setForm({ ...form, tagsText: e.target.value })}
               />
-              <input
-                list="mkb10-suggestions"
+              <Mkb10CodesInput
                 placeholder="Коды МКБ-10 через запятую (необязательно — для подсветки совпадения на приёме)"
                 value={form.mkb10CodesText}
-                onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
+                onChange={(v) => setForm({ ...form, mkb10CodesText: v })}
               />
-              <datalist id="mkb10-suggestions">
-                {getAllMkb10().map((m) => (
-                  <option key={m.code} value={m.code}>{m.label}</option>
-                ))}
-              </datalist>
 
-              <div className="scenarios-block">
-                <div className="scenarios-block-label">Фазы (последовательность во времени)</div>
-                {form.phases.map((p, idx) => (
-                  <ScenarioEditor
-                    key={idx}
-                    scenario={p}
-                    onChange={(ph) => updatePhase(idx, ph)}
-                    onDelete={() => removePhase(idx)}
-                    label="фазы"
-                    allowSchemeFill={false}
-                  />
-                ))}
-                <button type="button" className="btn-secondary btn-small" onClick={addPhase}>+ Фаза</button>
-              </div>
+              <label className="hub-mode-toggle-inline">
+                <input type="checkbox" checked={form.hasSubtypes} onChange={(e) => setForm({ ...form, hasSubtypes: e.target.checked })} />
+                Есть подтипы (взаимоисключающие варианты внутри одной схемы)
+              </label>
+
+              {form.hasSubtypes ? (
+                <div className="scenarios-block subtypes-block">
+                  <div className="scenarios-block-label">Подтипы</div>
+                  {form.subtypes.map((v, subIdx) => (
+                    <div key={subIdx} className="subtype-editor">
+                      <div className="scenario-editor-top">
+                        <input
+                          placeholder="Название подтипа, напр. «Гонококковая инфекция»"
+                          value={v.name}
+                          onChange={(e) => updateSubtype(subIdx, { name: e.target.value })}
+                        />
+                        <button type="button" className="remove-btn" onClick={() => removeSubtype(subIdx)}>×</button>
+                      </div>
+                      {renderPhasesEditor(
+                        v.phases,
+                        (idx, phase) => updateSubtypePhase(subIdx, idx, phase),
+                        (idx) => removeSubtypePhase(subIdx, idx),
+                        () => addSubtypePhase(subIdx)
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" className="btn-secondary btn-small" onClick={addSubtype}>+ Подтип</button>
+                </div>
+              ) : (
+                renderPhasesEditor(form.phases, updatePhase, removePhase, addPhase)
+              )}
 
               <AutoResizeTextarea
                 placeholder="Немедикаментозная терапия / общие рекомендации"
@@ -227,11 +326,17 @@ export default function TreatmentSchemesTab({ initialItemId }) {
                 <button type="button" className="remove-btn" onClick={() => remove(s.id)}>×</button>
               </div>
               <FillProgressBar item={{ ...s, tagsText: (s.tags || []).join(', ') }} fields={SCHEME_FILL_FIELDS} />
-              {(s.phases || []).map((p, i) => (
-                <div key={i} className="drug-db-line">
-                  <strong>{p.name}:</strong> {p.drugs.map((d) => d.name).join(', ')}
-                </div>
-              ))}
+              {s.subtypes?.length > 0
+                ? s.subtypes.map((v, i) => (
+                    <div key={i} className="drug-db-line">
+                      <strong>{v.name}:</strong> {v.phases.map((p) => p.drugs.map((d) => d.name).join(', ')).join(' → ')}
+                    </div>
+                  ))
+                : (s.phases || []).map((p, i) => (
+                    <div key={i} className="drug-db-line">
+                      <strong>{p.name}:</strong> {p.drugs.map((d) => d.name).join(', ')}
+                    </div>
+                  ))}
             </div>
           ))}
         {schemes.length === 0 && <p className="empty-hint">Пока пусто — добавь первую схему выше.</p>}

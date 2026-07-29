@@ -24,6 +24,7 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
   const [checkingInteractions, setCheckingInteractions] = useState(false)
   const [interactionError, setInteractionError] = useState('')
   const [addToDbFor, setAddToDbFor] = useState(null)
+  const [regimenPickerFor, setRegimenPickerFor] = useState(null)
   const [editingIdx, setEditingIdx] = useState(null)
   const [editingField, setEditingField] = useState(null)
   const [editingText, setEditingText] = useState('')
@@ -98,20 +99,31 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
     const clean = (name || '').trim()
     if (!clean) return
     const dbInfo = store.getDrugInfo(clean)
+    if (dbInfo?.regimens?.length > 1) {
+      setRegimenPickerFor({ name: clean, regimens: dbInfo.regimens })
+      setManualDrug('')
+      return
+    }
+    finalizeAddDrug(clean, dbInfo?.regimens?.[0] || dbInfo)
+  }
+
+  function finalizeAddDrug(name, regimen) {
+    const dbInfo = store.getDrugInfo(name)
     onChange([
       ...safeValues,
       {
-        name: clean,
+        name,
         evidence: 'self_verified',
-        dosage: dbInfo?.dosage || '',
-        frequency: dbInfo?.frequency || '',
-        duration: dbInfo?.duration || '',
+        dosage: regimen?.dosage || '',
+        frequency: regimen?.frequency || '',
+        duration: regimen?.duration || '',
         brandNames: dbInfo?.brandNames || '',
       },
     ])
-    ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, clean))
-    diagnosisCodes.forEach((code) => store.recordDiagnosisDrug(code, clean))
+    ;(complaints || []).forEach((c) => store.recordComplaintDrug(c, name))
+    diagnosisCodes.forEach((code) => store.recordDiagnosisDrug(code, name))
     setManualDrug('')
+    setRegimenPickerFor(null)
   }
 
   function removeDrug(idx) {
@@ -233,6 +245,18 @@ export default function DrugSection({ complaints, diagnosisText, patientAllergie
                 {d.dosage ? <span> · {d.dosage}</span> : null}
               </button>
             ))}
+          </div>
+        )}
+        {regimenPickerFor && (
+          <div className="regimen-picker">
+            <div className="regimen-picker-label">Выбери схему приёма — «{regimenPickerFor.name}»</div>
+            {regimenPickerFor.regimens.map((r, i) => (
+              <button type="button" key={i} className="regimen-picker-option" onClick={() => finalizeAddDrug(regimenPickerFor.name, r)}>
+                {r.label && <strong>{r.label}: </strong>}
+                {[r.dosage, r.frequency, r.duration].filter(Boolean).join(', ')}
+              </button>
+            ))}
+            <button type="button" className="btn-secondary btn-small" onClick={() => setRegimenPickerFor(null)}>Отмена</button>
           </div>
         )}
       </div>

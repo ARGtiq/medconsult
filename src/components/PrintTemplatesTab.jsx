@@ -58,10 +58,18 @@ export default function PrintTemplatesTab() {
   }
 
   function remove(id) {
+    const removed = templates.find((t) => t.id === id)
     store.deletePrintTemplate(id)
     refresh()
     setDefaultId(store.getDefaultPrintTemplateId())
-    showToast('Шаблон печати удалён', { type: 'success' })
+    showToast('Шаблон печати удалён', {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.savePrintTemplate(removed)
+        refresh()
+      },
+    })
   }
 
   function makeDefault(id) {

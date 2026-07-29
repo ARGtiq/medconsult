@@ -267,8 +267,8 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
       {
         name: drug.name,
         evidence: 'guideline',
-        dosage: drug.dose || dbInfo?.dosage || '',
-        frequency: dbInfo?.frequency || '',
+        dosage: drug.dosage || dbInfo?.dosage || '',
+        frequency: drug.frequency || dbInfo?.frequency || '',
         duration: drug.duration || dbInfo?.duration || '',
         brandNames: dbInfo?.brandNames || '',
       },

@@ -6,7 +6,8 @@ import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { parseDrugGroups } from '../data/drugSafety'
-import { getAllMkb10 } from '../data/mkb10'
+import Mkb10CodesInput from './Mkb10CodesInput'
+import { showToast } from '../lib/toast'
 
 const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
 
@@ -20,9 +21,7 @@ const EVIDENCE_OPTIONS = [
 function blankForm() {
   return {
     name: '',
-    dosage: '',
-    frequency: '',
-    duration: '',
+    regimens: [blankRegimen()],
     sideEffects: '',
     group: '',
     brandNames: '',
@@ -32,6 +31,20 @@ function blankForm() {
     mkb10Codes: '',
     evidenceLevel: '',
   }
+}
+
+function blankRegimen() {
+  return { label: '', dosage: '', frequency: '', duration: '' }
+}
+
+// Если у препарата ещё нет regimens (создан до появления множественных схем) —
+// собираем один regimen из старых плоских полей, чтобы форма не была пустой.
+function regimensFromDrug(d) {
+  if (d.regimens?.length) return d.regimens
+  if (d.dosage || d.frequency || d.duration) {
+    return [{ label: '', dosage: d.dosage || '', frequency: d.frequency || '', duration: d.duration || '' }]
+  }
+  return [blankRegimen()]
 }
 
 export default function DrugsTab({ initialItemId }) {
@@ -76,15 +89,37 @@ export default function DrugsTab({ initialItemId }) {
       return
     }
     setNameError(false)
-    store.saveDrugInfo(form)
+    const regimens = form.regimens.filter((r) => r.dosage.trim() || r.frequency.trim())
+    const primary = regimens[0] || {}
+    // старые плоские dosage/frequency/duration зеркалим из первой схемы — так все
+    // места, что читают их напрямую (автоподстановка, назначения и т.п.), не ломаются
+    store.saveDrugInfo({
+      ...form,
+      regimens,
+      dosage: primary.dosage || '',
+      frequency: primary.frequency || '',
+      duration: primary.duration || '',
+    })
     setForm(blankForm())
     setFormOpen(false)
     refresh()
   }
 
   function editExisting(d) {
-    setForm({ ...blankForm(), ...d })
+    setForm({ ...blankForm(), ...d, regimens: regimensFromDrug(d) })
     setFormOpen(true)
+  }
+
+  function addRegimen() {
+    setForm({ ...form, regimens: [...form.regimens, blankRegimen()] })
+  }
+
+  function updateRegimen(idx, patch) {
+    setForm({ ...form, regimens: form.regimens.map((r, i) => (i === idx ? { ...r, ...patch } : r)) })
+  }
+
+  function removeRegimen(idx) {
+    setForm({ ...form, regimens: form.regimens.filter((_, i) => i !== idx) })
   }
 
   async function runBrandNames() {
@@ -105,8 +140,17 @@ export default function DrugsTab({ initialItemId }) {
   }
 
   function remove(name) {
+    const removed = store.getDrugInfo(name)
     store.deleteDrugInfo(name)
     refresh()
+    showToast(`«${name}» удалён из базы`, {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.saveDrugInfo(removed)
+        refresh()
+      },
+    })
   }
 
   async function runExtract() {
@@ -169,22 +213,31 @@ export default function DrugsTab({ initialItemId }) {
             )}
           </div>
         </div>
-        <div className="drug-form-row">
-          <input
-            placeholder="Дозировка"
-            value={form.dosage}
-            onChange={(e) => setForm({ ...form, dosage: e.target.value })}
-          />
-          <input
-            placeholder="Кратность приёма"
-            value={form.frequency}
-            onChange={(e) => setForm({ ...form, frequency: e.target.value })}
-          />
-          <input
-            placeholder="Длительность курса (напр. 7-10 дней)"
-            value={form.duration}
-            onChange={(e) => setForm({ ...form, duration: e.target.value })}
-          />
+        <div className="scenarios-block">
+          <div className="scenarios-block-label">
+            Схема приёма {form.regimens.length > 1 ? '(несколько — на приёме можно будет выбрать нужную)' : ''}
+          </div>
+          {form.regimens.map((r, idx) => (
+            <div key={idx} className="drug-regimen-row">
+              {form.regimens.length > 1 && (
+                <input
+                  className="drug-regimen-label"
+                  placeholder="Название схемы, напр. «при почечной недостаточности»"
+                  value={r.label}
+                  onChange={(e) => updateRegimen(idx, { label: e.target.value })}
+                />
+              )}
+              <div className="drug-regimen-fields">
+                <input placeholder="Доза, напр. 500 мг" value={r.dosage} onChange={(e) => updateRegimen(idx, { dosage: e.target.value })} />
+                <input placeholder="Кратность, напр. 2 р/сут" value={r.frequency} onChange={(e) => updateRegimen(idx, { frequency: e.target.value })} />
+                <input placeholder="Длительность, напр. 7-10 дней" value={r.duration} onChange={(e) => updateRegimen(idx, { duration: e.target.value })} />
+                {form.regimens.length > 1 && (
+                  <button type="button" className="remove-btn" onClick={() => removeRegimen(idx)}>×</button>
+                )}
+              </div>
+            </div>
+          ))}
+          <button type="button" className="btn-secondary btn-small" onClick={addRegimen}>+ Ещё схема приёма</button>
         </div>
         <div className="drug-form-row drug-form-row-brand">
           <input
@@ -240,17 +293,11 @@ export default function DrugsTab({ initialItemId }) {
           onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
         />
         <div className="drug-form-row">
-          <input
-            list="mkb10-suggestions"
-            placeholder="Коды МКБ-10 через запятую (напр. N40, N41.1)"
+          <Mkb10CodesInput
             value={form.mkb10Codes}
-            onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
+            onChange={(v) => setForm({ ...form, mkb10Codes: v })}
+            placeholder="Коды МКБ-10 через запятую (напр. N40, N41.1)"
           />
-          <datalist id="mkb10-suggestions">
-            {getAllMkb10().map((m) => (
-              <option key={m.code} value={m.code}>{m.label}</option>
-            ))}
-          </datalist>
           <select value={form.evidenceLevel} onChange={(e) => setForm({ ...form, evidenceLevel: e.target.value })}>
             {EVIDENCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -345,9 +392,20 @@ export default function DrugsTab({ initialItemId }) {
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
               <FillProgressBar item={d} fields={DRUG_FILL_FIELDS} />
-              {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
-              {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
-              {d.duration && <div className="drug-db-line">Длительность курса: {d.duration}</div>}
+              {(d.regimens?.length > 1) ? (
+                d.regimens.map((r, i) => (
+                  <div key={i} className="drug-db-line">
+                    {r.label ? `${r.label}: ` : `Схема ${i + 1}: `}
+                    {[r.dosage, r.frequency, r.duration].filter(Boolean).join(', ')}
+                  </div>
+                ))
+              ) : (
+                <>
+                  {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
+                  {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
+                  {d.duration && <div className="drug-db-line">Длительность курса: {d.duration}</div>}
+                </>
+              )}
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
               {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
               {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}

@@ -32,10 +32,18 @@ export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, o
   }
 
   function removeCode(code) {
+    const removed = all.find((c) => c.code === code)
     removeCustomCode(code)
     if (selectedCode === code) setSelectedCode(null)
     forceTick((t) => t + 1)
-    showToast('Код удалён', { type: 'success' })
+    showToast('Код удалён', {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        addCustomCode(removed.code, removed.label)
+        forceTick((t) => t + 1)
+      },
+    })
   }
 
   return (

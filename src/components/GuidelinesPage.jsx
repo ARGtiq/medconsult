@@ -4,7 +4,8 @@ import { extractGuidelineInfo } from '../lib/openrouter'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import ScenarioEditor, { blankScenario, blankDrugRow } from './ScenarioEditor'
 import useEscapeToClose from '../lib/useEscapeToClose'
-import { getAllMkb10 } from '../data/mkb10'
+import Mkb10CodesInput from './Mkb10CodesInput'
+import { showToast } from '../lib/toast'
 
 function blankForm() {
   return {
@@ -36,7 +37,10 @@ function isStale(sourceYear) {
 // Каждый препарат из сценариев терапии клинрека автоматически попадает в базу
 // лекарств (если его там ещё нет) — тогда он появится в автоподсказках при
 // ручном добавлении препарата на приёме, даже вне контекста этого клинрека.
-function registerScenarioDrugsInDb(scenarios) {
+// Заодно код(ы) МКБ клинрека подмешиваются в поле "МКБ-10" препарата (если их
+// там ещё нет) — тогда на странице МКБ-10 этот препарат найдётся по коду,
+// даже если его туда никто не вписывал руками.
+function registerScenarioDrugsInDb(scenarios, mkb10Codes = []) {
   scenarios.forEach((s) => {
     s.drugs.forEach((d) => {
       if (!d.name?.trim()) return
@@ -44,10 +48,16 @@ function registerScenarioDrugsInDb(scenarios) {
       if (!existing) {
         store.saveDrugInfo({
           name: d.name.trim(),
-          dosage: d.dose || '',
+          dosage: d.dosage || '',
+          frequency: d.frequency || '',
           duration: d.duration || '',
+          mkb10Codes: mkb10Codes.join(', '),
           evidenceLevel: 'guideline',
         })
+      } else if (mkb10Codes.length) {
+        const existingCodes = new Set((existing.mkb10Codes || '').split(',').map((c) => c.trim()).filter(Boolean))
+        mkb10Codes.forEach((c) => existingCodes.add(c))
+        store.saveDrugInfo({ ...existing, mkb10Codes: [...existingCodes].join(', ') })
       }
     })
   })
@@ -97,9 +107,18 @@ export default function GuidelinesPage({ initialItemId }) {
   }
 
   function remove(id) {
+    const removed = store.getGuideline(id)
     store.deleteGuideline(id)
     refresh()
     if (form.id === id) setForm(blankForm())
+    showToast(`«${removed?.title}» удалён`, {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.saveGuideline(removed)
+        refresh()
+      },
+    })
   }
 
   function addScenario() {
@@ -128,7 +147,7 @@ export default function GuidelinesPage({ initialItemId }) {
       .map((s) => ({ ...s, drugs: s.drugs.filter((d) => d.name.trim()) }))
       .filter((s) => s.name.trim() && s.drugs.length)
     store.saveGuideline({ ...form, mkb10Codes, investigations, clinicalPicture, scenarios })
-    registerScenarioDrugsInDb(scenarios)
+    registerScenarioDrugsInDb(scenarios, mkb10Codes)
     setForm(blankForm())
     setFormOpen(false)
     refresh()
@@ -185,18 +204,12 @@ export default function GuidelinesPage({ initialItemId }) {
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
           />
-          <input
-            list="mkb10-suggestions"
+          <Mkb10CodesInput
             className={validationError && !form.mkb10CodesText.trim() ? 'input-error' : ''}
             placeholder="Коды МКБ-10 через запятую (напр. N10, N39.0)"
             value={form.mkb10CodesText}
-            onChange={(e) => setForm({ ...form, mkb10CodesText: e.target.value })}
+            onChange={(v) => setForm({ ...form, mkb10CodesText: v })}
           />
-          <datalist id="mkb10-suggestions">
-            {getAllMkb10().map((m) => (
-              <option key={m.code} value={m.code}>{m.label}</option>
-            ))}
-          </datalist>
         </div>
         <label className="hub-mode-toggle-inline">
           <input
@@ -319,7 +332,10 @@ export default function GuidelinesPage({ initialItemId }) {
               {g.definition && <div className="drug-db-line">{g.definition}</div>}
               {(g.scenarios || []).map((s, i) => (
                 <div key={i} className="drug-db-line">
-                  <strong>{s.name}:</strong> {s.drugs.map((d) => `${d.name}${d.dose ? ` (${d.dose}${d.duration ? `, ${d.duration}` : ''})` : ''}`).join('; ')}
+                  <strong>{s.name}:</strong> {s.drugs.map((d) => {
+                    const dose = [d.dosage, d.frequency].filter(Boolean).join(' ')
+                    return `${d.name}${dose ? ` (${dose}${d.duration ? `, ${d.duration}` : ''})` : ''}`
+                  }).join('; ')}
                 </div>
               ))}
               {g.source && (

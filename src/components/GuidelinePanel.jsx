@@ -114,7 +114,8 @@ export default function GuidelinePanel({
                         return (
                           <button type="button" key={i} className="guideline-drug-btn" onClick={() => onInsertDrug(d)} title="Клик — добавить этот препарат">
                             {d.name}{brand}
-                            {d.dose ? ` — ${d.dose}` : ''}
+                            {d.dosage ? ` — ${d.dosage}` : ''}
+                            {d.frequency ? ` ${d.frequency}` : ''}
                             {d.duration ? `, ${d.duration}` : ''}
                           </button>
                         )

@@ -1,14 +1,15 @@
 import { store } from '../lib/store'
+import AutoWidthInput from './AutoWidthInput'
 
 export function blankScenario() {
   return { name: '', drugs: [blankDrugRow()] }
 }
 
 export function blankDrugRow() {
-  return { name: '', dose: '', duration: '' }
+  return { name: '', dosage: '', frequency: '', duration: '' }
 }
 
-// Общий редактор "название + список препаратов с дозой/длительностью" —
+// Общий редактор "название + список препаратов с дозой/кратностью/длительностью" —
 // используется и для сценариев терапии клинрека, и для фаз схемы лечения
 // (структура одинаковая, просто в разных справочниках называется по-разному).
 // Кнопка "Подставить из схемы лечения" — разовое копирование препаратов
@@ -45,6 +46,19 @@ export default function ScenarioEditor({ scenario, onChange, onDelete, label = '
     })
   }
 
+  // Если выбранный препарат уже есть в базе и у поля дозы ещё пусто —
+  // подставляем первую схему приёма, чтобы не набирать заново то, что уже
+  // где-то заводили (если схем несколько — предлагаем выбрать здесь же).
+  function onNameChange(idx, name) {
+    updateDrug(idx, { name })
+    const info = store.getDrugInfo(name)
+    const current = scenario.drugs[idx]
+    if (info && !current.dosage && !current.frequency) {
+      const regimen = info.regimens?.[0] || info
+      updateDrug(idx, { name, dosage: regimen.dosage || '', frequency: regimen.frequency || '', duration: regimen.duration || current.duration })
+    }
+  }
+
   return (
     <div className="scenario-editor">
       <div className="scenario-editor-top">
@@ -70,9 +84,28 @@ export default function ScenarioEditor({ scenario, onChange, onDelete, label = '
       <div className="scenario-drug-rows">
         {scenario.drugs.map((d, idx) => (
           <div key={idx} className="scenario-drug-row">
-            <input placeholder="Препарат" list="scenario-drug-names" value={d.name} onChange={(e) => updateDrug(idx, { name: e.target.value })} />
-            <input placeholder="Доза, напр. 500 мг 2 р/сут" value={d.dose} onChange={(e) => updateDrug(idx, { dose: e.target.value })} />
-            <input placeholder="Длительность, напр. 7-10 дней" value={d.duration} onChange={(e) => updateDrug(idx, { duration: e.target.value })} />
+            <input placeholder="Препарат" list="scenario-drug-names" value={d.name} onChange={(e) => onNameChange(idx, e.target.value)} />
+            <AutoWidthInput
+              className="scenario-drug-field"
+              placeholder="Доза, напр. 500 мг"
+              value={d.dosage}
+              onChange={(e) => updateDrug(idx, { dosage: e.target.value })}
+              minWidth={90}
+            />
+            <AutoWidthInput
+              className="scenario-drug-field"
+              placeholder="Кратность, напр. 2 р/сут"
+              value={d.frequency}
+              onChange={(e) => updateDrug(idx, { frequency: e.target.value })}
+              minWidth={90}
+            />
+            <AutoWidthInput
+              className="scenario-drug-field"
+              placeholder="Длительность, напр. 7-10 дней"
+              value={d.duration}
+              onChange={(e) => updateDrug(idx, { duration: e.target.value })}
+              minWidth={90}
+            />
             <button type="button" className="remove-btn" onClick={() => removeDrug(idx)}>×</button>
           </div>
         ))}

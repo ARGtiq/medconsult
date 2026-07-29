@@ -809,6 +809,61 @@ body {
 }
 .mkb10-cross-block h4 { margin: 0 0 8px; font-size: 13px; }
 
+.mkb10-input-wrap { position: relative; flex: 1; min-width: 200px; }
+.mkb10-input-wrap input { width: 100%; }
+.mkb10-input-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(20, 32, 43, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 30;
+}
+.mkb10-input-suggestions button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.mkb10-input-suggestions button:hover { background: var(--paper); }
+
+.drug-regimen-row { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.drug-regimen-label { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.drug-regimen-fields { display: flex; gap: 6px; flex-wrap: wrap; }
+.drug-regimen-fields input { flex: 1; min-width: 110px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
+
+.regimen-picker {
+  background: var(--teal-soft);
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.regimen-picker-label { font-size: 12.5px; font-weight: 600; color: var(--teal); }
+.regimen-picker-option {
+  text-align: left;
+  border: 1px solid #cfe0da;
+  background: white;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.regimen-picker-option:hover { background: var(--paper); }
+
 .scheme-search-block {
   border: 1px solid var(--teal);
   border-radius: 10px;
@@ -2780,6 +2835,24 @@ body {
   border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 12.5px;
+}
+.scenario-drug-field {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.subtypes-block { background: var(--amber-soft); border-radius: 10px; padding: 10px; }
+.subtype-editor {
+  background: white;
+  border: 1px solid #e0d0a8;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .scenario-tabs {

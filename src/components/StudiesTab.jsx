@@ -3,6 +3,7 @@ import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import useEscapeToClose from '../lib/useEscapeToClose'
+import { showToast } from '../lib/toast'
 
 function blankField() {
   return { key: '', label: '', unit: '', normal: '' }
@@ -80,9 +81,17 @@ export default function StudiesTab() {
   }
 
   function remove(key) {
-    if (!window.confirm('Удалить это исследование из справочника?')) return
+    const removed = studies.find((s) => s.key === key)
     store.deleteCustomStudy(key)
     refresh()
+    showToast(`«${removed?.label}» удалено`, {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.saveCustomStudy(removed)
+        refresh()
+      },
+    })
   }
 
   return (

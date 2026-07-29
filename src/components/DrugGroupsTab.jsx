@@ -3,6 +3,7 @@ import { store } from '../lib/store'
 import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
+import { showToast } from '../lib/toast'
 
 const GROUP_FILL_FIELDS = ['crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
 
@@ -38,8 +39,17 @@ export default function DrugGroupsTab() {
   }
 
   function removeCross(id) {
+    const removed = crossList.find((c) => c.id === id)
     store.removeCrossReactivity(id)
     refreshCross()
+    showToast('Связка удалена', {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.addCrossReactivity(removed)
+        refreshCross()
+      },
+    })
   }
 
   function groupLabel(key) {
@@ -130,9 +140,18 @@ export default function DrugGroupsTab() {
   }
 
   function removeCustom(key) {
+    const removed = customGroups[key]
     store.deleteCustomGroup(key)
     refresh()
     if (form.key === key) setForm(blankGroupForm())
+    showToast(`«${removed?.label}» удалена`, {
+      type: 'success',
+      actionLabel: 'Отменить',
+      onAction: () => {
+        store.saveCustomGroup(key, removed)
+        refresh()
+      },
+    })
   }
 
   const staticEntries = Object.entries(DRUG_GROUPS)
