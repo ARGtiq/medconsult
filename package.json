@@ -1,28 +1,31 @@
 {
   "name": "medconsult",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "lint": "oxlint",
+    "icons": "node scripts/make-icons.mjs",
+    "build": "node scripts/make-icons.mjs && vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.7",
+    "lucide-react": "^0.510.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
     "gh-pages": "^6.3.0",
-    "oxlint": "^1.71.0",
-    "vite": "^8.1.1"
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.1.0"
   },
-  "homepage": "https://<username>.github.io/medconsult"
+  "homepage": "https://argtiq.github.io/medconsult"
 }
