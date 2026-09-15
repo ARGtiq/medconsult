@@ -1,7 +1,7 @@
 {
   "name": "medconsult",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,8 @@
     "lucide-react": "^0.510.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "zustand": "^5.0.0"
+    "zustand": "^5.0.0",
+    "@supabase/supabase-js": "^2.57.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

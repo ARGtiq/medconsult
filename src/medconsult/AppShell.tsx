@@ -9,6 +9,10 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import ToastContainer from "@/legacy/components/ToastContainer";
+import { initAutoSync } from "@/legacy/lib/autoSync";
+import { initTheme } from "@/legacy/lib/theme";
+import "@/legacy/legacy.css";
 import { CommandPalette } from "./CommandPalette";
 import { NavLink, useNav } from "./NavContext";
 import { useAppStore } from "./store";
@@ -35,6 +39,19 @@ export function AppShell({
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrated, hydrate]);
+
+  useEffect(() => {
+    try {
+      initTheme();
+    } catch {
+      /* */
+    }
+    try {
+      return initAutoSync();
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -125,6 +142,11 @@ export function AppShell({
           {patient && (
             <div className="truncate text-sm text-ink-soft">
               {patient.lastName} {patient.firstName.split(" ").map((p) => p[0] + ".").join(" ")} {patient.age}
+              {patient.allergies?.length ? (
+                <span className="ml-2 rounded bg-warn px-1.5 text-[10px] font-semibold text-ink">
+                  аллергия
+                </span>
+              ) : null}
             </div>
           )}
           <div className="flex-1" />
@@ -165,6 +187,9 @@ export function AppShell({
           {toast}
         </div>
       )}
+      <div className="legacy-surface">
+        <ToastContainer />
+      </div>
       {searchOpen && <CommandPalette onClose={() => setSearchOpen(false)} />}
     </div>
   );

@@ -58,4 +58,20 @@
   p {
     text-wrap: pretty;
   }
+
+  .voice-btn {
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    border-radius: 8px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .voice-btn.listening {
+    background: var(--color-danger-soft);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
 }

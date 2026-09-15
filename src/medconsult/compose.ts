@@ -1,5 +1,6 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
-import { fillStudyTemplate, getStudy } from "./data/studies";
+import { fillStudyTemplate } from "./data/studies";
+import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
 
 export type PreviewBlock = {
@@ -46,7 +47,7 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
 
   const studyParts = session.studies
     .map((entry) => {
-      const def = getStudy(entry.key);
+      const def = getStudyLive(entry.key);
       if (!def) return "";
       return entry.instances.map((inst) => fillStudyTemplate(def, inst)).join(" ");
     })

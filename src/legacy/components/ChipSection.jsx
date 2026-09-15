@@ -1,0 +1,318 @@
+import { useState, useMemo } from 'react'
+import { store } from '../lib/store'
+import VoiceInputButton from './VoiceInputButton'
+import AutoWidthInput from './AutoWidthInput'
+
+// Режим "конструктора" жалобы: клик по базовой карточке (боль и т.п.)
+// подменяет ряд чипов на карточки текущей группы уточнений (локализация,
+// характер, кратность...). Выбор в группе — множественный. Кнопка "Вставить"
+// видна всегда и вставляет/сохраняет то, что уже набрано, на любом шаге.
+// Клик по уже добавленному пузырьку, если он был собран из чипа с группами,
+// заново открывает конструктор с восстановленным выбором (редактирование
+// структурой, а не просто текстом).
+// Чипы шаблона группируются по chip.category в спойлеры (details/summary),
+// если категории заданы — иначе показываются плоским списком, как раньше.
+// Уже выбранные значения можно перетаскивать мышкой, чтобы менять порядок.
+
+function groupByCategory(chips) {
+  const withCategory = chips.filter((c) => c.category)
+  const withoutCategory = chips.filter((c) => !c.category)
+  if (!withCategory.length) return null
+  const groups = {}
+  withCategory.forEach((c) => {
+    if (!groups[c.category]) groups[c.category] = []
+    groups[c.category].push(c)
+  })
+  return { groups, withoutCategory }
+}
+
+export default function ChipSection({ section, values, onChange }) {
+  const [freeInput, setFreeInput] = useState('')
+  const [builderChip, setBuilderChip] = useState(null)
+  const [selections, setSelections] = useState({})
+  const [editIdx, setEditIdx] = useState(null) // индекс в values, который редактируем структурно
+  const [plainEditIdx, setPlainEditIdx] = useState(null) // fallback: обычная текстовая правка
+  const [plainEditText, setPlainEditText] = useState('')
+  const [dragIdx, setDragIdx] = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
+  const suggestions = useMemo(
+    () => (freeInput.trim() ? store.getComplaintSuggestions(freeInput) : []),
+    [freeInput]
+  )
+
+  const categorized = useMemo(() => groupByCategory(section.chips || []), [section.chips])
+
+  function addValue(text) {
+    const clean = text.trim()
+    if (!clean) return
+    onChange([...values, clean])
+    if (section.id === 'complaints') store.recordComplaint(clean)
+  }
+
+  function replaceValueAt(idx, text) {
+    const clean = text.trim()
+    if (!clean) return
+    onChange(values.map((v, i) => (i === idx ? clean : v)))
+  }
+
+  function removeValue(idx) {
+    onChange(values.filter((_, i) => i !== idx))
+  }
+
+  function reorderValues(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return
+    const next = [...values]
+    const [moved] = next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, moved)
+    onChange(next)
+  }
+
+  function handleFreeSubmit(e) {
+    e.preventDefault()
+    freeInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach(addValue)
+    setFreeInput('')
+  }
+
+  function startBuilder(chip) {
+    if (!chip.modifierGroups?.length) {
+      addValue(chip.text)
+      return
+    }
+    setBuilderChip(chip)
+    setSelections({})
+    setEditIdx(null)
+  }
+
+  // Пытаемся распознать "боль внизу живота (острая, поясничная область)"
+  // и восстановить, какой чип и какие опции в каких группах были выбраны.
+  // Клик по уже вставленному чипу — всегда простое текстовое редактирование,
+  // независимо от того, был ли у исходного чипа конструктор с уточнениями.
+  // Конструктор с группами открывается только при выборе НОВОГО чипа
+  // (см. startBuilder) — для правки уже вставленного проще и предсказуемее
+  // редактировать как обычный текст.
+  function startEditStructured(idx) {
+    setPlainEditIdx(idx)
+    setPlainEditText(values[idx])
+  }
+
+  function cancelBuilder() {
+    setBuilderChip(null)
+    setSelections({})
+    setEditIdx(null)
+  }
+
+  function toggleOption(gIdx, option) {
+    setSelections((prev) => {
+      const current = new Set(prev[gIdx] || [])
+      if (current.has(option)) current.delete(option)
+      else current.add(option)
+      return { ...prev, [gIdx]: current }
+    })
+  }
+
+  function composedText() {
+    const parts = []
+    Object.keys(selections)
+      .sort()
+      .forEach((k) => {
+        const set = selections[k]
+        if (set && set.size) parts.push(...Array.from(set))
+      })
+    const showLabel = builderChip.showLabel !== false
+    if (!parts.length) return builderChip.text
+    if (!showLabel) return parts.join(', ')
+    return `${builderChip.text} (${parts.join(', ')})`
+  }
+
+  function insertAndClose() {
+    if (editIdx !== null) replaceValueAt(editIdx, composedText())
+    else addValue(composedText())
+    cancelBuilder()
+  }
+
+  function savePlainEdit() {
+    const clean = plainEditText.trim()
+    if (clean) replaceValueAt(plainEditIdx, clean)
+    setPlainEditIdx(null)
+    setPlainEditText('')
+  }
+
+  const selectedCountTotal = Object.values(selections).reduce((sum, s) => sum + (s?.size || 0), 0)
+
+  function renderChipButton(chip) {
+    return (
+      <button type="button" key={chip.text} className="chip" onClick={() => startBuilder(chip)}>
+        {chip.text}
+        {chip.modifierGroups?.length ? <span className="chip-caret">▾</span> : null}
+      </button>
+    )
+  }
+
+  return (
+    <div className="chip-section">
+      {!builderChip ? (
+        categorized ? (
+          <div className="chip-categories">
+            {Object.entries(categorized.groups).map(([cat, chips]) => (
+              <div key={cat} className="chip-category-block">
+                <div className="chip-category-block-title">{cat} <span className="chip-category-count">({chips.length})</span></div>
+                <div className="chip-row">{chips.map(renderChipButton)}</div>
+              </div>
+            ))}
+            {categorized.withoutCategory.length > 0 && (
+              <div className="chip-row">{categorized.withoutCategory.map(renderChipButton)}</div>
+            )}
+          </div>
+        ) : (
+          <div className="chip-row">{section.chips?.map(renderChipButton)}</div>
+        )
+      ) : (
+        <div className="chip-builder">
+          <div className="chip-builder-breadcrumb">
+            <span className="chip-builder-base">
+              {editIdx !== null ? '✎ ' : ''}
+              {builderChip.text}
+            </span>
+            {Object.keys(selections)
+              .sort()
+              .flatMap((k) => Array.from(selections[k] || []))
+              .map((v) => (
+                <span key={v} className="chip-builder-crumb">
+                  {v}
+                </span>
+              ))}
+          </div>
+
+          {(builderChip.modifierGroups || []).map((group, gIdx) => (
+            <div key={group.label || gIdx}>
+              <div className="chip-builder-group-label">{group.label} (можно несколько)</div>
+              <div className="chip-row">
+                {group.options.map((opt) => {
+                  const isSelected = selections[gIdx]?.has(opt)
+                  return (
+                    <button
+                      type="button"
+                      key={opt}
+                      className={isSelected ? 'chip chip-active' : 'chip'}
+                      onClick={() => toggleOption(gIdx, opt)}
+                    >
+                      {opt}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+
+          <div className="chip-builder-controls">
+            <button type="button" className="btn-secondary btn-small" onClick={cancelBuilder}>
+              Отмена
+            </button>
+            <button type="button" className="btn-primary btn-small btn-insert" onClick={insertAndClose}>
+              {editIdx !== null ? 'Сохранить' : `Вставить${selectedCountTotal ? ` (${selectedCountTotal})` : ' как есть'}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <form className="free-input-row" onSubmit={handleFreeSubmit}>
+        <input
+          type="text"
+          value={freeInput}
+          placeholder="Добавить вручную, через запятую…"
+          onChange={(e) => setFreeInput(e.target.value)}
+        />
+        <button type="submit" className="btn-secondary">
+          Добавить
+        </button>
+        <VoiceInputButton onResult={(text) => setFreeInput((prev) => (prev ? `${prev}, ${text}` : text))} />
+      </form>
+
+      {suggestions.length > 0 && (
+        <div className="suggestions">
+          {suggestions.map((s) => (
+            <button
+              type="button"
+              key={s.text}
+              className="suggestion-pill"
+              onClick={() => {
+                addValue(s.text)
+                setFreeInput('')
+              }}
+            >
+              {s.text} <span className="suggestion-count">×{s.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {values.length > 0 && (
+        <div className="selected-values-block">
+          <div className="selected-values-block-label">Уже выбрано (можно перетаскивать)</div>
+          <div className="selected-values">
+            {values.map((v, idx) =>
+              plainEditIdx === idx ? (
+                <form
+                  key={`${v}-${idx}`}
+                  className="selected-chip-edit"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    savePlainEdit()
+                  }}
+                >
+                  <AutoWidthInput
+                    value={plainEditText}
+                    onChange={(e) => setPlainEditText(e.target.value)}
+                    onBlur={savePlainEdit}
+                  />
+                </form>
+              ) : (
+                <span
+                  key={`${v}-${idx}`}
+                  className={idx === dragOverIdx ? 'selected-chip drag-over' : 'selected-chip'}
+                  draggable
+                  onClick={() => startEditStructured(idx)}
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    if (dragOverIdx !== idx) setDragOverIdx(idx)
+                  }}
+                  onDragLeave={() => setDragOverIdx((prev) => (prev === idx ? null : prev))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (dragIdx !== null) reorderValues(dragIdx, idx)
+                    setDragIdx(null)
+                    setDragOverIdx(null)
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null)
+                    setDragOverIdx(null)
+                  }}
+                  title="Нажми, чтобы отредактировать · перетащи, чтобы изменить порядок"
+                >
+                  <span className="selected-chip-handle">⠿</span>
+                  {v}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeValue(idx)
+                    }}
+                    aria-label="Удалить"
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

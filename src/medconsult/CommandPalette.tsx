@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { COMPLAINTS, DRUGS, ICD } from "./data/catalog";
-import { STUDIES } from "./data/studies";
+import { allStudiesLive, liveComplaints, liveDrugsMerged, liveIcdMerged } from "./live";
 import { useAppStore } from "./store";
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -10,50 +9,58 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const items = useMemo(() => {
     const s = q.trim().toLowerCase();
     const out: { id: string; label: string; hint: string; run: () => void }[] = [];
-    COMPLAINTS.filter((c) => !s || c.text.includes(s)).forEach((c) =>
-      out.push({
-        id: "c-" + c.text,
-        label: c.text,
-        hint: "жалоба",
-        run: () => {
-          toggleComplaint(c.text);
-          setToast(`Жалоба: ${c.text}`);
-        },
-      }),
-    );
-    DRUGS.filter((d) => !s || d.name.includes(s)).forEach((d) =>
-      out.push({
-        id: "d-" + d.name,
-        label: `${d.name} ${d.dose}`,
-        hint: "назначение",
-        run: () => {
-          addRecommendation(`${d.name} ${d.dose}`);
-          setToast(`Назначение: ${d.name}`);
-        },
-      }),
-    );
-    STUDIES.filter((st) => !s || st.label.toLowerCase().includes(s)).forEach((st) =>
-      out.push({
-        id: "s-" + st.key,
-        label: st.label,
-        hint: "обследование",
-        run: () => {
-          addStudy(st.key);
-          setToast(`Добавлено: ${st.label}`);
-        },
-      }),
-    );
-    ICD.filter((i) => !s || i.code.toLowerCase().includes(s) || i.title.toLowerCase().includes(s)).forEach((i) =>
-      out.push({
-        id: "i-" + i.code,
-        label: `${i.code} ${i.title}`,
-        hint: "диагноз",
-        run: () => {
-          setSession({ diagnosisCode: i.code, diagnosisTitle: i.title });
-          setToast(`Диагноз ${i.code}`);
-        },
-      }),
-    );
+    liveComplaints()
+      .filter((text) => !s || text.toLowerCase().includes(s))
+      .forEach((text) =>
+        out.push({
+          id: "c-" + text,
+          label: text,
+          hint: "жалоба",
+          run: () => {
+            toggleComplaint(text);
+            setToast(`Жалоба: ${text}`);
+          },
+        }),
+      );
+    liveDrugsMerged()
+      .filter((d) => !s || d.name.toLowerCase().includes(s))
+      .forEach((d) =>
+        out.push({
+          id: "d-" + d.name,
+          label: `${d.name} ${d.dose}`.trim(),
+          hint: "назначение",
+          run: () => {
+            addRecommendation(`${d.name} ${d.dose}`.trim());
+            setToast(`Назначение: ${d.name}`);
+          },
+        }),
+      );
+    allStudiesLive()
+      .filter((st) => !s || st.label.toLowerCase().includes(s))
+      .forEach((st) =>
+        out.push({
+          id: "s-" + st.key,
+          label: st.label,
+          hint: "обследование",
+          run: () => {
+            addStudy(st.key);
+            setToast(`Добавлено: ${st.label}`);
+          },
+        }),
+      );
+    liveIcdMerged()
+      .filter((i) => !s || i.code.toLowerCase().includes(s) || i.title.toLowerCase().includes(s))
+      .forEach((i) =>
+        out.push({
+          id: "i-" + i.code,
+          label: `${i.code} ${i.title}`,
+          hint: "диагноз",
+          run: () => {
+            setSession({ diagnosisCode: i.code, diagnosisTitle: i.title });
+            setToast(`Диагноз ${i.code}`);
+          },
+        }),
+      );
     return out.slice(0, 16);
   }, [q, addRecommendation, addStudy, setSession, setToast, toggleComplaint]);
 

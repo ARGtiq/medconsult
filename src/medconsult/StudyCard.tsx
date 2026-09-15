@@ -1,10 +1,11 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
-import { STUDIES, applyComputed, getStudy } from "./data/studies";
+import { useMemo, useState } from "react";
+import { applyComputed } from "./data/studies";
+import { allStudiesLive, getStudyLive } from "./live";
 import { useAppStore } from "./store";
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
-  const def = getStudy(studyKey);
+  const def = getStudyLive(studyKey);
   const { session, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession } = useAppStore();
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
@@ -79,6 +80,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   );
                 })}
               </div>
+              {def.referenceNotes && (
+                <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>
+              )}
             </div>
           ))}
           <button type="button" className="text-xs font-medium text-teal" onClick={() => addStudyInstance(studyKey)}>
@@ -98,6 +102,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
 export function PlusStudyButton() {
   const [open, setOpen] = useState(false);
   const { session, addStudy } = useAppStore();
+  const studies = useMemo(() => allStudiesLive(), []);
   return (
     <div className="relative">
       <button
@@ -110,8 +115,8 @@ export function PlusStudyButton() {
         </span>
       </button>
       {open && (
-        <div className="absolute top-10 right-0 z-20 flex w-56 flex-col gap-1 rounded-xl border border-line bg-surface p-2 shadow-lg">
-          {STUDIES.map((s) => {
+        <div className="absolute top-10 right-0 z-20 flex max-h-80 w-64 flex-col gap-1 overflow-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
+          {studies.map((s) => {
             const on = session.studies.some((e) => e.key === s.key);
             return (
               <button

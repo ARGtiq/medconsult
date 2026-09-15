@@ -1,0 +1,256 @@
+import { useState, useMemo, useEffect } from 'react'
+import { polishNarrative } from '../lib/openrouter'
+import { store } from '../lib/store'
+import { printHtml, escapeHtml } from '../lib/print'
+
+function sectionToText(section, value, patient, sectionValues) {
+  const durationValue = sectionValues[`${section.id}_duration`]
+  const freeTextValue = sectionValues[`${section.id}_freetext`]
+  const pendingInvestigations = sectionValues[`${section.id}_pending_investigations`]
+
+  if (section.type === 'drugs') {
+    const drugs = value || []
+    const lines = drugs.map((d) => {
+      const extra = [d.dosage, d.frequency, d.duration].filter(Boolean).join(', ')
+      const brand = d.brandNames ? ` (${d.brandNames})` : ''
+      return `— ${d.name}${brand}${extra ? ` (${extra})` : ''}`
+    })
+    if (pendingInvestigations?.length) {
+      lines.push('', 'Дообследование:', ...pendingInvestigations.map((i) => `— ${i}`))
+    }
+    return lines.join('\n')
+  }
+
+  if (section.type === 'study_protocol') {
+    const selectedKeys = value || []
+    return store
+      .getAllStudies()
+      .filter((s) => selectedKeys.includes(s.key))
+      .map((s) => sectionValues[`${section.id}_text_${s.key}`] || s.template)
+      .join('\n\n')
+  }
+
+  let text = ''
+  if (section.type === 'investigations' && Array.isArray(value)) text = value.join('\n')
+  else if (Array.isArray(value)) text = value.join(', ')
+  else text = value || ''
+
+  if (section.hasFreeTextField && freeTextValue?.trim()) {
+    text = text ? `${text}\n${freeTextValue.trim()}` : freeTextValue.trim()
+  }
+
+  if (section.hasDurationField && durationValue?.trim()) {
+    text = text ? `Болеет: ${durationValue.trim()}\n${text}` : `Болеет: ${durationValue.trim()}`
+  }
+
+  if (section.id === 'anamnesis_vitae') {
+    const extraLines = []
+    extraLines.push(`Аллергоанамнез: ${patient?.allergies?.length ? patient.allergies.join(', ') : 'не отягощен'}.`)
+    extraLines.push(`Принимает в настоящее время: ${patient?.currentMedications?.length ? patient.currentMedications.join(', ') : 'лекарств не принимает'}.`)
+    text = text ? `${extraLines.join('\n')}\n${text}` : extraLines.join('\n')
+  }
+
+  return text
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+function calcAge(dob) {
+  if (!dob) return null
+  const birth = new Date(dob)
+  if (Number.isNaN(birth.getTime())) return null
+  const today = new Date()
+  let years = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--
+  return years
+}
+
+export default function ProtocolPreview({ template, sectionValues, patient, visitDate }) {
+  const [mode, setMode] = useState('fields') // 'fields' | 'canvas'
+  const [copied, setCopied] = useState(false)
+  const [canvasOverride, setCanvasOverride] = useState(null) // null = автосборка, иначе — ручная правка
+  const [polishing, setPolishing] = useState(false)
+  const [polishError, setPolishError] = useState('')
+  const [fieldOverrides, setFieldOverrides] = useState({}) // sectionId -> отредактированный текст
+
+  const headerText = useMemo(() => {
+    const lines = []
+    if (patient?.name) {
+      const age = calcAge(patient.dob)
+      const dobPart = patient.dob ? `, ДР ${formatDate(patient.dob)}${age !== null ? ` (${age} лет)` : ''}` : ''
+      lines.push(`Пациент: ${patient.name}${dobPart}`)
+    }
+    if (visitDate) lines.push(`Дата консультации: ${formatDate(visitDate)}`)
+    return lines.join('\n')
+  }, [patient, visitDate])
+
+  const generatedText = useMemo(() => {
+    const body = template.sections
+      .map((s) => {
+        const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues)
+        if (!text) return null
+        return `${s.title}:\n${text}`
+      })
+      .filter(Boolean)
+      .join('\n\n')
+    return headerText ? `${headerText}\n\n${body}` : body
+  }, [template, sectionValues, headerText, fieldOverrides, patient])
+
+  // при изменении данных сбрасываем ручную правку полотна, если её не трогали заново
+  useEffect(() => {
+    setCanvasOverride(null)
+  }, [template.id])
+
+  const fullText = canvasOverride !== null ? canvasOverride : generatedText
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  async function handlePolish() {
+    setPolishing(true)
+    setPolishError('')
+    try {
+      const result = await polishNarrative(generatedText)
+      setCanvasOverride(result)
+      setMode('canvas')
+    } catch (e) {
+      setPolishError(e.message)
+    } finally {
+      setPolishing(false)
+    }
+  }
+
+  function handlePrint() {
+    const printTemplates = store.getPrintTemplates()
+    const defaultId = store.getDefaultPrintTemplateId()
+    const pt = printTemplates.find((t) => t.id === defaultId) || printTemplates[0] || null
+
+    let html = ''
+    // headerHtml/footerHtml — новый rich-text формат; clinicName/doctorName/
+    // contactInfo/footerText — фоллбэк на шаблоны, созданные до его появления
+    const headerHtml = pt?.headerHtml || (pt && [pt.clinicName, pt.doctorName, pt.contactInfo].filter(Boolean).length
+      ? `<h2>${escapeHtml(pt.clinicName || '')}</h2><p>${escapeHtml(pt.doctorName || '')}</p><p>${escapeHtml(pt.contactInfo || '')}</p>`
+      : '')
+    const footerHtml = pt?.footerHtml || (pt?.footerText ? `<p>${escapeHtml(pt.footerText)}</p>` : '')
+
+    if (headerHtml) html += `<div class="print-letterhead">${headerHtml}</div>`
+
+    html += `<div class="print-meta">`
+    if (patient?.name) html += `<p><strong>Пациент:</strong> ${escapeHtml(patient.name)}</p>`
+    if (visitDate) html += `<p><strong>Дата консультации:</strong> ${escapeHtml(formatDate(visitDate))}</p>`
+    html += `</div>`
+
+    template.sections.forEach((s) => {
+      const text = fieldOverrides[s.id] ?? sectionToText(s, sectionValues[s.id], patient, sectionValues)
+      if (!text) return
+      html += `<div class="print-section"><h3>${escapeHtml(s.title)}</h3><div>${escapeHtml(text)}</div></div>`
+    })
+
+    if (footerHtml) html += `<div class="print-footer">${footerHtml}</div>`
+
+    printHtml(html, `Протокол — ${patient?.name || 'без пациента'}`)
+  }
+
+  return (
+    <div className="protocol-preview">
+      <div className="preview-header">
+        <div className="mode-toggle">
+          <button type="button" className={mode === 'fields' ? 'active' : ''} onClick={() => setMode('fields')}>
+            По полям
+          </button>
+          <button type="button" className={mode === 'canvas' ? 'active' : ''} onClick={() => setMode('canvas')}>
+            Единым текстом
+          </button>
+        </div>
+        <div className="preview-actions">
+          <button type="button" className="btn-ai btn-small" onClick={handlePolish} disabled={polishing}>
+            {polishing ? 'Причёсываю…' : '🤖 Причесать текст (AI)'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => copyToClipboard(fullText)}>
+            {copied ? 'Скопировано ✓' : 'Копировать всё'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={handlePrint}>
+            🖨 Печать / PDF
+          </button>
+        </div>
+      </div>
+
+      {polishError && <div className="ai-error">{polishError}</div>}
+
+      {canvasOverride !== null && (
+        <div className="override-banner">
+          Текст отредактирован вручную / причёсан AI — больше не пересобирается автоматически.{' '}
+          <button type="button" onClick={() => setCanvasOverride(null)}>
+            Вернуть автосборку
+          </button>
+        </div>
+      )}
+
+      {mode === 'canvas' ? (
+        <textarea
+          className="canvas-textarea"
+          value={fullText}
+          onChange={(e) => setCanvasOverride(e.target.value)}
+          rows={18}
+          placeholder="Протокол соберётся здесь по мере заполнения секций…"
+        />
+      ) : (
+        <div className="fields-preview">
+          {headerText && (
+            <div className="field-preview-block header-block">
+              <div className="field-preview-body">{headerText}</div>
+            </div>
+          )}
+          {template.sections.map((s, idx) => {
+            const generated = sectionToText(s, sectionValues[s.id], patient, sectionValues)
+            const text = fieldOverrides[s.id] ?? generated
+            return (
+              <div key={s.id} className={idx % 2 === 0 ? 'field-preview-block' : 'field-preview-block field-preview-block-alt'}>
+                <div className="field-preview-header">
+                  <span>{s.title}</span>
+                  <div className="field-preview-header-actions">
+                    {fieldOverrides[s.id] !== undefined && (
+                      <button
+                        type="button"
+                        className="copy-icon-btn"
+                        title="Вернуть автосборку секции"
+                        onClick={() =>
+                          setFieldOverrides((prev) => {
+                            const next = { ...prev }
+                            delete next[s.id]
+                            return next
+                          })
+                        }
+                      >
+                        ↺
+                      </button>
+                    )}
+                    <button type="button" className="copy-icon-btn" onClick={() => copyToClipboard(text)} title="Копировать секцию">
+                      ⧉
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  className="field-preview-editable"
+                  value={text}
+                  placeholder="пусто"
+                  onChange={(e) => setFieldOverrides((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  rows={Math.max(2, text.split('\n').length)}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

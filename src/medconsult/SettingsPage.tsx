@@ -1,25 +1,17 @@
 import type { ReactNode } from "react";
+import LegacySettings from "@/legacy/components/SettingsPage";
+import "@/legacy/legacy.css";
 import { AppShell } from "./AppShell";
 import { useAppStore } from "./store";
 
 export function SettingsPage() {
-  const { settings, setSettings, exportData, importData, setToast } = useAppStore();
-
-  function downloadExport() {
-    const blob = new Blob([exportData()], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "medconsult-backup.json";
-    a.click();
-    setToast("Экспорт скачан");
-  }
-
+  const { settings, setSettings } = useAppStore();
   return (
     <AppShell>
       <div className="mx-auto max-w-4xl space-y-3 p-4 pb-24 md:p-8">
         <h1 className="font-display text-2xl">Как ведёт себя станок</h1>
         <div className="grid gap-3 md:grid-cols-2">
-          <Card title="Кнопка AI">
+          <Card title="Кнопка AI на протоколе">
             {(
               [
                 ["always", "Постоянно в каждом блоке"],
@@ -33,15 +25,7 @@ export function SettingsPage() {
               </label>
             ))}
           </Card>
-          <Card title="Мастер и старт">
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.wizardEnabled}
-                onChange={(e) => setSettings({ wizardEnabled: e.target.checked })}
-              />
-              Кнопка «по шагам» на протоколе
-            </label>
+          <Card title="Старт">
             <label className="mt-2 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -51,50 +35,24 @@ export function SettingsPage() {
               При запуске открывать Протокол
             </label>
           </Card>
-          <Card title="Клинреки на протоколе">
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                checked={settings.guidelineDisplay === "block"}
-                onChange={() => setSettings({ guidelineDisplay: "block" })}
-              />
-              Блок на странице
-            </label>
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                checked={settings.guidelineDisplay === "modal"}
-                onChange={() => setSettings({ guidelineDisplay: "modal" })}
-              />
-              Модальное окно
-            </label>
-          </Card>
-          <Card title="AI-провайдер и ключи">
-            <p className="text-xs text-ink-soft">
-              OpenRouter. Ключ живёт только в этом браузере. Облачный резерв — из вашего репозитория (Supabase), здесь
-              превью без облака.
-            </p>
-            <input
-              type="password"
-              value={settings.openRouterKey}
-              onChange={(e) => setSettings({ openRouterKey: e.target.value })}
-              placeholder="sk-or-…"
-              className="mt-2 w-full rounded-lg border border-line bg-paper px-2 py-1.5 text-sm"
-            />
-            <input
-              value={settings.aiModel}
-              onChange={(e) => setSettings({ aiModel: e.target.value })}
-              className="mt-2 w-full rounded-lg border border-line bg-paper px-2 py-1.5 text-sm"
-            />
-          </Card>
-          <Card title="Данные">
-            <p className="text-xs text-ink-soft">Справочники, пациенты, тексты сеансов.</p>
-            <div className="mt-2 flex gap-2">
-              <button type="button" className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm" onClick={downloadExport}>
-                Экспорт
+          <Card title="Сеанс станка">
+            <p className="mt-2 text-xs text-ink-soft">Протокол v2 + старые неймспейсы в одном файле.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm"
+                onClick={() => {
+                  const blob = new Blob([useAppStore.getState().exportData()], { type: "application/json" });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `medconsult-${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                }}
+              >
+                Скачать всё
               </button>
               <label className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
-                Импорт
+                Загрузить
                 <input
                   type="file"
                   accept="application/json"
@@ -102,20 +60,15 @@ export function SettingsPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    file.text().then(importData);
+                    file.text().then((raw) => useAppStore.getState().importData(raw));
                   }}
                 />
               </label>
             </div>
           </Card>
-          <Card title="Синхронизация Supabase">
-            <p className="text-xs text-ink-soft">
-              Офлайн и так работает. В полном репозитории — URL и ключ проекта. Здесь достаточно экспорта JSON.
-            </p>
-            <button type="button" className="mt-2 rounded-lg bg-teal px-3 py-1.5 text-sm font-medium text-paper">
-              Подключить
-            </button>
-          </Card>
+        </div>
+        <div className="legacy-surface rounded-xl border border-line bg-surface p-3">
+          <LegacySettings />
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
           <h3 className="text-sm font-medium">Горячие клавиши · Windows</h3>

@@ -38,6 +38,10 @@ export type Patient = {
   lastName: string;
   firstName: string;
   age: string;
+  name?: string;
+  dob?: string;
+  allergies?: string[];
+  currentMedications?: string[];
 };
 
 export type VisitRecord = {

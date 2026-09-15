@@ -1,0 +1,247 @@
+
+function _ls() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemLS || (globalThis.__medconsultMemLS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.localStorage;
+}
+function _ss() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemSS || (globalThis.__medconsultMemSS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.sessionStorage;
+}
+
+// Клиент для AI-вызовов. Поддерживает два провайдера на выбор:
+// - OpenRouter (унифицированный доступ к разным моделям, платный по токенам)
+// - Google AI Studio напрямую (свой ключ с ai.google.dev, у Gemini есть бесплатный лимит)
+// Оба используют модель Gemini. Ключи хранятся только в localStorage браузера.
+
+const PROVIDER_KEY = 'medconsult_ai_provider'
+const OPENROUTER_KEY = 'medconsult_openrouter_key'
+const GOOGLE_KEY = 'medconsult_google_key'
+
+const OPENROUTER_MODEL = 'google/gemini-2.5-flash'
+const GOOGLE_MODEL = 'gemini-2.5-flash'
+
+export function getProvider() {
+  return _ls().getItem(PROVIDER_KEY) || 'openrouter'
+}
+
+export function setProvider(provider) {
+  _ls().setItem(PROVIDER_KEY, provider)
+}
+
+export function getApiKey(provider = getProvider()) {
+  const key = provider === 'google' ? GOOGLE_KEY : OPENROUTER_KEY
+  return _ls().getItem(key) || ''
+}
+
+export function setApiKey(provider, value) {
+  const key = provider === 'google' ? GOOGLE_KEY : OPENROUTER_KEY
+  _ls().setItem(key, value.trim())
+}
+
+export function hasApiKey() {
+  return !!getApiKey()
+}
+
+async function callOpenRouterProvider(systemPrompt, userPrompt) {
+  const apiKey = getApiKey('openrouter')
+  if (!apiKey) throw new Error('Не задан ключ OpenRouter — добавь его в настройках сверху')
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.2,
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+  return data?.choices?.[0]?.message?.content?.trim() || ''
+}
+
+async function callGoogleProvider(systemPrompt, userPrompt) {
+  const apiKey = getApiKey('google')
+  if (!apiKey) throw new Error('Не задан ключ Google AI Studio — добавь его в настройках сверху')
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${apiKey}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature: 0.2 },
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Google AI ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+  return data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('').trim() || ''
+}
+
+async function callAI(systemPrompt, userPrompt) {
+  const provider = getProvider()
+  return provider === 'google' ? callGoogleProvider(systemPrompt, userPrompt) : callOpenRouterProvider(systemPrompt, userPrompt)
+}
+
+export async function shortenText(text) {
+  return callAI(
+    'Сократи текст до самого важного, без потери клинического смысла — короткими пунктами через запятую, не переписывая факты. Не добавляй ничего, чего нет в исходном тексте. Ответь только сокращённым текстом, без преамбулы.',
+    text
+  )
+}
+
+export async function testAiConnection() {
+  const start = performance.now()
+  try {
+    const result = await callAI('Ответь одним словом.', 'Скажи "ок".')
+    const latency = Math.round(performance.now() - start)
+    return { ok: true, latency, provider: getProvider(), sample: result.slice(0, 60) }
+  } catch (e) {
+    const latency = Math.round(performance.now() - start)
+    return { ok: false, latency, provider: getProvider(), error: e.message }
+  }
+}
+
+export async function checkDrugInteractions(drugNames) {
+  if (!drugNames.length) return 'Нет назначений для проверки.'
+  return callAI(
+    'Ты — ассистент врача-уролога по проверке лекарственных взаимодействий. Отвечай кратко, по-русски, структурированным списком. Если взаимодействий нет — так и скажи одной строкой. Не давай общих фраз-предупреждений о необходимости проверки у специалиста — сам врач и есть специалист, дай конкретику по каждой найденной паре.',
+    `Проверь клинически значимые взаимодействия между препаратами: ${drugNames.join(', ')}.`
+  )
+}
+
+export async function polishNarrative(sectionsText) {
+  return callAI(
+    'Ты помогаешь врачу-урологу превратить черновик протокола консультации (набор фрагментов по секциям) в связный медицинский текст на русском языке. Сохраняй все клинические факты дословно, ничего не добавляй и не выдумывай. Не убирай медицинские термины. Формат — связный текст протокола, без markdown-разметки.',
+    sectionsText
+  )
+}
+
+export async function suggestDiagnosis(complaints, anamnesis) {
+  return callAI(
+    'Ты — ассистент врача-уролога. По жалобам и анамнезу предложи 2-3 наиболее вероятных диагноза (с кодами МКБ-10, если уместно) для рассмотрения врачом. Это вспомогательная подсказка, не окончательное решение — пиши кратко, по-русски, списком.',
+    `Жалобы: ${complaints.join(', ') || 'не указаны'}\nАнамнез: ${anamnesis || 'не указан'}`
+  )
+}
+
+export async function extractDrugInfo(instructionText) {
+  const raw = await callAI(
+    'Ты извлекаешь структурированные данные СТРОГО из предоставленного текста инструкции по медицинскому применению препарата. КРИТИЧЕСКИ ВАЖНО: используй только то, что явно написано в тексте. Никогда не дополняй, не досочиняй и не подставляй "типичные" значения из общих знаний о препарате, даже если уверен в них, — если данных нет в тексте, оставляй поле пустой строкой. Отвечай СТРОГО валидным JSON без markdown-разметки, без ```, без преамбулы. Формат: {"dosage": "стандартная разовая/суточная доза кратко, дословно из текста", "frequency": "кратность приёма кратко, дословно из текста", "sideEffects": "3-5 главных побочных эффектов через запятую, только те, что перечислены в тексте", "group": "фармакологическая группа кратко, если указана в тексте", "brandNames": "3-6 торговых названий через запятую, только если явно перечислены в тексте", "monitoring": "какие анализы/обследования нужно контролировать на фоне приёма, через запятую — только если explicitly указано в тексте, иначе пустая строка"}. Пустая строка для любого поля, которого нет в тексте — не выдумывай.',
+    instructionText.slice(0, 12000)
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    throw new Error('Не удалось разобрать ответ AI как JSON. Попробуй ещё раз или заполни вручную.')
+  }
+}
+
+export async function extractGuidelineInfo(instructionText) {
+  const raw = await callAI(
+    `Ты извлекаешь структурированные клинические рекомендации российского формата (напр. reclin.ru, cr.minzdrav.gov.ru) для врача-уролога. У таких источников фиксированная структура разделов: Определение, Этиология, МКБ, Классификация, Клиническая картина, Диагностика, Лечение (с таблицами вида "Антибиотик — Суточная доза — Продолжительность", разбитыми по сценариям: тяжесть течения, путь введения, линия терапии).
+
+КРИТИЧЕСКИ ВАЖНО: заполняй поля СТРОГО из предоставленного текста. Никогда не дополняй своими знаниями о заболевании, даже если уверен в них, не досочиняй дозы, коды МКБ, классификацию или сценарии терапии, которых нет в тексте дословно. Если раздел в тексте отсутствует — оставляй соответствующее поле пустой строкой или пустым массивом, а не заполняй его по памяти.
+
+Отвечай СТРОГО валидным JSON без markdown, без \`\`\`, без преамбулы. Формат:
+{
+  "mkb10Codes": "коды через запятую, напр. N10, N39.0",
+  "title": "краткое название состояния",
+  "definition": "определение в 1-2 предложения",
+  "classification": "классификация/стадии, каждая стадия/степень на отдельной строке (\\n между ними), если есть в тексте",
+  "diagnosisFormulation": "шаблон корректной формулировки диагноза для протокола",
+  "diagnosisCriteria": "критерии постановки диагноза кратко (не обследования, а именно что подтверждает диагноз)",
+  "investigations": "обследования для диагностики через запятую (анализы, УЗИ, КТ и т.п.)",
+  "clinicalPicture": "типичные жалобы/симптомы этого состояния через запятую (для подсказки в разделе Жалобы)",
+  "scenarios": [
+    {
+      "name": "название клинического сценария, напр. «Нетяжёлое течение, перорально» или «Тяжёлое течение, парентерально»",
+      "drugs": [
+        { "name": "МНН препарата", "dose": "доза как в тексте, напр. 500 мг 2 р/сут", "duration": "длительность курса, напр. 7-10 дней" }
+      ]
+    }
+  ],
+  "nonDrugTherapy": "немедикаментозная терапия / общие рекомендации кратко (режим, диета, физиотерапия)",
+  "redFlags": "тревожные признаки, требующие направления к специалисту/госпитализации, если есть в тексте",
+  "additionalInfo": "дополнительная информация: прогноз, диспансерное наблюдение и т.п., если есть",
+  "source": "название документа-источника",
+  "sourceYear": "год утверждения/публикации, если указан"
+}
+
+Каждую отдельную таблицу доз в разделе "Лечение" превращай в отдельный сценарий — не смешивай разные схемы (перорально/парентерально, лёгкое/тяжёлое, первая/вторая линия) в один список. Не выдумывай дозы и длительность, если их нет в тексте — оставляй поле пустым, но препарат всё равно добавляй в список. Если что-то не найдено вообще — пустая строка или пустой массив.`,
+    instructionText.slice(0, 16000)
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    throw new Error('Не удалось разобрать ответ AI как JSON. Попробуй ещё раз или заполни вручную.')
+  }
+}
+
+export async function suggestBrandNames(mnn) {
+  const raw = await callAI(
+    'Ты называешь торговые названия лекарственных препаратов по международному непатентованному названию (МНН). КРИТИЧЕСКИ ВАЖНО: только препараты, реально присутствующие на рынке России (зарегистрированные в ГРЛС и продающиеся в российских аптеках) — не называй зарубежные бренды, которых нет в РФ, даже если они известны. Отвечай СТРОГО валидным JSON без markdown: {"brandNames": "Название1, Название2, Название3"}. Если не уверен, есть ли препарат в РФ — не включай его в список. Не выдумывай несуществующие названия.',
+    `МНН: ${mnn}`
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    const parsed = JSON.parse(cleaned)
+    return parsed.brandNames || ''
+  } catch {
+    return raw
+  }
+}
+
+export async function checkAllergyAI(drugName, patientAllergies) {
+  if (!patientAllergies?.length) return 'У пациента не указаны аллергии.'
+  return callAI(
+    'Ты — ассистент врача-уролога по проверке перекрёстной лекарственной аллергии. По препарату и списку известных аллергий пациента оцени риск перекрёстной реакции (химическая близость, общий класс, известные case-report данные). Отвечай кратко по-русски. Если риска нет — одна строка об этом.',
+    `Назначаемый препарат: ${drugName}\nАллергии пациента: ${patientAllergies.join(', ')}`
+  )
+}
+
+export async function suggestAnalogsAI(drugName) {
+  const raw = await callAI(
+    'Ты — ассистент врача по подбору терапевтических аналогов и препаратов той же фармакологической группы. Отвечай СТРОГО валидным JSON без markdown: {"analogs": "Аналог1, Аналог2, Аналог3"}. Указывай МНН, не выдумывай несуществующие препараты.',
+    `Подбери аналоги (тот же класс/механизм действия) для препарата: ${drugName}`
+  )
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  try {
+    const parsed = JSON.parse(cleaned)
+    return (parsed.analogs || '').split(',').map((s) => s.trim()).filter(Boolean)
+  } catch {
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+}

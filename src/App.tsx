@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LockGate } from "./medconsult/LockGate";
 import { NavProvider } from "./medconsult/NavContext";
 import { PatientsPage } from "./medconsult/PatientsPage";
 import { ProtocolPage } from "./medconsult/ProtocolPage";
@@ -17,7 +18,6 @@ export default function App() {
   const openOnProtocol = useAppStore((s) => s.settings.openOnProtocol);
 
   useEffect(() => {
-    useAppStore.getState().hydrate();
     const onHash = () => setPath(pageFromHash());
     window.addEventListener("hashchange", onHash);
     if (!window.location.hash) {
@@ -38,8 +38,10 @@ export default function App() {
   else if (path.startsWith("/start")) page = <StartPage />;
 
   return (
-    <NavProvider path={path === "" ? "/" : path} navigate={navigate}>
-      {page}
-    </NavProvider>
+    <LockGate>
+      <NavProvider path={path === "" ? "/" : path} navigate={navigate}>
+        {page}
+      </NavProvider>
+    </LockGate>
   );
 }
