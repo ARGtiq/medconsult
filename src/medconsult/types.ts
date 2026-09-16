@@ -19,7 +19,7 @@ export type StudyField = {
 export type StudyDef = {
   key: string;
   label: string;
-  category: "instrumental" | "lab";
+  category: "instrumental" | "lab" | "questionnaire";
   template: string;
   fields: StudyField[];
   referenceNotes: string;

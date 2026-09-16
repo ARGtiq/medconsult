@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { applyComputed } from "./data/studies";
+import { applyComputed, interpretScore } from "./data/studies";
 import { allStudiesLive, getStudyLive } from "./live";
 import { useAppStore } from "./store";
 
@@ -64,6 +64,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
+                  const interp = def.category === "questionnaire" && value ? interpretScore(f.key, value) : "";
                   return (
                     <label
                       key={f.key}
@@ -81,9 +82,14 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                             updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: e.target.value })
                           }
                           className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
+                          placeholder={def.category === "questionnaire" ? "балл" : undefined}
                         />
                       )}
-                      {f.normal && <span className="block text-[10px] text-teal">{f.normal}</span>}
+                      {interp && interp !== value ? (
+                        <span className="block text-[10px] font-medium text-teal">{interp}</span>
+                      ) : f.normal ? (
+                        <span className="block text-[10px] text-teal">{f.normal}</span>
+                      ) : null}
                       {was && (
                         <span className="mt-0.5 block text-[10px] text-mute">
                           было: {was}
@@ -123,7 +129,13 @@ export function PlusStudyButton() {
   const [pos, setPos] = useState({ top: 0, left: 0, maxH: 280, width: 280 });
   const { session, addStudy } = useAppStore();
   const studies = useMemo(() => allStudiesLive(), []);
-  const filtered = studies.filter((s) => !q.trim() || s.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtered = studies.filter((s) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    if (s.label.toLowerCase().includes(needle)) return true;
+    if (s.category?.toLowerCase().includes(needle)) return true;
+    return (s.fields || []).some((f) => f.label.toLowerCase().includes(needle));
+  });
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -246,6 +258,9 @@ export function PlusStudyButton() {
                     }`}
                   >
                     {s.label}
+                    {s.category === "questionnaire" ? (
+                      <span className="mt-0.5 block text-[10px] font-normal opacity-80">IPSS, МИЭФ-5, PEDT…</span>
+                    ) : null}
                     {on ? " · добавлен" : ""}
                   </button>
                 );

@@ -148,6 +148,24 @@ export const STUDIES: StudyDef[] = [
     ],
     referenceNotes: "ПСА интерпретировать вместе с объёмом простаты (плотность ПСА).",
   },
+  {
+    key: "questionnaires",
+    label: "Анкеты",
+    category: "questionnaire",
+    template: "Анкеты от {date}: {summary}.",
+    fields: [
+      { key: "ipss", label: "IPSS", normal: "0–7 лёгкие · 8–19 умеренные · 20–35 тяжёлые" },
+      { key: "ipssQol", label: "IPSS-QoL", normal: "0 отлично — 6 невыносимо" },
+      { key: "iief5", label: "МИЭФ-5", normal: "22–25 нет ЭД · 17–21 лёгкая · 12–16 лёгкая/умеренная · 8–11 умеренная · 5–7 тяжёлая" },
+      { key: "pedt", label: "PEDT", normal: "≥11 ПЭ · 9–10 вероятная · ≤8 нет" },
+      { key: "nihcpsi", label: "NIH-CPSI", normal: "0–43 (боль 0–21, мочеиспуск. 0–10, QoL 0–12)" },
+      { key: "iciq", label: "ICIQ-SF", normal: "0–21 · 1–5 лёгкая · 6–12 умеренная · 13–21 тяжёлая инконтиненция" },
+      { key: "ams", label: "AMS", normal: "17–26 нет · 27–36 лёгкие · 37–49 умеренные · ≥50 тяжёлые" },
+      { key: "other", label: "Другая", normal: "название и балл" },
+    ],
+    referenceNotes:
+      "IPSS 0–35. МИЭФ-5 (IIEF-5) 5–25. PEDT ≥11 — преждевременная эякуляция. NIH-CPSI — хронический простатит. ICIQ-SF — недержание. AMS — возрастной андрогенный дефицит.",
+  },
 ];
 
 export function getStudy(key: string) {
@@ -179,6 +197,42 @@ function withPrev(cur: string, prev?: string) {
   return `${c} (${p})`;
 }
 
+function parseScore(raw: string) {
+  const n = parseFloat(raw.replace(",", ".").replace(/[^\d.+-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+export function interpretScore(key: string, raw: string) {
+  const v = (raw || "").trim();
+  if (!v) return "";
+  const n = parseScore(v);
+  if (n === null) return v;
+  if (key === "ipss") {
+    const band = n <= 7 ? "лёгкие" : n <= 19 ? "умеренные" : "тяжёлые";
+    return `${n} (${band})`;
+  }
+  if (key === "ipssQol") return String(n);
+  if (key === "iief5") {
+    const band =
+      n >= 22 ? "нет ЭД" : n >= 17 ? "лёгкая ЭД" : n >= 12 ? "лёгкая/умеренная ЭД" : n >= 8 ? "умеренная ЭД" : "тяжёлая ЭД";
+    return `${n} (${band})`;
+  }
+  if (key === "pedt") {
+    const band = n >= 11 ? "ПЭ" : n >= 9 ? "вероятная ПЭ" : "ПЭ нет";
+    return `${n} (${band})`;
+  }
+  if (key === "nihcpsi") return `${n}`;
+  if (key === "iciq") {
+    const band = n <= 0 ? "нет" : n <= 5 ? "лёгкая" : n <= 12 ? "умеренная" : "тяжёлая";
+    return `${n} (${band})`;
+  }
+  if (key === "ams") {
+    const band = n <= 26 ? "нет" : n <= 36 ? "лёгкие" : n <= 49 ? "умеренные" : "тяжёлые";
+    return `${n} (${band})`;
+  }
+  return v;
+}
+
 export function fillStudyTemplate(
   def: StudyDef,
   instance: { date: string; fields: Record<string, string> },
@@ -190,6 +244,20 @@ export function fillStudyTemplate(
     previous?.date && previous.date !== instance.date
       ? `${instance.date || "—"} (ранее ${previous.date})`
       : instance.date || "—";
+
+  if (def.category === "questionnaire") {
+    const bits: string[] = [];
+    for (const f of def.fields) {
+      const v = (fields[f.key] || "").trim();
+      if (!v) continue;
+      const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+      const shown = interpretScore(f.key, v);
+      bits.push(p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`);
+    }
+    if (!bits.length) return "";
+    return `Анкеты от ${date}: ${bits.join("; ")}.`;
+  }
+
   let text = def.template.replaceAll("{date}", date);
   for (const f of def.fields) {
     const v = (fields[f.key] || "").trim();

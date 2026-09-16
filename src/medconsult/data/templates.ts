@@ -25,32 +25,32 @@ export type TemplatesState = {
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
+  { id: "asthma", label: "бронхиальная астма" },
+  { id: "gastritis", label: "гастрит" },
   { id: "htn", label: "гипертоническая болезнь" },
+  { id: "bph", label: "ДГПЖ" },
+  { id: "ihd", label: "ИБС" },
+  { id: "mi", label: "инфаркт миокарда", needsDate: true },
+  { id: "urolith", label: "мочекаменная болезнь" },
+  { id: "cva", label: "ОНМК", needsDate: true },
+  { id: "pancreatitis", label: "панкреатит" },
   { id: "dm1", label: "сахарный диабет 1 типа" },
   { id: "dm2", label: "сахарный диабет 2 типа" },
   { id: "cholecystitis", label: "холецистит" },
-  { id: "pancreatitis", label: "панкреатит" },
-  { id: "gastritis", label: "гастрит" },
-  { id: "ihd", label: "ИБС" },
-  { id: "mi", label: "инфаркт миокарда", needsDate: true },
-  { id: "cva", label: "ОНМК", needsDate: true },
-  { id: "urolith", label: "мочекаменная болезнь" },
-  { id: "bph", label: "ДГПЖ" },
-  { id: "prostatitis", label: "хронический простатит" },
-  { id: "asthma", label: "бронхиальная астма" },
   { id: "copd", label: "ХОБЛ" },
+  { id: "prostatitis", label: "хронический простатит" },
 ];
 
 export const SEED_SURGERIES: VitaePreset[] = [
   { id: "appendectomy", label: "аппендэктомия", needsDate: true, emptyDateText: "давно" },
-  { id: "cholecystectomy", label: "холецистэктомия", needsDate: true },
+  { id: "varicocele", label: "варикоцелэктомия", needsDate: true },
   { id: "hernia_inguinal", label: "герниопластика по поводу паховой грыжи", needsDate: true },
   { id: "hernia_umbilical", label: "герниопластика по поводу пупочной грыжи", needsDate: true },
-  { id: "turp", label: "ТУР простаты", needsDate: true },
-  { id: "prostatectomy", label: "простатэктомия", needsDate: true },
-  { id: "varicocele", label: "варикоцелэктомия", needsDate: true },
   { id: "nephrectomy", label: "нефрэктомия", needsDate: true },
   { id: "orchiectomy", label: "орхиэктомия", needsDate: true },
+  { id: "prostatectomy", label: "простатэктомия", needsDate: true },
+  { id: "turp", label: "ТУР простаты", needsDate: true },
+  { id: "cholecystectomy", label: "холецистэктомия", needsDate: true },
 ];
 
 export const SEED_DOC_KINDS: DocKind[] = [

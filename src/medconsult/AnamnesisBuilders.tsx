@@ -74,6 +74,10 @@ function PresetPicker({
   onChange: (next: VitaeItem[]) => void;
 }) {
   const [custom, setCustom] = useState("");
+  const sorted = useMemo(
+    () => [...presets].sort((a, b) => a.label.localeCompare(b.label, "ru", { sensitivity: "base" })),
+    [presets],
+  );
   function toggle(p: VitaePreset) {
     const has = selected.some((s) => s.id === p.id);
     if (has) onChange(selected.filter((s) => s.id !== p.id));
@@ -85,7 +89,7 @@ function PresetPicker({
   return (
     <div className="mt-1">
       <div className="flex flex-wrap gap-1">
-        {presets.map((p) => {
+        {sorted.map((p) => {
           const on = selected.some((s) => s.id === p.id);
           return (
             <button

@@ -36,7 +36,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         }),
       );
     allStudiesLive()
-      .filter((st) => !s || st.label.toLowerCase().includes(s))
+      .filter(
+        (st) =>
+          !s ||
+          st.label.toLowerCase().includes(s) ||
+          st.category?.toLowerCase().includes(s) ||
+          (st.fields || []).some((f) => f.label.toLowerCase().includes(s)),
+      )
       .forEach((st) =>
         out.push({
           id: "s-" + st.key,
