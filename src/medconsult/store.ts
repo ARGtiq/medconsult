@@ -148,6 +148,7 @@ type AppStore = {
   toggleComplaint: (text: string) => void;
   toggleLocal: (text: string) => void;
   addRecommendation: (text: string) => void;
+  addPatient: (input: { lastName: string; firstName: string; patronymic?: string; year?: string }) => Patient;
   saveVisit: () => void;
   loadVisit: (id: string) => void;
   loadLastForPatient: () => void;
@@ -355,6 +356,42 @@ export const useAppStore = create<AppStore>((set, get) => ({
     } catch {
       /* */
     }
+  },
+
+  addPatient(input) {
+    const first = [input.firstName, input.patronymic].filter(Boolean).join(" ").trim();
+    const year = (input.year || "").trim();
+    const dob = /^\d{4}$/.test(year) ? `${year}-01-01` : undefined;
+    const p: Patient = {
+      id: uid("p"),
+      lastName: input.lastName.trim(),
+      firstName: first,
+      age: calcAge(dob),
+      name: `${input.lastName.trim()} ${first}`.trim(),
+      dob,
+      allergies: [],
+      currentMedications: [],
+    };
+    const patients = [...get().patients, p];
+    const unique = Object.values(
+      Object.fromEntries(patients.map((x) => [x.id, x])),
+    ) as Patient[];
+    writeJson(PATIENTS_KEY, unique);
+    set({ patients: unique });
+    try {
+      legacy.savePatient({
+        id: p.id,
+        name: p.name,
+        dob: p.dob || "",
+        allergies: [],
+        currentMedications: [],
+      });
+    } catch {
+      /* */
+    }
+    get().setSession({ patientId: p.id });
+    get().setToast(`Пациент: ${p.name}`);
+    return p;
   },
 
   saveVisit() {

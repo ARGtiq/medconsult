@@ -15,10 +15,14 @@ import {
   complaintsForSession,
   drugLine,
   learnedDrugs,
+  liveComplaints,
   liveIcdMerged,
   searchDrugs,
 } from "./live";
+import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
+import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
 import { PlusStudyButton, StudyCard } from "./StudyCard";
+import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 
 export function ProtocolPage() {
@@ -31,6 +35,7 @@ export function ProtocolPage() {
   const [ixText, setIxText] = useState<string | null>(null);
   const [ixBusy, setIxBusy] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
+  const [complaintQ, setComplaintQ] = useState("");
   const patient = patients.find((p) => p.id === session.patientId);
   const guideline = compactGuideline(session.diagnosisCode);
   const packs = packsForCode(session.diagnosisCode);
@@ -347,7 +352,21 @@ export function ProtocolPage() {
             ai={showAi("complaints") ? () => polish("complaints") : undefined}
             voice={(t) => toggleComplaint(t)}
           >
-            <div className="text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
+            <Typeahead
+              value={complaintQ}
+              onChange={setComplaintQ}
+              items={liveComplaints()
+                .filter((t) => !complaintQ.trim() || t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
+                .slice(0, 12)
+                .map((t) => ({ id: t, label: t }))}
+              onPick={(it) => {
+                if (!session.complaints.includes(it.label)) toggleComplaint(it.label);
+              }}
+              onSubmitCustom={(raw) => toggleComplaint(raw)}
+              placeholder="Начать вводить жалобу…  ↑↓ Enter"
+              emptyHint="Enter — добавить свою формулировку"
+            />
+            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
             <Chips texts={store.recentChips} onToggle={toggleComplaint} selected={session.complaints} />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
             <Chips texts={chips.fromCode} onToggle={toggleComplaint} selected={session.complaints} dashed />
@@ -376,36 +395,70 @@ export function ProtocolPage() {
             id="anamnesis"
             title="Анамнез заболевания"
             open={session.openSection === "anamnesis"}
-            onOpen={() => setSession({ openSection: session.openSection === "anamnesis" ? null : "anamnesis" })}
+            onOpen={() => {
+              if (session.openSection === "anamnesis") {
+                const t = composeAnamnesis(session.anamnesisDraft || emptyAnamnesis());
+                setSession({
+                  openSection: null,
+                  anamnesisChipMode: t ? false : session.anamnesisChipMode,
+                  anamnesis: t || session.anamnesis,
+                });
+              } else {
+                setSession({ openSection: "anamnesis" });
+              }
+            }}
             onRemove={() => toggleBlock("anamnesis")}
             ai={showAi("anamnesis") ? () => polish("anamnesis") : undefined}
-            voice={(t) => setSession({ anamnesis: session.anamnesis ? `${session.anamnesis} ${t}` : t })}
+            voice={(t) => setSession({ anamnesis: session.anamnesis ? `${session.anamnesis} ${t}` : t, anamnesisChipMode: false })}
           >
-            <textarea
-              value={session.anamnesis}
-              onChange={(e) => setSession({ anamnesis: e.target.value })}
-              rows={3}
-              className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            <AnamnesisDisease
+              draft={session.anamnesisDraft || emptyAnamnesis()}
+              text={session.anamnesis}
+              chipMode={session.anamnesisChipMode ?? !session.anamnesis}
+              onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d) })}
+              onText={(t) => setSession({ anamnesis: t })}
+              onMode={(chips) =>
+                setSession({
+                  anamnesisChipMode: chips,
+                  anamnesis: chips ? composeAnamnesis(session.anamnesisDraft || emptyAnamnesis()) : session.anamnesis,
+                })
+              }
             />
           </Sec>
 
-          {session.visitKind === "primary" && (
-            <Sec
-              id="anamnesisVitae"
-              title="Анамнез жизни"
-              open={session.openSection === "anamnesisVitae"}
-              onOpen={() => setSession({ openSection: session.openSection === "anamnesisVitae" ? null : "anamnesisVitae" })}
-              onRemove={() => toggleBlock("anamnesisVitae")}
-              voice={(t) => setSession({ anamnesisVitae: session.anamnesisVitae ? `${session.anamnesisVitae} ${t}` : t })}
-            >
-              <textarea
-                value={session.anamnesisVitae}
-                onChange={(e) => setSession({ anamnesisVitae: e.target.value })}
-                rows={3}
-                className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-              />
-            </Sec>
-          )}
+          <Sec
+            id="anamnesisVitae"
+            title="Предварительный анамнез жизни"
+            open={session.openSection === "anamnesisVitae"}
+            onOpen={() => {
+              if (session.openSection === "anamnesisVitae") {
+                const t = composeVitae(session.vitaeDraft || emptyVitae());
+                setSession({
+                  openSection: null,
+                  vitaeChipMode: t ? false : session.vitaeChipMode,
+                  anamnesisVitae: t || session.anamnesisVitae,
+                });
+              } else {
+                setSession({ openSection: "anamnesisVitae" });
+              }
+            }}
+            onRemove={() => toggleBlock("anamnesisVitae")}
+            voice={(t) => setSession({ anamnesisVitae: session.anamnesisVitae ? `${session.anamnesisVitae} ${t}` : t, vitaeChipMode: false })}
+          >
+            <AnamnesisVitae
+              draft={session.vitaeDraft || emptyVitae()}
+              text={session.anamnesisVitae}
+              chipMode={session.vitaeChipMode ?? !session.anamnesisVitae}
+              onDraft={(d) => setSession({ vitaeDraft: d, anamnesisVitae: composeVitae(d) })}
+              onText={(t) => setSession({ anamnesisVitae: t })}
+              onMode={(chips) =>
+                setSession({
+                  vitaeChipMode: chips,
+                  anamnesisVitae: chips ? composeVitae(session.vitaeDraft || emptyVitae()) : session.anamnesisVitae,
+                })
+              }
+            />
+          </Sec>
 
           <Sec
             id="status"
@@ -688,59 +741,28 @@ function DrugSearch({
 }) {
   const [q, setQ] = useState("");
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
-  const showContext = !q.trim() && !!diagnosisCode && hits.length > 0;
-
-  function submit() {
-    const t = q.trim();
-    if (!t) return;
-    if (hits[0]) onAdd(hits[0].line);
-    else onAdd(t);
-    setQ("");
-  }
+  const items = hits
+    .filter((h) => !selected.includes(h.line))
+    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.via }));
 
   return (
     <div className="mt-1">
-      <input
+      <Typeahead
         value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        placeholder="ДВ, торговое, группа, МКБ…"
-        className="w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
+        onChange={setQ}
+        items={items}
+        onPick={(it) => onAdd(it.label)}
+        onSubmitCustom={(raw) => onAdd(raw)}
+        placeholder="ДВ, торговое, группа, МКБ…  ↑↓ Enter"
+        emptyHint="Нет в справочнике. Enter — вставить как есть"
       />
       {!q.trim() && !diagnosisCode && (
         <p className="mt-1.5 text-xs text-mute">
           Справочник не вываливается целиком. Найди препарат или поставь диагноз — подтянутся схема и клинрек.
         </p>
       )}
-      {showContext && <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по диагнозу {diagnosisCode}</div>}
-      {q.trim() && hits.length === 0 && (
-        <p className="mt-1.5 text-xs text-mute">Нет в справочнике. Enter — вставить как есть.</p>
-      )}
-      {hits.length > 0 && (
-        <ul className="mt-1 max-h-48 overflow-auto rounded-md border border-line bg-paper">
-          {hits.map((h) => {
-            const on = selected.includes(h.line);
-            return (
-              <li key={h.name + h.via}>
-                <button
-                  type="button"
-                  onClick={() => onAdd(h.line)}
-                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${
-                    on ? "bg-teal-soft text-teal" : "hover:bg-surface"
-                  }`}
-                >
-                  <span className="min-w-0 flex-1 truncate">{h.line}</span>
-                  <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">{h.via}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      {!q.trim() && !!diagnosisCode && hits.length > 0 && (
+        <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по диагнозу {diagnosisCode} — стрелки и Enter</div>
       )}
     </div>
   );

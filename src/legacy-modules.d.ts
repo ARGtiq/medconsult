@@ -6,7 +6,7 @@ declare module "@/legacy/components/*" {
 
 declare module "@/legacy/lib/store" {
   export const store: {
-    getPatients: () => Record<string, unknown>[];
+    savePatient: (p: Record<string, unknown>) => void;
     getVisits: () => Record<string, unknown>[];
     saveVisit: (v: Record<string, unknown>) => void;
     recordComplaint: (text: string) => void;

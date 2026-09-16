@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { applyComputed } from "./data/studies";
 import { allStudiesLive, getStudyLive } from "./live";
 import { useAppStore } from "./store";
@@ -102,45 +103,144 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
 
 export function PlusStudyButton() {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [idx, setIdx] = useState(0);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, maxH: 280, width: 280 });
   const { session, addStudy } = useAppStore();
   const studies = useMemo(() => allStudiesLive(), []);
+  const filtered = studies.filter((s) => !q.trim() || s.label.toLowerCase().includes(q.trim().toLowerCase()));
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    function place() {
+      if (!btnRef.current) return;
+      const r = btnRef.current.getBoundingClientRect();
+      const width = 280;
+      const spaceBelow = window.innerHeight - r.bottom - 12;
+      const spaceAbove = r.top - 12;
+      const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const maxH = Math.max(180, Math.min(440, openUp ? spaceAbove : spaceBelow));
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+      const top = openUp ? Math.max(8, r.top - maxH - 4) : Math.min(r.bottom + 4, window.innerHeight - maxH - 8);
+      setPos({ top, left, maxH, width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, filtered.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => setIdx(0), [q, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = panelRef.current?.querySelector<HTMLElement>(`[data-idx="${idx}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [idx, open]);
+
+  function choose(i: number) {
+    const s = filtered[i];
+    if (!s) return;
+    if (session.studies.some((e) => e.key === s.key)) return;
+    addStudy(s.key);
+    setOpen(false);
+    setQ("");
+  }
+
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         type="button"
         className="rounded-lg bg-teal px-2.5 py-1.5 text-sm font-bold text-paper"
         onClick={() => setOpen((v) => !v)}
         title="Добавить обследование"
         aria-label="Добавить обследование"
+        aria-expanded={open}
       >
         <span className="inline-flex items-center gap-1">
           <Plus className="size-3.5" /> обследование
         </span>
       </button>
-      {open && (
-        <div className="absolute top-10 right-0 z-20 flex max-h-80 w-64 flex-col gap-1 overflow-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
-          {studies.map((s) => {
-            const on = session.studies.some((e) => e.key === s.key);
-            return (
-              <button
-                key={s.key}
-                type="button"
-                disabled={on}
-                onClick={() => {
-                  addStudy(s.key);
-                  setOpen(false);
-                }}
-                className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium ${
-                  on ? "border-teal/30 bg-teal-soft text-teal" : "border-line bg-paper text-ink"
-                }`}
-              >
-                {s.label}
-                {on ? " · добавлен" : ""}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{ top: pos.top, left: pos.left, width: pos.width, height: pos.maxH }}
+            className="fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
+          >
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setIdx((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setIdx((i) => Math.max(i - 1, 0));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  choose(idx);
+                }
+              }}
+              placeholder="Найти обследование…  ↑↓ Enter"
+              className="shrink-0 border-b border-line bg-paper px-2.5 py-2 text-sm outline-none"
+            />
+            <div className="min-h-0 flex-1 overflow-auto p-1.5">
+              {filtered.length === 0 && <p className="px-2 py-3 text-xs text-mute">Ничего не нашлось</p>}
+              {filtered.map((s, i) => {
+                const on = session.studies.some((e) => e.key === s.key);
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    data-idx={i}
+                    disabled={on}
+                    onMouseEnter={() => setIdx(i)}
+                    onClick={() => choose(i)}
+                    className={`mb-1 w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium last:mb-0 ${
+                      on
+                        ? "border-teal/30 bg-teal-soft text-teal"
+                        : i === idx
+                          ? "border-teal bg-teal-soft text-teal"
+                          : "border-line bg-paper text-ink"
+                    }`}
+                  >
+                    {s.label}
+                    {on ? " · добавлен" : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

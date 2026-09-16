@@ -44,7 +44,7 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
 
   push("complaints", "Жалобы", session.complaints.join(", "));
   push("anamnesis", "Анамнез заболевания", session.anamnesis);
-  push("anamnesisVitae", "Анамнез жизни", session.anamnesisVitae);
+  push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
   const status = [session.objective, session.localStatus.join("; ")].filter((x) => x.trim()).join(" ");
   push("status", "Объективный + локальный статус", status);
 

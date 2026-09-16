@@ -1,3 +1,5 @@
+import type { AnamnesisDraft, VitaeDraft } from "./anamnesisChips";
+
 export type VisitKind = "primary" | "followup";
 export type SessionMode = "consult" | "study" | "consult_study" | "document";
 export type GuidelineDisplay = "block" | "modal";
@@ -70,6 +72,10 @@ export type SessionState = {
   complaints: string[];
   anamnesis: string;
   anamnesisVitae: string;
+  anamnesisDraft?: AnamnesisDraft;
+  anamnesisChipMode?: boolean;
+  vitaeDraft?: VitaeDraft;
+  vitaeChipMode?: boolean;
   objective: string;
   localStatus: string[];
   studies: StudyEntry[];

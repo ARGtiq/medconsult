@@ -15,7 +15,8 @@ import { initTheme } from "@/legacy/lib/theme";
 import "@/legacy/legacy.css";
 import { CommandPalette } from "./CommandPalette";
 import { NavLink, useNav } from "./NavContext";
-import { formatPatient, useAppStore } from "./store";
+import { PatientPicker } from "./PatientPicker";
+import { useAppStore } from "./store";
 
 const NAV = [
   { to: "/", label: "протокол", icon: ClipboardList },
@@ -33,7 +34,7 @@ export function AppShell({
   topRight?: ReactNode;
 }) {
   const { path: pathname } = useNav();
-  const { settings, setSettings, hydrate, hydrated, toast, patients, session, setSession } = useAppStore();
+  const { settings, setSettings, hydrate, hydrated, toast } = useAppStore();
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export function AppShell({
   }, []);
 
   const collapsed = settings.railCollapsed;
-  const patient = patients.find((p) => p.id === session.patientId);
+  const patient = useAppStore((s) => s.patients.find((p) => p.id === s.session.patientId));
 
   return (
     <div className="flex min-h-dvh bg-paper text-ink">
@@ -138,21 +139,8 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center gap-2 border-b border-line bg-surface px-3">
-          <select
-            aria-label="Пациент"
-            className="max-w-[46%] shrink-0 truncate rounded-lg border border-line bg-paper px-2 py-1.5 text-sm font-medium md:max-w-[260px]"
-            value={session.patientId}
-            onChange={(e) => setSession({ patientId: e.target.value })}
-          >
-            <option value="">без пациента</option>
-            {patients.map((p) => (
-              <option key={p.id} value={p.id}>
-                {formatPatient(p)}
-                {p.age ? `, ${p.age}` : ""}
-              </option>
-            ))}
-          </select>
+        <header className="relative z-20 flex h-12 items-center gap-2 border-b border-line bg-surface px-3">
+          <PatientPicker />
           {patient?.allergies?.length ? (
             <span className="hidden rounded bg-warn px-1.5 text-[10px] font-semibold text-ink sm:inline">аллергия</span>
           ) : null}
