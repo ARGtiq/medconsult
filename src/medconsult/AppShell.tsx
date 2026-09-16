@@ -15,7 +15,7 @@ import { initTheme } from "@/legacy/lib/theme";
 import "@/legacy/legacy.css";
 import { CommandPalette } from "./CommandPalette";
 import { NavLink, useNav } from "./NavContext";
-import { useAppStore } from "./store";
+import { formatPatient, useAppStore } from "./store";
 
 const NAV = [
   { to: "/", label: "протокол", icon: ClipboardList },
@@ -33,7 +33,7 @@ export function AppShell({
   topRight?: ReactNode;
 }) {
   const { path: pathname } = useNav();
-  const { settings, setSettings, hydrate, hydrated, toast, patients, session } = useAppStore();
+  const { settings, setSettings, hydrate, hydrated, toast, patients, session, setSession } = useAppStore();
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -138,17 +138,24 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center gap-3 border-b border-line bg-surface px-3">
-          {patient && (
-            <div className="truncate text-sm text-ink-soft">
-              {patient.lastName} {patient.firstName.split(" ").map((p) => p[0] + ".").join(" ")} {patient.age}
-              {patient.allergies?.length ? (
-                <span className="ml-2 rounded bg-warn px-1.5 text-[10px] font-semibold text-ink">
-                  аллергия
-                </span>
-              ) : null}
-            </div>
-          )}
+        <header className="flex h-12 items-center gap-2 border-b border-line bg-surface px-3">
+          <select
+            aria-label="Пациент"
+            className="max-w-[46%] shrink-0 truncate rounded-lg border border-line bg-paper px-2 py-1.5 text-sm font-medium md:max-w-[260px]"
+            value={session.patientId}
+            onChange={(e) => setSession({ patientId: e.target.value })}
+          >
+            <option value="">без пациента</option>
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>
+                {formatPatient(p)}
+                {p.age ? `, ${p.age}` : ""}
+              </option>
+            ))}
+          </select>
+          {patient?.allergies?.length ? (
+            <span className="hidden rounded bg-warn px-1.5 text-[10px] font-semibold text-ink sm:inline">аллергия</span>
+          ) : null}
           <div className="flex-1" />
           {topRight}
           <button

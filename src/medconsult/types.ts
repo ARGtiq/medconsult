@@ -1,8 +1,9 @@
 export type VisitKind = "primary" | "followup";
-export type SessionMode = "consult" | "study" | "consult_study";
+export type SessionMode = "consult" | "study" | "consult_study" | "document";
 export type GuidelineDisplay = "block" | "modal";
 export type AiButtonMode = "always" | "temporary" | "off";
 export type RefFilter = "all" | "schemes" | "complaints" | "guidelines" | "treatment";
+export type WorkKind = "primary" | "followup" | "study" | "document";
 
 export type StudyField = {
   key: string;
@@ -83,6 +84,7 @@ export type SettingsState = {
   openOnProtocol: boolean;
   guidelineDisplay: GuidelineDisplay;
   railCollapsed: boolean;
+  blocksAsSpoiler: boolean;
   openRouterKey: string;
   aiModel: string;
 };

@@ -15,6 +15,9 @@ export function composeHeader(session: SessionState, patient: Patient | undefine
   const who = patient ? `${patient.lastName} ${patient.firstName}, ${patient.age} года` : "Пациент не выбран";
   const kind = visitKindLabel(session.visitKind);
   const what = modeLabel(session.mode, session.studies);
+  if (session.mode === "document") {
+    return `${who}.\nДругой документ.`;
+  }
   if (session.mode === "study") {
     return `${who}.\n${what}.`;
   }

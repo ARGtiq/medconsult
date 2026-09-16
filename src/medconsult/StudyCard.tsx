@@ -6,15 +6,16 @@ import { useAppStore } from "./store";
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
-  const { session, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession } = useAppStore();
+  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession } = useAppStore();
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
-  const open = session.openSection === studyKey;
+  const selected = session.openSection === studyKey;
+  const open = !settings.blocksAsSpoiler || selected;
 
   return (
     <section
       className={`relative rounded-[10px] border bg-surface py-2 pr-8 pl-2.5 ${
-        open ? "border-teal/40 shadow-[0_0_0_3px_var(--color-teal-soft)]" : "border-line"
+        selected ? "border-teal/40 shadow-[0_0_0_3px_var(--color-teal-soft)]" : "border-line"
       }`}
     >
       <button
@@ -28,7 +29,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       <button
         type="button"
         className="flex w-full items-center gap-2 text-left"
-        onClick={() => setSession({ openSection: open ? null : studyKey })}
+        onClick={() => setSession({ openSection: selected ? null : studyKey })}
       >
         <h4 className="text-sm font-medium">{def.label}</h4>
       </button>
@@ -107,8 +108,10 @@ export function PlusStudyButton() {
     <div className="relative">
       <button
         type="button"
-        className="rounded-lg bg-teal px-3 py-1.5 text-sm font-bold text-paper"
+        className="rounded-lg bg-teal px-2.5 py-1.5 text-sm font-bold text-paper"
         onClick={() => setOpen((v) => !v)}
+        title="Добавить обследование"
+        aria-label="Добавить обследование"
       >
         <span className="inline-flex items-center gap-1">
           <Plus className="size-3.5" /> обследование

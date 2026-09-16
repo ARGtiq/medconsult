@@ -1,4 +1,5 @@
 import { store } from "@/legacy/lib/store";
+import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
 import { STUDIES, getStudy as seedStudy } from "./data/studies";
@@ -149,6 +150,141 @@ function overlayComputed(def: StudyDef): StudyDef {
 
 export function drugLine(d: { name: string; dose?: string; dosage?: string; frequency?: string; duration?: string }) {
   return [d.name, d.dose || [d.dosage, d.frequency, d.duration].filter(Boolean).join(" ")].filter(Boolean).join(" ");
+}
+
+export type DrugRecord = {
+  name: string;
+  dose: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  brandNames?: string;
+  group?: string;
+  mkb10Codes?: string;
+};
+
+export function liveDrugRecords(): DrugRecord[] {
+  const fromDb: DrugRecord[] = [];
+  try {
+    Object.values(store.getDrugInfoAll() || {}).forEach((d) => {
+      if (!d?.name) return;
+      fromDb.push({
+        name: d.name,
+        dose: [d.dosage, d.frequency].filter(Boolean).join(" "),
+        dosage: d.dosage,
+        frequency: d.frequency,
+        duration: d.duration,
+        brandNames: d.brandNames,
+        group: d.group,
+        mkb10Codes: d.mkb10Codes,
+      });
+    });
+  } catch {
+    /* */
+  }
+  const names = new Set(fromDb.map((d) => d.name.toLowerCase()));
+  for (const d of DRUGS) {
+    if (names.has(d.name.toLowerCase())) continue;
+    fromDb.push({ name: d.name, dose: d.dose, mkb10Codes: d.codes.join(", ") });
+  }
+  return fromDb;
+}
+
+export type DrugHit = {
+  line: string;
+  name: string;
+  via: "ДВ" | "торговое" | "группа" | "МКБ";
+  hint: string;
+};
+
+function groupCatalog(): { label: string; drugs: string[] }[] {
+  const list: { label: string; drugs: string[] }[] = Object.values(DRUG_GROUPS).map((g) => ({
+    label: g.label,
+    drugs: g.drugs || [],
+  }));
+  try {
+    Object.values(store.getCustomGroups() || {}).forEach((g) => {
+      if (g?.label) list.push({ label: g.label, drugs: g.drugs || [] });
+    });
+  } catch {
+    /* */
+  }
+  return list;
+}
+
+export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
+  const records = liveDrugRecords();
+  const q = query.trim().toLowerCase();
+  const hits: DrugHit[] = [];
+  const seen = new Set<string>();
+  const push = (d: DrugRecord, via: DrugHit["via"], hint: string) => {
+    const key = d.name.toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    hits.push({ line: drugLine(d), name: d.name, via, hint });
+  };
+
+  if (!q) {
+    if (!diagnosisCode) return [];
+    const code = diagnosisCode.toUpperCase();
+    const stem = code.split(".")[0];
+    records.forEach((d) => {
+      const codes = (d.mkb10Codes || "").toUpperCase();
+      if (codes.includes(code) || (stem && codes.split(/[,\s]+/).includes(stem))) {
+        push(d, "МКБ", d.mkb10Codes || code);
+      }
+    });
+    try {
+      store.getDrugsForMkbCode(code).forEach((d) => {
+        if (d.name) push({ name: d.name, dose: [d.dosage, d.frequency].filter(Boolean).join(" "), ...d }, "МКБ", code);
+      });
+      if (stem !== code) {
+        store.getDrugsForMkbCode(stem).forEach((d) => {
+          if (d.name) push({ name: d.name, dose: [d.dosage, d.frequency].filter(Boolean).join(" "), ...d }, "МКБ", stem);
+        });
+      }
+    } catch {
+      /* */
+    }
+    return hits.slice(0, 16);
+  }
+
+  for (const d of records) {
+    if (d.name.toLowerCase().includes(q)) push(d, "ДВ", d.name);
+  }
+  for (const d of records) {
+    const brands = (d.brandNames || "").toLowerCase();
+    if (brands.includes(q)) push(d, "торговое", d.brandNames || "");
+  }
+  for (const d of records) {
+    if ((d.group || "").toLowerCase().includes(q)) push(d, "группа", d.group || "");
+  }
+  for (const g of groupCatalog()) {
+    if (!g.label.toLowerCase().includes(q)) continue;
+    for (const n of g.drugs) {
+      const rec = records.find((r) => r.name.toLowerCase() === n.toLowerCase()) || { name: n, dose: "" };
+      push(rec, "группа", g.label);
+    }
+  }
+  for (const d of records) {
+    const codes = (d.mkb10Codes || "").toLowerCase();
+    if (codes.includes(q)) push(d, "МКБ", d.mkb10Codes || "");
+  }
+  if (q.length >= 3) {
+    liveIcdMerged()
+      .filter((i) => i.code.toLowerCase().includes(q) || i.title.toLowerCase().includes(q))
+      .slice(0, 8)
+      .forEach((i) => {
+        const stem = i.code.split(".")[0].toUpperCase();
+        records.forEach((d) => {
+          const codes = (d.mkb10Codes || "").toUpperCase();
+          if (codes.includes(i.code.toUpperCase()) || codes.split(/[,\s]+/).includes(stem)) {
+            push(d, "МКБ", `${i.code} ${i.title}`);
+          }
+        });
+      });
+  }
+  return hits.slice(0, 24);
 }
 
 export function learnedDrugs(complaints: string[], code: string): string[] {

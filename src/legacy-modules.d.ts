@@ -12,9 +12,20 @@ declare module "@/legacy/lib/store" {
     recordComplaint: (text: string) => void;
     recordComplaintDrug: (complaint: string, drug: string) => void;
     recordDiagnosisDrug: (code: string, drug: string) => void;
-    getCustomGroups: () => Record<string, unknown>;
+    getCustomGroups: () => Record<string, { label?: string; drugs?: string[] }>;
     getCrossReactivity: () => unknown[];
-    getDrugInfoAll: () => Record<string, { name?: string; dosage?: string; frequency?: string }>;
+    getDrugInfoAll: () => Record<
+      string,
+      {
+        name?: string;
+        dosage?: string;
+        frequency?: string;
+        duration?: string;
+        brandNames?: string;
+        group?: string;
+        mkb10Codes?: string;
+      }
+    >;
     getDrugInfo: (name: string) => { name?: string; brandNames?: string; dosage?: string; frequency?: string } | null;
     getGuidelines: () => Record<string, unknown> | unknown[];
     getGuidelinesForCodes: (codes: string[]) => Record<string, unknown>[];
@@ -22,6 +33,7 @@ declare module "@/legacy/lib/store" {
     getComplaintSuggestions: (q?: string) => { text: string; count?: number }[];
     getDrugsForComplaints: (complaints: string[]) => { drug: string; weight: number }[];
     getDrugsForDiagnosisCodes: (codes: string[]) => { drug: string; weight: number }[];
+    getDrugsForMkbCode: (code: string) => { name?: string; dosage?: string; frequency?: string; duration?: string; mkb10Codes?: string }[];
     exportAll: () => string;
     importAll: (raw: string) => void;
     on: (event: string, cb: () => void) => () => void;
@@ -74,6 +86,7 @@ declare module "@/legacy/data/drugSafety" {
     groupMeta?: unknown,
     customCrossReactivity?: unknown,
   ): { level: string; message: string }[];
+  export const DRUG_GROUPS: Record<string, { label: string; drugs: string[] }>;
 }
 
 declare module "@/legacy/data/mkb10" {

@@ -35,6 +35,19 @@ export function SettingsPage() {
               При запуске открывать Протокол
             </label>
           </Card>
+          <Card title="Блоки протокола">
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.blocksAsSpoiler}
+                onChange={(e) => setSettings({ blocksAsSpoiler: e.target.checked })}
+              />
+              Сворачивать блоки в спойлер
+            </label>
+            <p className="mt-1 text-xs text-ink-soft">
+              Вкл — клик по заголовку открывает один блок. Выкл — все поля сразу на виду.
+            </p>
+          </Card>
           <Card title="Сеанс станка">
             <p className="mt-2 text-xs text-ink-soft">Протокол v2 + старые неймспейсы в одном файле.</p>
             <div className="mt-2 flex flex-wrap gap-2">

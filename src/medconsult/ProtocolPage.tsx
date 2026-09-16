@@ -15,11 +15,11 @@ import {
   complaintsForSession,
   drugLine,
   learnedDrugs,
-  liveDrugsMerged,
   liveIcdMerged,
+  searchDrugs,
 } from "./live";
 import { PlusStudyButton, StudyCard } from "./StudyCard";
-import { formatPatient, useAppStore } from "./store";
+import { formatPatient, useAppStore, workKindOf } from "./store";
 
 export function ProtocolPage() {
   const store = useAppStore();
@@ -36,8 +36,9 @@ export function ProtocolPage() {
   const packs = packsForCode(session.diagnosisCode);
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();
-  const drugs = liveDrugsMerged();
   const fromPractice = learnedDrugs(session.complaints, session.diagnosisCode);
+  const work = workKindOf(session);
+  const consult = session.mode === "consult" || session.mode === "consult_study";
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
   const blocks = useMemo(() => composeBlocks(session), [session]);
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
@@ -157,41 +158,38 @@ export function ProtocolPage() {
     addRecommendation(drugLine({ name: d.name || "", dosage: d.dosage || d.dose, frequency: d.frequency, duration: d.duration }));
   };
 
+  function setWork(kind: "primary" | "followup" | "study" | "document") {
+    if (kind === "primary") {
+      setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult" });
+    } else if (kind === "followup") {
+      setSession({ visitKind: "followup", mode: session.studies.length ? "consult_study" : "consult" });
+    } else if (kind === "study") {
+      setSession({ mode: "study" });
+    } else {
+      setSession({ mode: "document" });
+    }
+  }
+
+  const kindBtn = (id: "primary" | "followup" | "study" | "document", label: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setWork(id)}
+      className={`rounded-lg px-2.5 py-1.5 text-sm font-semibold ${
+        work === id ? "bg-teal text-paper" : "border border-line bg-surface"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   const assembly = (
     <div className="flex flex-col gap-1.5 overflow-auto p-2.5 md:p-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <select
-          className="max-w-[180px] rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-semibold"
-          value={session.patientId}
-          onChange={(e) => setSession({ patientId: e.target.value })}
-        >
-          <option value="">без пациента</option>
-          {patients.map((p) => (
-            <option key={p.id} value={p.id}>
-              {formatPatient(p)}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-semibold"
-          value={session.visitKind}
-          onChange={(e) => setSession({ visitKind: e.target.value as "primary" | "followup" })}
-        >
-          <option value="primary">первичный</option>
-          <option value="followup">повторный</option>
-        </select>
-        <select
-          className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-semibold"
-          value={session.mode === "study" ? "study" : "consult"}
-          onChange={(e) =>
-            setSession({
-              mode: e.target.value === "study" ? "study" : session.studies.length ? "consult_study" : "consult",
-            })
-          }
-        >
-          <option value="consult">консультация</option>
-          <option value="study">исследование</option>
-        </select>
+        {kindBtn("primary", "первичный")}
+        {kindBtn("followup", "повторный")}
+        {kindBtn("study", "обследование")}
+        {kindBtn("document", "другой документ")}
         <PlusStudyButton />
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>
           Повторить прошлый сеанс
@@ -338,7 +336,7 @@ export function ProtocolPage() {
         </>
       )}
 
-      {session.mode !== "study" && (
+      {consult && (
         <>
           <Sec
             id="complaints"
@@ -439,7 +437,26 @@ export function ProtocolPage() {
         <StudyCard key={s.key} studyKey={s.key} />
       ))}
 
-      {session.mode !== "study" && (
+      {session.mode === "document" && (
+        <Sec
+          id="notes"
+          title="Текст документа"
+          open={session.openSection === "notes"}
+          onOpen={() => setSession({ openSection: session.openSection === "notes" ? null : "notes" })}
+          onRemove={() => toggleBlock("notes")}
+          voice={(t) => setSession({ notes: session.notes ? `${session.notes} ${t}` : t })}
+        >
+          <textarea
+            value={session.notes}
+            onChange={(e) => setSession({ notes: e.target.value })}
+            rows={6}
+            className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            placeholder="Справка, направление, заключение…"
+          />
+        </Sec>
+      )}
+
+      {(consult || session.mode === "document") && (
         <Sec
           id="recommendations"
           title="Назначения"
@@ -454,47 +471,60 @@ export function ProtocolPage() {
               <Chips texts={fromPractice} onToggle={addRecommendation} selected={session.recommendations} dashed />
             </>
           )}
-          <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">справочник</div>
-          <Chips
-            texts={drugs.slice(0, 16).map((d) => drugLine(d))}
-            onToggle={addRecommendation}
+          <DrugSearch
+            diagnosisCode={session.diagnosisCode}
             selected={session.recommendations}
-            dashed
+            onAdd={addRecommendation}
           />
-          <ul className="mt-2 space-y-1 text-sm">
-            {session.recommendations.map((r) => (
-              <li key={r} className="flex justify-between gap-2">
-                <span>{r}</span>
-                <button
-                  type="button"
-                  className="text-mute"
-                  onClick={() => setSession({ recommendations: session.recommendations.filter((x) => x !== r) })}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="legacy-surface mt-2 space-y-2">
-            <GuidelinePanel
-              diagnosisText={diagnosisText}
-              mode="drugs"
-              onInsertComplaint={toggleComplaint}
-              onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
-              onInsertClassificationLine={(line: string) =>
-                setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
-              }
-              onInsertInvestigation={(item: string) => addRecommendation(item)}
-              onInsertDrug={insertDrug}
-            />
-            <TreatmentSchemeSearch
-              diagnosisText={diagnosisText}
-              onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
-                phaseDrugs.forEach(insertDrug);
-                store.setToast("Фаза схемы добавлена");
-              }}
-            />
-          </div>
+          {session.recommendations.length > 0 && (
+            <ul className="mt-2 space-y-1 text-sm">
+              {session.recommendations.map((r) => (
+                <li key={r} className="flex justify-between gap-2">
+                  <span>{r}</span>
+                  <button
+                    type="button"
+                    className="text-mute"
+                    onClick={() => setSession({ recommendations: session.recommendations.filter((x) => x !== r) })}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {session.diagnosisCode && (
+            <div className="legacy-surface mt-2 space-y-2">
+              <GuidelinePanel
+                diagnosisText={diagnosisText}
+                mode="drugs"
+                onInsertComplaint={toggleComplaint}
+                onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
+                onInsertClassificationLine={(line: string) =>
+                  setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
+                }
+                onInsertInvestigation={(item: string) => addRecommendation(item)}
+                onInsertDrug={insertDrug}
+              />
+              <TreatmentSchemeSearch
+                diagnosisText={diagnosisText}
+                onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
+                  phaseDrugs.forEach(insertDrug);
+                  store.setToast("Фаза схемы добавлена");
+                }}
+              />
+            </div>
+          )}
+          {!session.diagnosisCode && (
+            <div className="legacy-surface mt-2">
+              <TreatmentSchemeSearch
+                diagnosisText={diagnosisText}
+                onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
+                  phaseDrugs.forEach(insertDrug);
+                  store.setToast("Фаза схемы добавлена");
+                }}
+              />
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -647,6 +677,75 @@ export function ProtocolPage() {
   );
 }
 
+function DrugSearch({
+  diagnosisCode,
+  selected,
+  onAdd,
+}: {
+  diagnosisCode: string;
+  selected: string[];
+  onAdd: (line: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
+  const showContext = !q.trim() && !!diagnosisCode && hits.length > 0;
+
+  function submit() {
+    const t = q.trim();
+    if (!t) return;
+    if (hits[0]) onAdd(hits[0].line);
+    else onAdd(t);
+    setQ("");
+  }
+
+  return (
+    <div className="mt-1">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="ДВ, торговое, группа, МКБ…"
+        className="w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
+      />
+      {!q.trim() && !diagnosisCode && (
+        <p className="mt-1.5 text-xs text-mute">
+          Справочник не вываливается целиком. Найди препарат или поставь диагноз — подтянутся схема и клинрек.
+        </p>
+      )}
+      {showContext && <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по диагнозу {diagnosisCode}</div>}
+      {q.trim() && hits.length === 0 && (
+        <p className="mt-1.5 text-xs text-mute">Нет в справочнике. Enter — вставить как есть.</p>
+      )}
+      {hits.length > 0 && (
+        <ul className="mt-1 max-h-48 overflow-auto rounded-md border border-line bg-paper">
+          {hits.map((h) => {
+            const on = selected.includes(h.line);
+            return (
+              <li key={h.name + h.via}>
+                <button
+                  type="button"
+                  onClick={() => onAdd(h.line)}
+                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${
+                    on ? "bg-teal-soft text-teal" : "hover:bg-surface"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{h.line}</span>
+                  <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">{h.via}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Chips({
   texts,
   onToggle,
@@ -707,7 +806,9 @@ function Sec({
   children?: ReactNode;
 }) {
   const hidden = useAppStore((s) => s.session.hiddenBlocks.includes(id));
+  const spoiler = useAppStore((s) => s.settings.blocksAsSpoiler);
   if (hidden) return null;
+  const shown = !spoiler || open;
   return (
     <section
       className={`relative rounded-[10px] border bg-surface py-2 pr-8 pl-2.5 ${
@@ -744,7 +845,7 @@ function Sec({
           )}
         </span>
       </div>
-      {open && <div className="mt-2">{children}</div>}
+      {shown && <div className="mt-2">{children}</div>}
     </section>
   );
 }

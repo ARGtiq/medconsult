@@ -26,6 +26,7 @@ export const defaultSettings = (): SettingsState => ({
   openOnProtocol: true,
   guidelineDisplay: "block",
   railCollapsed: true,
+  blocksAsSpoiler: true,
   openRouterKey: "",
   aiModel: "openai/gpt-4o-mini",
 });
@@ -227,7 +228,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     };
     const studies = [...session.studies, entry];
     const mode: SessionState["mode"] =
-      session.mode === "consult" || session.mode === "consult_study" ? "consult_study" : "study";
+      session.mode === "consult" || session.mode === "consult_study"
+        ? "consult_study"
+        : session.mode === "document"
+          ? "document"
+          : "study";
     const next = { ...session, studies, mode, openSection: key };
     persistSession(next);
     set({ session: next });
@@ -487,7 +492,14 @@ export function visitKindLabel(k: VisitKind) {
 
 export function modeLabel(mode: SessionState["mode"], studies: StudyEntry[]) {
   const studyNames = studies.map((s) => getStudyLive(s.key)?.label).filter(Boolean);
+  if (mode === "document") return "Другой документ";
   if (mode === "study") return studyNames.join(" + ") || "Исследование";
   if (studyNames.length) return `Консультация + ${studyNames.join(", ")}`;
   return "Консультация уролога";
+}
+
+export function workKindOf(session: SessionState): "primary" | "followup" | "study" | "document" {
+  if (session.mode === "study") return "study";
+  if (session.mode === "document") return "document";
+  return session.visitKind;
 }
