@@ -33,7 +33,14 @@ function hidden(session: SessionState, id: string) {
   return session.hiddenBlocks.includes(id);
 }
 
-export function composeBlocks(session: SessionState): PreviewBlock[] {
+function includeStd(session: SessionState, id: string) {
+  if (hidden(session, id)) return false;
+  if (session.mode === "document") return (session.docStd || []).includes(id);
+  if (session.mode === "study") return false;
+  return true;
+}
+
+export function composeBlocks(session: SessionState, patient?: Patient): PreviewBlock[] {
   const out: PreviewBlock[] = [];
   const push = (id: string, title: string, text: string) => {
     if (hidden(session, id)) return;
@@ -42,11 +49,26 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
     out.push({ id, n: 0, title, text: trimmed });
   };
 
-  push("complaints", "Жалобы", (session.complaints || []).join(", "));
-  push("anamnesis", "Анамнез заболевания", session.anamnesis);
-  push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
-  const status = [session.objective, (session.localStatus || []).join("; ")].filter((x) => x.trim()).join(" ");
-  push("status", "Объективный + локальный статус", status);
+  if (patient) {
+    const bits: string[] = [];
+    if (patient.allergies?.length) bits.push(`Аллергия: ${patient.allergies.join(", ")}`);
+    if (patient.currentMedications?.length) bits.push(`Постоянно принимает: ${patient.currentMedications.join(", ")}`);
+    if (bits.length) push("card", "Карточка пациента", `${bits.join(". ")}.`);
+  }
+
+  if (includeStd(session, "complaints")) {
+    push("complaints", "Жалобы", (session.complaints || []).join(", "));
+  }
+  if (includeStd(session, "anamnesis")) {
+    push("anamnesis", "Анамнез заболевания", session.anamnesis);
+  }
+  if (includeStd(session, "anamnesisVitae")) {
+    push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
+  }
+  if (includeStd(session, "status")) {
+    const status = [session.objective, (session.localStatus || []).join("; ")].filter((x) => x.trim()).join(" ");
+    push("status", "Объективный + локальный статус", status);
+  }
 
   const studyParts = (session.studies || [])
     .map((entry) => {
@@ -57,12 +79,19 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
         .join(" ");
     })
     .filter(Boolean);
-  push("studies", "Обследования", studyParts.join("\n"));
+  if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));
 
-  const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
-  push("diagnosis", "Диагноз", dx);
-  push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
-  push("notes", session.mode === "document" ? "Текст документа" : "Примечания", session.notes);
+  if (includeStd(session, "diagnosis")) {
+    const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
+    push("diagnosis", "Диагноз", dx);
+  }
+  if (includeStd(session, "recommendations")) {
+    push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
+  }
+
+  if (session.mode === "document" || session.notes.trim()) {
+    push("notes", session.mode === "document" ? "Текст документа" : "Примечания", session.notes);
+  }
 
   (session.extraBlocks || []).forEach((b) => {
     push(b.id, b.title, b.text);
@@ -72,7 +101,7 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
 }
 
 export function composeAll(session: SessionState, patient: Patient | undefined, includeHeader: boolean) {
-  const blocks = composeBlocks(session);
+  const blocks = composeBlocks(session, patient);
   const body = blocks.map((b) => `${b.title}. ${b.text}`).join("\n\n");
   if (!includeHeader) return body;
   return `${composeHeader(session, patient)}\n\n${body}`;

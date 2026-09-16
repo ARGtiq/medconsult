@@ -48,6 +48,9 @@ export type PatientGlobals = {
   vitaeDraft?: VitaeDraft;
   anamnesisVitae?: string;
   extraLast?: Record<string, string>;
+  studyLast?: Record<string, StudyInstance>;
+  allergies?: string[];
+  currentMedications?: string[];
 };
 
 export type Patient = {

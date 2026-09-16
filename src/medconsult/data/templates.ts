@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { LOCAL_PACKS } from "./catalog";
 import type { LocalPack } from "../types";
 
@@ -126,11 +127,47 @@ export function getDocKinds(): DocKind[] {
 }
 
 export function packsForCodeLive(code: string) {
-  if (!code) return [] as LocalPack[];
+  const all = getLocalPacks();
+  if (!code) return all.filter((p) => p.id === "custom_free" || p.codes.length === 0);
   const prefix = code.split(".")[0];
-  return getLocalPacks().filter((p) => p.codes.includes(code) || p.codes.includes(prefix));
+  return all.filter(
+    (p) => p.codes.includes(code) || p.codes.includes(prefix) || p.id === "custom_free" || p.codes.length === 0,
+  );
+}
+
+/** Save a custom local-status phrase as a reusable template for this ICD. */
+export function addLocalChipToCode(code: string, chip: string) {
+  const text = chip.trim();
+  if (!text) return;
+  const t = read();
+  const packs = t.localPacks.map((p) => ({ ...p, chips: [...p.chips] }));
+  const prefix = code ? code.split(".")[0] : "";
+  let hit = code
+    ? packs.find((p) => p.codes.includes(code) || (prefix && p.codes.includes(prefix)))
+    : packs.find((p) => p.id === "custom_free");
+  if (!hit) {
+    hit = {
+      id: code ? `custom_${code}` : "custom_free",
+      codes: code ? [code] : [],
+      label: code ? `свои · ${code}` : "свои",
+      chips: [],
+    };
+    packs.push(hit);
+  }
+  if (!hit.chips.includes(text)) hit.chips.push(text);
+  write({ ...t, localPacks: packs });
 }
 
 export function resetTemplates() {
   write(seedTemplates());
+}
+
+export function useTemplates(): TemplatesState {
+  const [data, setData] = useState<TemplatesState>(() => getTemplates());
+  useEffect(() => {
+    const reload = () => setData(getTemplates());
+    window.addEventListener("medconsult-templates", reload);
+    return () => window.removeEventListener("medconsult-templates", reload);
+  }, []);
+  return data;
 }

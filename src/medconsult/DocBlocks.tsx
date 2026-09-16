@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getDocKinds, STD_DOC_BLOCKS } from "./data/templates";
+import { STD_DOC_BLOCKS, useTemplates } from "./data/templates";
 import { useAppStore } from "./store";
 
 export function PlusDocBlockButton() {
@@ -11,7 +11,7 @@ export function PlusDocBlockButton() {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, maxH: 320, width: 280 });
   const { session, toggleDocStd, addExtraBlock } = useAppStore();
-  const kinds = getDocKinds();
+  const { docKinds: kinds } = useTemplates();
 
   useLayoutEffect(() => {
     if (!open) return;

@@ -9,7 +9,7 @@ import {
   type VitaeDraft,
   type VitaeItem,
 } from "./anamnesisChips";
-import { getChronicPresets, getSurgeryPresets, type VitaePreset } from "./data/templates";
+import { useTemplates, type VitaePreset } from "./data/templates";
 import { searchDrugs } from "./live";
 import { Typeahead } from "./Typeahead";
 
@@ -103,16 +103,16 @@ function PresetPicker({
       </div>
       {selected.map((s) => {
         const preset = presets.find((p) => p.id === s.id);
-        if (!preset?.needsDate && !s.date) return null;
-        if (!preset?.needsDate) return null;
+        const showDate = preset?.needsDate || Boolean(s.date);
+        if (!showDate) return null;
         return (
           <label key={s.id} className="mt-1 flex items-center gap-2 text-xs">
             <span className="text-ink-soft">{s.label}</span>
             <input
               value={s.date || ""}
               onChange={(e) => setDate(s.id, e.target.value)}
-              placeholder={preset.emptyDateText ? "дата / пусто = давно" : "год или дата"}
-              className="w-36 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
+              placeholder={preset?.emptyDateText ? `пусто = ${preset.emptyDateText}` : "год или дата, можно пусто"}
+              className="w-44 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
             />
           </label>
         );
@@ -308,8 +308,9 @@ export function AnamnesisVitae({
 }) {
   const d = useMemo(() => normalizeVitae(draft), [draft]);
   const patch = (p: Partial<VitaeDraft>) => onDraft({ ...d, ...p });
-  const chronicPresets = getChronicPresets();
-  const surgeryPresets = getSurgeryPresets();
+  const templates = useTemplates();
+  const chronicPresets = templates.chronic;
+  const surgeryPresets = templates.surgeries;
 
   if (!chipMode) {
     return (

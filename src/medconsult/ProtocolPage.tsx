@@ -1,5 +1,5 @@
-import { Copy, Printer } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Copy, Plus, Printer } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
@@ -8,7 +8,7 @@ import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton } from "./DocBlocks";
 import { EditableChips, ToggleChips } from "./EditableChip";
-import { packsForCodeLive } from "./data/templates";
+import { packsForCodeLive, useTemplates } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, polishLocal } from "./copy";
@@ -31,6 +31,7 @@ export function ProtocolPage() {
   const store = useAppStore();
   const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation } =
     store;
+  const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
   const [headerOpen, setHeaderOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -39,9 +40,13 @@ export function ProtocolPage() {
   const [hubOpen, setHubOpen] = useState(false);
   const [complaintQ, setComplaintQ] = useState("");
   const [localQ, setLocalQ] = useState("");
+  const [localAdd, setLocalAdd] = useState(false);
   const patient = patients.find((p) => p.id === session.patientId);
   const guideline = compactGuideline(session.diagnosisCode);
-  const packs = packsForCodeLive(session.diagnosisCode);
+  const packs = useMemo(
+    () => packsForCodeLive(session.diagnosisCode),
+    [session.diagnosisCode, templates.localPacks],
+  );
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();
   const fromPractice = learnedDrugs(session.complaints, session.diagnosisCode);
@@ -50,7 +55,7 @@ export function ProtocolPage() {
   const documentMode = session.mode === "document";
   const want = (id: string) => consult || (documentMode && (session.docStd || []).includes(id));
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
-  const blocks = useMemo(() => composeBlocks(session), [session]);
+  const blocks = useMemo(() => composeBlocks(session, patient), [session, patient]);
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
   const diagnosisText = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
 
@@ -79,13 +84,11 @@ export function ProtocolPage() {
     };
   }, [blocks, header, patient, session, store]);
 
-  const appliedIcd = useRef(session.diagnosisCode);
   useEffect(() => {
-    if (session.diagnosisCode && session.diagnosisCode !== appliedIcd.current) {
-      store.applyLocalFromIcd(session.diagnosisCode);
-    }
-    appliedIcd.current = session.diagnosisCode;
-  }, [session.diagnosisCode, store]);
+    if (!session.diagnosisCode) return;
+    if (session.localStatusAutoFor === session.diagnosisCode) return;
+    store.applyLocalFromIcd(session.diagnosisCode);
+  }, [session.diagnosisCode, session.localStatusAutoFor, store]);
 
   const showAi = (section: string) => {
     if (settings.aiButton === "off") return false;
@@ -184,9 +187,25 @@ export function ProtocolPage() {
     } else if (kind === "study") {
       setSession({ mode: "study" });
     } else {
+      store.ensureGlobals();
       setSession({ mode: "document" });
     }
   }
+
+  const renameInserted = (field: "complaints" | "localStatus" | "recommendations") => (from: string, to: string) => {
+    store.renameList(
+      field,
+      session[field].map((x) => (x === from ? to : x)),
+    );
+  };
+
+  const commitLocalPhrase = () => {
+    const t = localQ.trim();
+    if (!t) return;
+    store.addLocalPhrase(t);
+    setLocalQ("");
+    setLocalAdd(false);
+  };
 
   const kindBtn = (id: "primary" | "followup" | "study" | "document", label: string) => (
     <button
@@ -221,7 +240,16 @@ export function ProtocolPage() {
           <GlobalField
             label="Аллергии"
             items={patient.allergies || []}
-            onChange={(allergies) => store.updatePatient(patient.id, { allergies })}
+            onChange={(allergies) => {
+              store.updatePatient(patient.id, { allergies });
+              const d = session.vitaeDraft || emptyVitae();
+              const next = {
+                ...d,
+                allergy: allergies.length ? ("has" as const) : d.allergy,
+                allergyText: allergies.join(", ") || d.allergyText,
+              };
+              store.setSession({ vitaeDraft: next, anamnesisVitae: composeVitae(next) });
+            }}
             placeholder="аллерген + Enter"
           />
           <GlobalField
@@ -232,6 +260,13 @@ export function ProtocolPage() {
           />
         </div>
       ) : null}
+
+      {documentMode && !(session.docStd || []).length && !(session.extraBlocks || []).length && !session.notes.trim() && (
+        <p className="rounded-[10px] border border-dashed border-line px-3 py-3 text-sm text-ink-soft">
+          Пустой документ. «+ блок» — жалобы, анамнезы, статусы, диагноз, назначения, дневник (копирует прошлый),
+          эпикриз, протокол операции или свой.
+        </p>
+      )}
 
       {(session.mode !== "document" || want("diagnosis")) && (
       <Sec
@@ -385,11 +420,27 @@ export function ProtocolPage() {
               emptyHint="Enter — добавить свою формулировку"
             />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
-            <ToggleChips texts={store.recentChips} onToggle={toggleComplaint} selected={session.complaints} />
+            <ToggleChips
+              texts={store.recentChips}
+              onToggle={toggleComplaint}
+              selected={session.complaints}
+              onRename={renameInserted("complaints")}
+            />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
-            <ToggleChips texts={chips.fromCode} onToggle={toggleComplaint} selected={session.complaints} dashed />
+            <ToggleChips
+              texts={chips.fromCode}
+              onToggle={toggleComplaint}
+              selected={session.complaints}
+              dashed
+              onRename={renameInserted("complaints")}
+            />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
-            <ToggleChips texts={chips.rest.slice(0, 12)} onToggle={toggleComplaint} selected={session.complaints} />
+            <ToggleChips
+              texts={chips.rest.slice(0, 12)}
+              onToggle={toggleComplaint}
+              selected={session.complaints}
+              onRename={renameInserted("complaints")}
+            />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
             <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
             {session.diagnosisCode && (
@@ -503,39 +554,48 @@ export function ProtocolPage() {
             {packs.map((p) => (
               <div key={p.id} className="mb-1">
                 <div className="text-[10px] text-mute uppercase">{p.label} · по МКБ</div>
-                <ToggleChips texts={p.chips} onToggle={toggleLocal} selected={session.localStatus} dashed />
+                <ToggleChips
+                  texts={p.chips}
+                  onToggle={toggleLocal}
+                  selected={session.localStatus}
+                  dashed
+                  onRename={renameInserted("localStatus")}
+                />
               </div>
             ))}
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
-            <EditableChips items={session.localStatus} onChange={(next) => store.renameList("localStatus", next)} />
-            <div className="mt-1.5 flex gap-1">
-              <input
-                value={localQ}
-                onChange={(e) => setLocalQ(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && localQ.trim()) {
-                    e.preventDefault();
-                    const t = localQ.trim();
-                    if (!session.localStatus.includes(t)) toggleLocal(t);
-                    setLocalQ("");
-                  }
-                }}
-                placeholder="свой статус"
-                className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
-              />
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
               <button
                 type="button"
-                className="rounded-md bg-teal px-2.5 text-sm font-bold text-paper"
-                onClick={() => {
-                  const t = localQ.trim();
-                  if (!t) return;
-                  if (!session.localStatus.includes(t)) toggleLocal(t);
-                  setLocalQ("");
-                }}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs font-bold text-teal"
+                onClick={() => setLocalAdd(true)}
+                title="Добавить свой шаблон в блок"
               >
-                +
+                <Plus className="size-3" /> свой шаблон
               </button>
             </div>
+            {localAdd && (
+              <div className="mt-1.5 flex gap-1">
+                <input
+                  autoFocus
+                  value={localQ}
+                  onChange={(e) => setLocalQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitLocalPhrase();
+                    }
+                    if (e.key === "Escape") setLocalAdd(false);
+                  }}
+                  placeholder="формулировка — в блок и в шаблоны"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+                <button type="button" className="rounded-md bg-teal px-2.5 text-sm font-bold text-paper" onClick={commitLocalPhrase}>
+                  +
+                </button>
+              </div>
+            )}
+            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+            <EditableChips items={session.localStatus} onChange={(next) => store.renameList("localStatus", next)} />
           </Sec>
       )}
 
@@ -932,4 +992,3 @@ function Sec({
     </section>
   );
 }
-

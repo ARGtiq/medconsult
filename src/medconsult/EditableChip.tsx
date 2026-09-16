@@ -67,22 +67,64 @@ export function ToggleChips({
   texts,
   selected,
   onToggle,
+  onRename,
   dashed,
 }: {
   texts: string[];
   selected: string[];
   onToggle: (t: string) => void;
+  onRename?: (from: string, to: string) => void;
   dashed?: boolean;
 }) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (edit) ref.current?.focus();
+  }, [edit]);
+
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {texts.map((t) => {
         const on = selected.includes(t);
+        if (on && onRename && edit === t) {
+          return (
+            <input
+              key={t}
+              ref={ref}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => {
+                const next = draft.trim();
+                if (!next) onToggle(t);
+                else if (next !== t) onRename(t, next);
+                setEdit(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+                if (e.key === "Escape") setEdit(null);
+              }}
+              className="min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+            />
+          );
+        }
         return (
           <button
             key={t}
             type="button"
-            onClick={() => onToggle(t)}
+            title={on && onRename ? "Нажми — править как текст" : undefined}
+            onClick={() => {
+              if (on && onRename) {
+                setEdit(t);
+                setDraft(t);
+                return;
+              }
+              onToggle(t);
+            }}
             className={`rounded-full px-2 py-0.5 text-xs ${
               on
                 ? "bg-teal-soft text-teal"

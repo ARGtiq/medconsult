@@ -1,3 +1,5 @@
+import { getChronicPresets, getSurgeryPresets } from "./data/templates";
+
 export type AnamnesisDraft = {
   onset: "" | "first" | "chronic";
   amount: string;
@@ -55,7 +57,7 @@ export const emptyVitae = (): VitaeDraft => ({
 });
 
 export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
-  return { ...emptyVitae(), ...(d || {}) , chronicItems: d?.chronicItems || [], surgeryItems: d?.surgeryItems || [] };
+  return { ...emptyVitae(), ...(d || {}), chronicItems: d?.chronicItems || [], surgeryItems: d?.surgeryItems || [] };
 }
 
 function ruCount(n: number, one: string, few: string, many: string) {
@@ -106,19 +108,31 @@ function formatVitaeItem(it: VitaeItem, emptyDateText?: string) {
 
 export function composeVitae(raw: VitaeDraft) {
   const d = normalizeVitae(raw);
+  const chronicPresets = getChronicPresets();
+  const surgeryPresets = getSurgeryPresets();
   const parts: string[] = [];
   if (d.chronic === "denies" && !d.chronicItems.length) {
     parts.push("Хронические заболевания отрицает");
   }
   if (d.chronic === "has" || d.chronicItems.length) {
-    const named = d.chronicItems.map((it) => formatVitaeItem(it)).filter(Boolean);
+    const named = d.chronicItems
+      .map((it) => {
+        const preset = chronicPresets.find((p) => p.id === it.id);
+        return formatVitaeItem(it, preset?.emptyDateText);
+      })
+      .filter(Boolean);
     const extra = d.chronicText.trim();
     const all = [...named, extra].filter(Boolean).join(", ");
     parts.push(all ? `Хронические заболевания: ${all}` : "Есть хронические заболевания");
   }
   if (d.surgery === "none" && !d.surgeryItems.length) parts.push("Операций не было");
   if (d.surgery === "has" || d.surgeryItems.length) {
-    const named = d.surgeryItems.map((it) => formatVitaeItem(it)).filter(Boolean);
+    const named = d.surgeryItems
+      .map((it) => {
+        const preset = surgeryPresets.find((p) => p.id === it.id);
+        return formatVitaeItem(it, preset?.emptyDateText);
+      })
+      .filter(Boolean);
     const extra = d.surgeryText.trim();
     const all = [...named, extra].filter(Boolean).join(", ");
     parts.push(all ? `Операции: ${all}` : "Операции в анамнезе");
