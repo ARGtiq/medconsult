@@ -1,12 +1,14 @@
 import { Copy, Printer } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/openrouter";
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
-import { packsForCode } from "./data/catalog";
+import { PlusDocBlockButton } from "./DocBlocks";
+import { EditableChips, ToggleChips } from "./EditableChip";
+import { packsForCodeLive } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, polishLocal } from "./copy";
@@ -36,14 +38,17 @@ export function ProtocolPage() {
   const [ixBusy, setIxBusy] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [complaintQ, setComplaintQ] = useState("");
+  const [localQ, setLocalQ] = useState("");
   const patient = patients.find((p) => p.id === session.patientId);
   const guideline = compactGuideline(session.diagnosisCode);
-  const packs = packsForCode(session.diagnosisCode);
+  const packs = packsForCodeLive(session.diagnosisCode);
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();
   const fromPractice = learnedDrugs(session.complaints, session.diagnosisCode);
   const work = workKindOf(session);
   const consult = session.mode === "consult" || session.mode === "consult_study";
+  const documentMode = session.mode === "document";
+  const want = (id: string) => consult || (documentMode && (session.docStd || []).includes(id));
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
   const blocks = useMemo(() => composeBlocks(session), [session]);
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
@@ -73,6 +78,14 @@ export function ProtocolPage() {
       window.removeEventListener("medconsult-copy-block", copyBlock);
     };
   }, [blocks, header, patient, session, store]);
+
+  const appliedIcd = useRef(session.diagnosisCode);
+  useEffect(() => {
+    if (session.diagnosisCode && session.diagnosisCode !== appliedIcd.current) {
+      store.applyLocalFromIcd(session.diagnosisCode);
+    }
+    appliedIcd.current = session.diagnosisCode;
+  }, [session.diagnosisCode, store]);
 
   const showAi = (section: string) => {
     if (settings.aiButton === "off") return false;
@@ -196,26 +209,31 @@ export function ProtocolPage() {
         {kindBtn("study", "обследование")}
         {kindBtn("document", "другой документ")}
         <PlusStudyButton />
+        {documentMode && <PlusDocBlockButton />}
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>
           Повторить прошлый сеанс
         </button>
       </div>
 
-      {(patient?.allergies?.length || patient?.currentMedications?.length) ? (
+      {patient ? (
         <div className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2 text-xs leading-relaxed">
-          {patient?.allergies?.length ? (
-            <div>
-              <b>Аллергии:</b> {patient.allergies.join(", ")}
-            </div>
-          ) : null}
-          {patient?.currentMedications?.length ? (
-            <div>
-              <b>Принимает сейчас:</b> {patient.currentMedications.join(", ")}
-            </div>
-          ) : null}
+          <div className="mb-1 text-[10px] font-semibold tracking-wide uppercase">карточка · во все документы</div>
+          <GlobalField
+            label="Аллергии"
+            items={patient.allergies || []}
+            onChange={(allergies) => store.updatePatient(patient.id, { allergies })}
+            placeholder="аллерген + Enter"
+          />
+          <GlobalField
+            label="Принимает постоянно"
+            items={patient.currentMedications || []}
+            onChange={(currentMedications) => store.updatePatient(patient.id, { currentMedications })}
+            placeholder="препарат + Enter"
+          />
         </div>
       ) : null}
 
+      {(session.mode !== "document" || want("diagnosis")) && (
       <Sec
         id="diagnosis"
         title="Диагноз"
@@ -263,8 +281,9 @@ export function ProtocolPage() {
           </div>
         )}
       </Sec>
+      )}
 
-      {hubMode === "block" && guideline && (
+      {hubMode === "block" && guideline && !documentMode && (
         <div className="rounded-[10px] border border-line bg-surface px-2.5 py-2">
           <div className="flex items-center justify-between text-sm">
             <div>
@@ -306,7 +325,7 @@ export function ProtocolPage() {
         </div>
       )}
 
-      {hubMode === "modal" && guideline && (
+      {hubMode === "modal" && guideline && !documentMode && (
         <>
           <button
             type="button"
@@ -341,8 +360,7 @@ export function ProtocolPage() {
         </>
       )}
 
-      {consult && (
-        <>
+      {want("complaints") && (
           <Sec
             id="complaints"
             title="Жалобы"
@@ -367,13 +385,13 @@ export function ProtocolPage() {
               emptyHint="Enter — добавить свою формулировку"
             />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
-            <Chips texts={store.recentChips} onToggle={toggleComplaint} selected={session.complaints} />
+            <ToggleChips texts={store.recentChips} onToggle={toggleComplaint} selected={session.complaints} />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
-            <Chips texts={chips.fromCode} onToggle={toggleComplaint} selected={session.complaints} dashed />
+            <ToggleChips texts={chips.fromCode} onToggle={toggleComplaint} selected={session.complaints} dashed />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
-            <Chips texts={chips.rest.slice(0, 12)} onToggle={toggleComplaint} selected={session.complaints} />
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте</div>
-            <Chips texts={session.complaints} onToggle={toggleComplaint} selected={session.complaints} filled />
+            <ToggleChips texts={chips.rest.slice(0, 12)} onToggle={toggleComplaint} selected={session.complaints} />
+            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+            <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
             {session.diagnosisCode && (
               <div className="legacy-surface mt-2">
                 <GuidelinePanel
@@ -390,7 +408,9 @@ export function ProtocolPage() {
               </div>
             )}
           </Sec>
+      )}
 
+      {want("anamnesis") && (
           <Sec
             id="anamnesis"
             title="Анамнез заболевания"
@@ -417,15 +437,17 @@ export function ProtocolPage() {
               chipMode={session.anamnesisChipMode ?? !session.anamnesis}
               onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d) })}
               onText={(t) => setSession({ anamnesis: t })}
-              onMode={(chips) =>
+              onMode={(chipsMode) =>
                 setSession({
-                  anamnesisChipMode: chips,
-                  anamnesis: chips ? composeAnamnesis(session.anamnesisDraft || emptyAnamnesis()) : session.anamnesis,
+                  anamnesisChipMode: chipsMode,
+                  anamnesis: chipsMode ? composeAnamnesis(session.anamnesisDraft || emptyAnamnesis()) : session.anamnesis,
                 })
               }
             />
           </Sec>
+      )}
 
+      {want("anamnesisVitae") && (
           <Sec
             id="anamnesisVitae"
             title="Предварительный анамнез жизни"
@@ -451,15 +473,17 @@ export function ProtocolPage() {
               chipMode={session.vitaeChipMode ?? !session.anamnesisVitae}
               onDraft={(d) => setSession({ vitaeDraft: d, anamnesisVitae: composeVitae(d) })}
               onText={(t) => setSession({ anamnesisVitae: t })}
-              onMode={(chips) =>
+              onMode={(chipsMode) =>
                 setSession({
-                  vitaeChipMode: chips,
-                  anamnesisVitae: chips ? composeVitae(session.vitaeDraft || emptyVitae()) : session.anamnesisVitae,
+                  vitaeChipMode: chipsMode,
+                  anamnesisVitae: chipsMode ? composeVitae(session.vitaeDraft || emptyVitae()) : session.anamnesisVitae,
                 })
               }
             />
           </Sec>
+      )}
 
+      {want("status") && (
           <Sec
             id="status"
             title="Локальный статус"
@@ -478,16 +502,65 @@ export function ProtocolPage() {
             />
             {packs.map((p) => (
               <div key={p.id} className="mb-1">
-                <div className="text-[10px] text-mute uppercase">{p.label}</div>
-                <Chips texts={p.chips} onToggle={toggleLocal} selected={session.localStatus} dashed />
+                <div className="text-[10px] text-mute uppercase">{p.label} · по МКБ</div>
+                <ToggleChips texts={p.chips} onToggle={toggleLocal} selected={session.localStatus} dashed />
               </div>
             ))}
+            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+            <EditableChips items={session.localStatus} onChange={(next) => store.renameList("localStatus", next)} />
+            <div className="mt-1.5 flex gap-1">
+              <input
+                value={localQ}
+                onChange={(e) => setLocalQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && localQ.trim()) {
+                    e.preventDefault();
+                    const t = localQ.trim();
+                    if (!session.localStatus.includes(t)) toggleLocal(t);
+                    setLocalQ("");
+                  }
+                }}
+                placeholder="свой статус"
+                className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                className="rounded-md bg-teal px-2.5 text-sm font-bold text-paper"
+                onClick={() => {
+                  const t = localQ.trim();
+                  if (!t) return;
+                  if (!session.localStatus.includes(t)) toggleLocal(t);
+                  setLocalQ("");
+                }}
+              >
+                +
+              </button>
+            </div>
           </Sec>
-        </>
       )}
 
       {session.studies.map((s) => (
         <StudyCard key={s.key} studyKey={s.key} />
+      ))}
+
+      {(session.extraBlocks || []).map((b) => (
+        <Sec
+          key={b.id}
+          id={b.id}
+          title={b.title}
+          open={session.openSection === b.id}
+          onOpen={() => setSession({ openSection: session.openSection === b.id ? null : b.id })}
+          onRemove={() => store.removeExtraBlock(b.id)}
+          voice={(t) => store.updateExtraBlock(b.id, { text: b.text ? `${b.text} ${t}` : t })}
+        >
+          <textarea
+            value={b.text}
+            onChange={(e) => store.updateExtraBlock(b.id, { text: e.target.value })}
+            rows={5}
+            className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            placeholder={b.title}
+          />
+        </Sec>
       ))}
 
       {session.mode === "document" && (
@@ -509,7 +582,7 @@ export function ProtocolPage() {
         </Sec>
       )}
 
-      {(consult || session.mode === "document") && (
+      {(consult || want("recommendations")) && (
         <Sec
           id="recommendations"
           title="Назначения"
@@ -521,7 +594,7 @@ export function ProtocolPage() {
           {fromPractice.length > 0 && (
             <>
               <div className="text-[10px] tracking-wide text-mute uppercase">из практики</div>
-              <Chips texts={fromPractice} onToggle={addRecommendation} selected={session.recommendations} dashed />
+              <ToggleChips texts={fromPractice} onToggle={addRecommendation} selected={session.recommendations} dashed />
             </>
           )}
           <DrugSearch
@@ -530,20 +603,13 @@ export function ProtocolPage() {
             onAdd={addRecommendation}
           />
           {session.recommendations.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm">
-              {session.recommendations.map((r) => (
-                <li key={r} className="flex justify-between gap-2">
-                  <span>{r}</span>
-                  <button
-                    type="button"
-                    className="text-mute"
-                    onClick={() => setSession({ recommendations: session.recommendations.filter((x) => x !== r) })}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+              <EditableChips
+                items={session.recommendations}
+                onChange={(next) => store.renameList("recommendations", next)}
+              />
+            </>
           )}
           {session.diagnosisCode && (
             <div className="legacy-surface mt-2 space-y-2">
@@ -730,6 +796,39 @@ export function ProtocolPage() {
   );
 }
 
+function GlobalField({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+}) {
+  const [q, setQ] = useState("");
+  return (
+    <div className="mt-1">
+      <div className="text-[10px] font-semibold tracking-wide uppercase">{label}</div>
+      <EditableChips items={items} onChange={onChange} />
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && q.trim()) {
+            e.preventDefault();
+            if (!items.includes(q.trim())) onChange([...items, q.trim()]);
+            setQ("");
+          }
+        }}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-md border border-warn-line bg-surface px-2 py-1 text-xs"
+      />
+    </div>
+  );
+}
+
 function DrugSearch({
   diagnosisCode,
   selected,
@@ -764,44 +863,6 @@ function DrugSearch({
       {!q.trim() && !!diagnosisCode && hits.length > 0 && (
         <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по диагнозу {diagnosisCode} — стрелки и Enter</div>
       )}
-    </div>
-  );
-}
-
-function Chips({
-  texts,
-  onToggle,
-  selected,
-  dashed,
-  filled,
-}: {
-  texts: string[];
-  onToggle: (t: string) => void;
-  selected: string[];
-  dashed?: boolean;
-  filled?: boolean;
-}) {
-  return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {texts.map((t) => {
-        const on = selected.includes(t);
-        return (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onToggle(t)}
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              filled || on
-                ? "bg-teal-soft text-teal"
-                : dashed
-                  ? "border border-dashed border-teal/40 bg-surface text-teal"
-                  : "border border-line bg-paper"
-            }`}
-          >
-            {t}
-          </button>
-        );
-      })}
     </div>
   );
 }

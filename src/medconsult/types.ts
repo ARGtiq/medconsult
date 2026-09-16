@@ -34,6 +34,20 @@ export type StudyInstance = {
 export type StudyEntry = {
   key: string;
   instances: StudyInstance[];
+  previous?: StudyInstance;
+};
+
+export type ExtraBlock = {
+  id: string;
+  kindId: string;
+  title: string;
+  text: string;
+};
+
+export type PatientGlobals = {
+  vitaeDraft?: VitaeDraft;
+  anamnesisVitae?: string;
+  extraLast?: Record<string, string>;
 };
 
 export type Patient = {
@@ -45,6 +59,8 @@ export type Patient = {
   dob?: string;
   allergies?: string[];
   currentMedications?: string[];
+  anamnesisVitae?: string;
+  globals?: PatientGlobals;
 };
 
 export type VisitRecord = {
@@ -78,10 +94,13 @@ export type SessionState = {
   vitaeChipMode?: boolean;
   objective: string;
   localStatus: string[];
+  localStatusAutoFor?: string;
   studies: StudyEntry[];
   recommendations: string[];
   notes: string;
   headerOverride: string;
+  docStd: string[];
+  extraBlocks: ExtraBlock[];
 };
 
 export type SettingsState = {

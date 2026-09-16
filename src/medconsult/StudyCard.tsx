@@ -12,6 +12,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   if (!def || !entry) return null;
   const selected = session.openSection === studyKey;
   const open = !settings.blocksAsSpoiler || selected;
+  const previous = entry.previous;
+  const prevFields = previous ? applyComputed(def, previous.fields) : null;
 
   return (
     <section
@@ -33,6 +35,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
         onClick={() => setSession({ openSection: selected ? null : studyKey })}
       >
         <h4 className="text-sm font-medium">{def.label}</h4>
+        {previous?.date && (
+          <span className="rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">было {previous.date}</span>
+        )}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
@@ -58,6 +63,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 {def.fields.map((f) => {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
+                  const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   return (
                     <label
                       key={f.key}
@@ -78,6 +84,12 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                         />
                       )}
                       {f.normal && <span className="block text-[10px] text-teal">{f.normal}</span>}
+                      {was && (
+                        <span className="mt-0.5 block text-[10px] text-mute">
+                          было: {was}
+                          {previous?.date ? ` · ${previous.date}` : ""}
+                        </span>
+                      )}
                     </label>
                   );
                 })}
@@ -95,6 +107,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       {!open && (
         <p className="mt-1 text-xs text-ink-soft">
           {entry.instances.length} {entry.instances.length === 1 ? "результат" : "результата"}
+          {previous?.date ? ` · прошлый ${previous.date}` : ""}
         </p>
       )}
     </section>

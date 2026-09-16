@@ -7,16 +7,26 @@ export type AnamnesisDraft = {
   effect: "" | "none" | "temp" | "full" | "worse";
 };
 
+export type VitaeItem = {
+  id: string;
+  label: string;
+  date?: string;
+};
+
 export type VitaeDraft = {
   chronic: "" | "denies" | "has";
+  chronicItems: VitaeItem[];
   chronicText: string;
   surgery: "" | "none" | "has";
+  surgeryItems: VitaeItem[];
   surgeryText: string;
   allergy: "" | "denies" | "has";
   allergyText: string;
   smoke: "" | "no" | "yes";
+  smokePacks: string;
   alcohol: "" | "no" | "yes";
   heritage: "" | "clear" | "burdened";
+  heritageText: string;
 };
 
 export const emptyAnamnesis = (): AnamnesisDraft => ({
@@ -30,15 +40,23 @@ export const emptyAnamnesis = (): AnamnesisDraft => ({
 
 export const emptyVitae = (): VitaeDraft => ({
   chronic: "",
+  chronicItems: [],
   chronicText: "",
   surgery: "",
+  surgeryItems: [],
   surgeryText: "",
   allergy: "",
   allergyText: "",
   smoke: "",
   alcohol: "",
+  smokePacks: "",
   heritage: "",
+  heritageText: "",
 });
+
+export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
+  return { ...emptyVitae(), ...(d || {}) , chronicItems: d?.chronicItems || [], surgeryItems: d?.surgeryItems || [] };
+}
 
 function ruCount(n: number, one: string, few: string, many: string) {
   const n10 = n % 10;
@@ -79,22 +97,46 @@ export function composeAnamnesis(d: AnamnesisDraft) {
   return text.endsWith(".") ? text : `${text}.`;
 }
 
-export function composeVitae(d: VitaeDraft) {
+function formatVitaeItem(it: VitaeItem, emptyDateText?: string) {
+  const date = (it.date || "").trim();
+  if (date) return `${it.label} (${date})`;
+  if (emptyDateText) return `${it.label} ${emptyDateText}`.trim();
+  return it.label;
+}
+
+export function composeVitae(raw: VitaeDraft) {
+  const d = normalizeVitae(raw);
   const parts: string[] = [];
-  if (d.chronic === "denies") parts.push("Хронические заболевания отрицает");
-  if (d.chronic === "has") parts.push(d.chronicText.trim() ? `Хронические заболевания: ${d.chronicText.trim()}` : "Есть хронические заболевания");
-  if (d.surgery === "none") parts.push("Операций не было");
-  if (d.surgery === "has") parts.push(d.surgeryText.trim() ? `Операции: ${d.surgeryText.trim()}` : "Операции в анамнезе");
+  if (d.chronic === "denies" && !d.chronicItems.length) {
+    parts.push("Хронические заболевания отрицает");
+  }
+  if (d.chronic === "has" || d.chronicItems.length) {
+    const named = d.chronicItems.map((it) => formatVitaeItem(it)).filter(Boolean);
+    const extra = d.chronicText.trim();
+    const all = [...named, extra].filter(Boolean).join(", ");
+    parts.push(all ? `Хронические заболевания: ${all}` : "Есть хронические заболевания");
+  }
+  if (d.surgery === "none" && !d.surgeryItems.length) parts.push("Операций не было");
+  if (d.surgery === "has" || d.surgeryItems.length) {
+    const named = d.surgeryItems.map((it) => formatVitaeItem(it)).filter(Boolean);
+    const extra = d.surgeryText.trim();
+    const all = [...named, extra].filter(Boolean).join(", ");
+    parts.push(all ? `Операции: ${all}` : "Операции в анамнезе");
+  }
   if (d.allergy === "denies") parts.push("Аллергию отрицает");
   if (d.allergy === "has") parts.push(d.allergyText.trim() ? `Аллергия: ${d.allergyText.trim()}` : "Аллергия есть");
   const habits: string[] = [];
   if (d.smoke === "no") habits.push("не курит");
-  if (d.smoke === "yes") habits.push("курит");
+  if (d.smoke === "yes") {
+    habits.push(d.smokePacks.trim() ? `курит, ${d.smokePacks.trim()} пач./сут` : "курит");
+  }
   if (d.alcohol === "no") habits.push("алкоголь отрицает");
   if (d.alcohol === "yes") habits.push("употребляет алкоголь");
   if (habits.length) parts.push(habits.join(", "));
   if (d.heritage === "clear") parts.push("Наследственность не отягощена");
-  if (d.heritage === "burdened") parts.push("Наследственность отягощена");
+  if (d.heritage === "burdened") {
+    parts.push(d.heritageText.trim() ? `Наследственность отягощена: ${d.heritageText.trim()}` : "Наследственность отягощена");
+  }
   if (!parts.length) return "";
   const text = parts.join(". ");
   return text.endsWith(".") ? text : `${text}.`;

@@ -1,4 +1,4 @@
-import type { StudyDef } from "../types";
+import type { StudyDef, StudyInstance } from "../types";
 
 export const STUDIES: StudyDef[] = [
   {
@@ -172,12 +172,29 @@ export function applyComputed(def: StudyDef, fields: Record<string, string>) {
   return next;
 }
 
-export function fillStudyTemplate(def: StudyDef, instance: { date: string; fields: Record<string, string> }) {
+function withPrev(cur: string, prev?: string) {
+  const c = (cur || "").trim() || "—";
+  const p = (prev || "").trim();
+  if (!p || p === c) return c;
+  return `${c} (${p})`;
+}
+
+export function fillStudyTemplate(
+  def: StudyDef,
+  instance: { date: string; fields: Record<string, string> },
+  previous?: StudyInstance,
+) {
   const fields = applyComputed(def, instance.fields);
-  let text = def.template.replaceAll("{date}", instance.date || "—");
+  const prevFields = previous ? applyComputed(def, previous.fields) : undefined;
+  const date =
+    previous?.date && previous.date !== instance.date
+      ? `${instance.date || "—"} (ранее ${previous.date})`
+      : instance.date || "—";
+  let text = def.template.replaceAll("{date}", date);
   for (const f of def.fields) {
     const v = (fields[f.key] || "").trim();
-    text = text.replaceAll(`{${f.key}}`, v || "—");
+    const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+    text = text.replaceAll(`{${f.key}}`, withPrev(v, p));
   }
   return text;
 }

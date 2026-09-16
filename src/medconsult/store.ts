@@ -3,8 +3,9 @@ import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { applyComputed } from "./data/studies";
+import { getDocKinds, packsForCodeLive } from "./data/templates";
 import { getStudyLive } from "./live";
-import type { Patient, SessionState, SettingsState, StudyEntry, VisitKind, VisitRecord } from "./types";
+import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
 const SESSION_KEY = "medconsult_v2_session";
 const SETTINGS_KEY = "medconsult_v2_settings";
@@ -61,6 +62,8 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     recommendations: [],
     notes: "",
     headerOverride: "",
+    docStd: [],
+    extraBlocks: [],
     ...partial,
   };
 }
@@ -94,6 +97,7 @@ function calcAge(dob?: string) {
 export function adaptPatient(p: Record<string, unknown>): Patient {
   const name = String(p.name || "");
   const parts = name.trim().split(/\s+/);
+  const globals = (p.globals && typeof p.globals === "object" ? p.globals : {}) as Patient["globals"];
   return {
     id: String(p.id || uid("p")),
     lastName: String(p.lastName || parts[0] || ""),
@@ -103,6 +107,8 @@ export function adaptPatient(p: Record<string, unknown>): Patient {
     dob: p.dob as string | undefined,
     allergies: Array.isArray(p.allergies) ? (p.allergies as string[]) : [],
     currentMedications: Array.isArray(p.currentMedications) ? (p.currentMedications as string[]) : [],
+    anamnesisVitae: typeof p.anamnesisVitae === "string" ? p.anamnesisVitae : globals?.anamnesisVitae,
+    globals,
   };
 }
 
@@ -124,6 +130,95 @@ function refreshPatientsFromLegacy(current: Patient[]): Patient[] {
   } catch {
     return current.length ? current : [demoPatient()];
   }
+}
+
+function writePatient(p: Patient) {
+  try {
+    legacy.savePatient({
+      id: p.id,
+      name: p.name,
+      dob: p.dob || "",
+      allergies: p.allergies || [],
+      currentMedications: p.currentMedications || [],
+      anamnesisVitae: p.anamnesisVitae || "",
+      globals: p.globals || {},
+    });
+  } catch {
+    /* */
+  }
+}
+
+function allergiesFromVitae(session: SessionState): string[] | undefined {
+  const d = session.vitaeDraft;
+  if (!d) return undefined;
+  if (d.allergy === "denies") return [];
+  if (d.allergy === "has" && d.allergyText.trim()) {
+    return d.allergyText
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return undefined;
+}
+
+function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
+  if (!session.patientId) return patients;
+  const idx = patients.findIndex((p) => p.id === session.patientId);
+  if (idx < 0) return patients;
+  const prev = patients[idx];
+  const fromVitae = allergiesFromVitae(session);
+  const extraLast = { ...(prev.globals?.extraLast || {}) };
+  (session.extraBlocks || []).forEach((b) => {
+    if (b.text.trim()) extraLast[b.kindId] = b.text;
+  });
+  const next: Patient = {
+    ...prev,
+    allergies: fromVitae !== undefined ? fromVitae : prev.allergies,
+    anamnesisVitae: session.anamnesisVitae || prev.anamnesisVitae,
+    globals: {
+      ...(prev.globals || {}),
+      vitaeDraft: session.vitaeDraft,
+      anamnesisVitae: session.anamnesisVitae,
+      extraLast,
+    },
+  };
+  const list = patients.map((p, i) => (i === idx ? next : p));
+  writeJson(PATIENTS_KEY, list);
+  writePatient(next);
+  return list;
+}
+
+function applyGlobals(session: SessionState, patient: Patient | undefined): SessionState {
+  if (!patient) return session;
+  const draft = patient.globals?.vitaeDraft;
+  const vitaeText = patient.anamnesisVitae || patient.globals?.anamnesisVitae || "";
+  return {
+    ...session,
+    anamnesisVitae: vitaeText,
+    vitaeDraft: draft,
+    vitaeChipMode: vitaeText ? false : true,
+  };
+}
+
+function findPreviousStudy(visits: VisitRecord[], patientId: string, key: string): StudyInstance | undefined {
+  if (!patientId) return undefined;
+  for (const v of visits) {
+    if (v.patientId !== patientId) continue;
+    const e = v.session?.studies?.find((s) => s.key === key);
+    const inst = e?.instances?.[0];
+    if (inst && Object.values(inst.fields || {}).some((x) => String(x || "").trim())) return inst;
+  }
+  return undefined;
+}
+
+function findPreviousExtra(visits: VisitRecord[], patientId: string, kindId: string): string {
+  if (!patientId) return "";
+  for (const v of visits) {
+    if (v.patientId !== patientId) continue;
+    const hit = (v.session?.extraBlocks || []).find((b) => b.kindId === kindId && b.text.trim());
+    if (hit) return hit.text;
+  }
+  return "";
 }
 
 type AppStore = {
@@ -148,7 +243,14 @@ type AppStore = {
   toggleComplaint: (text: string) => void;
   toggleLocal: (text: string) => void;
   addRecommendation: (text: string) => void;
+  renameList: (field: "complaints" | "localStatus" | "recommendations", next: string[]) => void;
   addPatient: (input: { lastName: string; firstName: string; patronymic?: string; year?: string }) => Patient;
+  updatePatient: (id: string, patch: Partial<Patient>) => void;
+  addExtraBlock: (kindId: string, title?: string) => void;
+  updateExtraBlock: (id: string, patch: Partial<ExtraBlock>) => void;
+  removeExtraBlock: (id: string) => void;
+  toggleDocStd: (id: string) => void;
+  applyLocalFromIcd: (code: string) => void;
   saveVisit: () => void;
   loadVisit: (id: string) => void;
   loadLastForPatient: () => void;
@@ -176,9 +278,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const v2Patients = readJson<Patient[]>(PATIENTS_KEY, []);
     const patients = refreshPatientsFromLegacy(v2Patients);
     const v2Visits = readJson<VisitRecord[]>(VISITS_KEY, []);
+    const raw = readJson(SESSION_KEY, blankSession({ patientId: patients[0]?.id || "" }));
+    const session = blankSession(raw);
     set({
       hydrated: true,
-      session: readJson(SESSION_KEY, blankSession({ patientId: patients[0]?.id || "" })),
+      session,
       settings: { ...defaultSettings(), ...readJson(SETTINGS_KEY, {}) },
       patients,
       visits: v2Visits,
@@ -197,9 +301,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setSession(patch) {
-    const session = { ...get().session, ...patch };
+    const prev = get().session;
+    let patients = get().patients;
+    if (patch.patientId && patch.patientId !== prev.patientId) {
+      patients = persistGlobals(prev, patients);
+    }
+    let session = { ...prev, ...patch };
+    if (patch.patientId && patch.patientId !== prev.patientId) {
+      session = applyGlobals(session, patients.find((p) => p.id === patch.patientId));
+    }
+    const vitaeTouched =
+      "vitaeDraft" in patch || "anamnesisVitae" in patch || "extraBlocks" in patch;
+    if (vitaeTouched) patients = persistGlobals(session, patients);
     persistSession(session);
-    set({ session });
+    set({ session, patients });
   },
 
   setSettings(patch) {
@@ -223,9 +338,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   addStudy(key) {
     const session = get().session;
     if (session.studies.some((s) => s.key === key)) return;
+    const prevInst = findPreviousStudy(get().visits, session.patientId, key);
     const entry: StudyEntry = {
       key,
       instances: [{ id: uid("i"), date: todayISO(), fields: {} }],
+      previous: prevInst ? { ...prevInst, fields: { ...prevInst.fields } } : undefined,
     };
     const studies = [...session.studies, entry];
     const mode: SessionState["mode"] =
@@ -237,6 +354,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const next = { ...session, studies, mode, openSection: key };
     persistSession(next);
     set({ session: next });
+    if (prevInst) get().setToast("Подставил прошлый результат под поля");
   },
 
   removeStudy(key) {
@@ -320,6 +438,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     get().setSession({ localStatus });
   },
 
+  renameList(field, next) {
+    get().setSession({ [field]: next } as Partial<SessionState>);
+  },
+
   addRecommendation(text) {
     const session = get().session;
     if (session.recommendations.includes(text)) return;
@@ -373,30 +495,80 @@ export const useAppStore = create<AppStore>((set, get) => ({
       currentMedications: [],
     };
     const patients = [...get().patients, p];
-    const unique = Object.values(
-      Object.fromEntries(patients.map((x) => [x.id, x])),
-    ) as Patient[];
+    const unique = Object.values(Object.fromEntries(patients.map((x) => [x.id, x]))) as Patient[];
     writeJson(PATIENTS_KEY, unique);
     set({ patients: unique });
-    try {
-      legacy.savePatient({
-        id: p.id,
-        name: p.name,
-        dob: p.dob || "",
-        allergies: [],
-        currentMedications: [],
-      });
-    } catch {
-      /* */
-    }
+    writePatient(p);
     get().setSession({ patientId: p.id });
     get().setToast(`Пациент: ${p.name}`);
     return p;
   },
 
+  updatePatient(id, patch) {
+    const patients = get().patients.map((p) => (p.id === id ? { ...p, ...patch } : p));
+    writeJson(PATIENTS_KEY, patients);
+    set({ patients });
+    const p = patients.find((x) => x.id === id);
+    if (p) writePatient(p);
+  },
+
+  addExtraBlock(kindId, title) {
+    const session = get().session;
+    const kinds = getDocKinds();
+    const kind = kinds.find((k) => k.id === kindId);
+    const label = title || kind?.title || "Блок";
+    const copy = kind?.copyPrevious;
+    const patient = get().patients.find((p) => p.id === session.patientId);
+    let text = "";
+    if (copy) {
+      text = findPreviousExtra(get().visits, session.patientId, kindId) || patient?.globals?.extraLast?.[kindId] || "";
+    }
+    const block: ExtraBlock = { id: uid("xb"), kindId, title: label, text };
+    get().setSession({ extraBlocks: [...(session.extraBlocks || []), block], openSection: block.id });
+    if (text) get().setToast("Подставил прошлый текст");
+  },
+
+  updateExtraBlock(id, patch) {
+    const session = get().session;
+    get().setSession({
+      extraBlocks: (session.extraBlocks || []).map((b) => (b.id === id ? { ...b, ...patch } : b)),
+    });
+  },
+
+  removeExtraBlock(id) {
+    const session = get().session;
+    get().setSession({ extraBlocks: (session.extraBlocks || []).filter((b) => b.id !== id) });
+  },
+
+  toggleDocStd(id) {
+    const session = get().session;
+    const setIds = new Set(session.docStd || []);
+    if (setIds.has(id)) setIds.delete(id);
+    else setIds.add(id);
+    const hidden = session.hiddenBlocks.filter((h) => h !== id);
+    get().setSession({ docStd: [...setIds], hiddenBlocks: hidden, openSection: id });
+  },
+
+  applyLocalFromIcd(code) {
+    const session = get().session;
+    if (!code || session.localStatusAutoFor === code) return;
+    const auto = packsForCodeLive(code).flatMap((p) => p.chips);
+    if (!auto.length) {
+      get().setSession({ localStatusAutoFor: code });
+      return;
+    }
+    const localStatus = [...session.localStatus];
+    auto.forEach((c) => {
+      if (!localStatus.includes(c)) localStatus.push(c);
+    });
+    get().setSession({ localStatus, localStatusAutoFor: code });
+  },
+
   saveVisit() {
     const { session, patients, visits } = get();
-    const patient = patients.find((p) => p.id === session.patientId);
+    const synced = persistGlobals(session, patients);
+    set({ patients: synced });
+    const patient = synced.find((p) => p.id === session.patientId);
     const rec: VisitRecord = {
       id: uid("v"),
       patientId: session.patientId,
@@ -437,8 +609,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   loadVisit(id) {
     const rec = get().visits.find((v) => v.id === id);
     if (!rec) return;
-    persistSession(rec.session);
-    set({ session: rec.session });
+    const session = blankSession(rec.session);
+    persistSession(session);
+    set({ session });
     get().setToast("Сеанс загружен");
   },
 
@@ -449,8 +622,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       get().setToast("Нет прошлого сеанса у этого пациента");
       return;
     }
-    persistSession(last.session);
-    set({ session: last.session });
+    const next = blankSession(last.session);
+    persistSession(next);
+    set({ session: next });
     get().setToast("Повторил прошлый сеанс");
   },
 
@@ -478,7 +652,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     } catch {
       /* */
     }
-    return JSON.stringify({ session, settings, patients, visits, recentChips, legacy: legacyBlob }, null, 2);
+    let templates = {};
+    try {
+      templates = JSON.parse(localStorage.getItem("medconsult_v2_templates") || "{}");
+    } catch {
+      /* */
+    }
+    return JSON.stringify({ session, settings, patients, visits, recentChips, templates, legacy: legacyBlob }, null, 2);
   },
 
   importData(raw) {
@@ -502,6 +682,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (data.patients) writeJson(PATIENTS_KEY, data.patients);
       if (data.visits) writeJson(VISITS_KEY, data.visits);
       if (data.recentChips) writeJson(CHIPS_KEY, data.recentChips);
+      if (data.templates) writeJson("medconsult_v2_templates", data.templates);
       get().hydrate();
       get().setToast("Импорт выполнен");
       return true;

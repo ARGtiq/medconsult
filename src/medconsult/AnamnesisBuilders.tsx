@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   composeAnamnesis,
   composeVitae,
   emptyAnamnesis,
   emptyVitae,
+  normalizeVitae,
   type AnamnesisDraft,
   type VitaeDraft,
+  type VitaeItem,
 } from "./anamnesisChips";
+import { getChronicPresets, getSurgeryPresets, type VitaePreset } from "./data/templates";
 import { searchDrugs } from "./live";
 import { Typeahead } from "./Typeahead";
 
@@ -61,6 +64,78 @@ function DoneBar({ sentence, onDone }: { sentence: string; onDone: () => void })
   );
 }
 
+function PresetPicker({
+  presets,
+  selected,
+  onChange,
+}: {
+  presets: VitaePreset[];
+  selected: VitaeItem[];
+  onChange: (next: VitaeItem[]) => void;
+}) {
+  const [custom, setCustom] = useState("");
+  function toggle(p: VitaePreset) {
+    const has = selected.some((s) => s.id === p.id);
+    if (has) onChange(selected.filter((s) => s.id !== p.id));
+    else onChange([...selected, { id: p.id, label: p.label, date: "" }]);
+  }
+  function setDate(id: string, date: string) {
+    onChange(selected.map((s) => (s.id === id ? { ...s, date } : s)));
+  }
+  return (
+    <div className="mt-1">
+      <div className="flex flex-wrap gap-1">
+        {presets.map((p) => {
+          const on = selected.some((s) => s.id === p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => toggle(p)}
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {selected.map((s) => {
+        const preset = presets.find((p) => p.id === s.id);
+        if (!preset?.needsDate && !s.date) return null;
+        if (!preset?.needsDate) return null;
+        return (
+          <label key={s.id} className="mt-1 flex items-center gap-2 text-xs">
+            <span className="text-ink-soft">{s.label}</span>
+            <input
+              value={s.date || ""}
+              onChange={(e) => setDate(s.id, e.target.value)}
+              placeholder={preset.emptyDateText ? "дата / пусто = давно" : "год или дата"}
+              className="w-36 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
+            />
+          </label>
+        );
+      })}
+      <div className="mt-1 flex gap-1">
+        <input
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && custom.trim()) {
+              e.preventDefault();
+              onChange([...selected, { id: `c_${Date.now()}`, label: custom.trim() }]);
+              setCustom("");
+            }
+          }}
+          placeholder="своё + Enter"
+          className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AnamnesisDisease({
   draft,
   text,
@@ -77,6 +152,8 @@ export function AnamnesisDisease({
   onMode: (chips: boolean) => void;
 }) {
   const [drugQ, setDrugQ] = useState("");
+  const [editDrug, setEditDrug] = useState<number | null>(null);
+  const [drugDraft, setDrugDraft] = useState("");
   const d = draft;
   const patch = (p: Partial<AnamnesisDraft>) => onDraft({ ...d, ...p });
   const hits = searchDrugs(drugQ).slice(0, 8);
@@ -161,16 +238,39 @@ export function AnamnesisDisease({
           />
           {d.drugs.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
-              {d.drugs.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
-                  onClick={() => patch({ drugs: d.drugs.filter((x) => x !== name) })}
-                >
-                  {name} ×
-                </button>
-              ))}
+              {d.drugs.map((name, i) =>
+                editDrug === i ? (
+                  <input
+                    key={name}
+                    autoFocus
+                    value={drugDraft}
+                    onChange={(e) => setDrugDraft(e.target.value)}
+                    onBlur={() => {
+                      const next = [...d.drugs];
+                      if (!drugDraft.trim()) next.splice(i, 1);
+                      else next[i] = drugDraft.trim();
+                      patch({ drugs: next });
+                      setEditDrug(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    className="w-32 rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+                  />
+                ) : (
+                  <button
+                    key={name}
+                    type="button"
+                    className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
+                    onClick={() => {
+                      setEditDrug(i);
+                      setDrugDraft(name);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ),
+              )}
             </div>
           )}
           <ChipRow
@@ -206,8 +306,10 @@ export function AnamnesisVitae({
   onText: (t: string) => void;
   onMode: (chips: boolean) => void;
 }) {
-  const d = draft;
+  const d = useMemo(() => normalizeVitae(draft), [draft]);
   const patch = (p: Partial<VitaeDraft>) => onDraft({ ...d, ...p });
+  const chronicPresets = getChronicPresets();
+  const surgeryPresets = getSurgeryPresets();
 
   if (!chipMode) {
     return (
@@ -230,35 +332,43 @@ export function AnamnesisVitae({
       <ChipRow
         label="хронические"
         value={d.chronic}
-        onChange={(id) => patch({ chronic: id as VitaeDraft["chronic"] })}
+        onChange={(id) =>
+          patch({
+            chronic: id as VitaeDraft["chronic"],
+            chronicItems: id === "denies" ? [] : d.chronicItems,
+          })
+        }
         options={[
           { id: "denies", text: "отрицает" },
           { id: "has", text: "есть" },
         ]}
       />
       {d.chronic === "has" && (
-        <input
-          value={d.chronicText}
-          onChange={(e) => patch({ chronicText: e.target.value })}
-          placeholder="какие"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        <PresetPicker
+          presets={chronicPresets}
+          selected={d.chronicItems}
+          onChange={(chronicItems) => patch({ chronicItems })}
         />
       )}
       <ChipRow
         label="операции"
         value={d.surgery}
-        onChange={(id) => patch({ surgery: id as VitaeDraft["surgery"] })}
+        onChange={(id) =>
+          patch({
+            surgery: id as VitaeDraft["surgery"],
+            surgeryItems: id === "none" ? [] : d.surgeryItems,
+          })
+        }
         options={[
           { id: "none", text: "не было" },
           { id: "has", text: "были" },
         ]}
       />
       {d.surgery === "has" && (
-        <input
-          value={d.surgeryText}
-          onChange={(e) => patch({ surgeryText: e.target.value })}
-          placeholder="какие"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        <PresetPicker
+          presets={surgeryPresets}
+          selected={d.surgeryItems}
+          onChange={(surgeryItems) => patch({ surgeryItems })}
         />
       )}
       <ChipRow
@@ -287,6 +397,14 @@ export function AnamnesisVitae({
           { id: "yes", text: "курит" },
         ]}
       />
+      {d.smoke === "yes" && (
+        <input
+          value={d.smokePacks}
+          onChange={(e) => patch({ smokePacks: e.target.value })}
+          placeholder="пачек в сутки"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
       <ChipRow
         label="алкоголь"
         value={d.alcohol}
@@ -305,6 +423,14 @@ export function AnamnesisVitae({
           { id: "burdened", text: "отягощена" },
         ]}
       />
+      {d.heritage === "burdened" && (
+        <input
+          value={d.heritageText}
+          onChange={(e) => patch({ heritageText: e.target.value })}
+          placeholder="какое заболевание"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
       <DoneBar sentence={composeVitae(d)} onDone={() => onMode(false)} />
     </div>
   );

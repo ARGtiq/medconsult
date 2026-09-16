@@ -42,25 +42,31 @@ export function composeBlocks(session: SessionState): PreviewBlock[] {
     out.push({ id, n: 0, title, text: trimmed });
   };
 
-  push("complaints", "Жалобы", session.complaints.join(", "));
+  push("complaints", "Жалобы", (session.complaints || []).join(", "));
   push("anamnesis", "Анамнез заболевания", session.anamnesis);
   push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
-  const status = [session.objective, session.localStatus.join("; ")].filter((x) => x.trim()).join(" ");
+  const status = [session.objective, (session.localStatus || []).join("; ")].filter((x) => x.trim()).join(" ");
   push("status", "Объективный + локальный статус", status);
 
-  const studyParts = session.studies
+  const studyParts = (session.studies || [])
     .map((entry) => {
       const def = getStudyLive(entry.key);
       if (!def) return "";
-      return entry.instances.map((inst) => fillStudyTemplate(def, inst)).join(" ");
+      return entry.instances
+        .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : undefined))
+        .join(" ");
     })
     .filter(Boolean);
   push("studies", "Обследования", studyParts.join("\n"));
 
   const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
   push("diagnosis", "Диагноз", dx);
-  push("recommendations", "Рекомендации", session.recommendations.join(". "));
-  push("notes", "Примечания", session.notes);
+  push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
+  push("notes", session.mode === "document" ? "Текст документа" : "Примечания", session.notes);
+
+  (session.extraBlocks || []).forEach((b) => {
+    push(b.id, b.title, b.text);
+  });
 
   return out.map((b, i) => ({ ...b, n: i + 1 }));
 }
