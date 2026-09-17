@@ -1,4 +1,5 @@
 import type { StudyDef, StudyInstance } from "../types";
+import { domainLine, QUESTION_SCALES } from "./questionnaires";
 
 export const STUDIES: StudyDef[] = [
   {
@@ -252,7 +253,11 @@ export function fillStudyTemplate(
       if (!v) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
       const shown = interpretScore(f.key, v);
-      bits.push(p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`);
+      const scale = QUESTION_SCALES.find((s) => s.totalKey === f.key);
+      const domains = scale ? domainLine(fields, scale) : "";
+      let line = p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`;
+      if (domains) line = `${line}; ${domains}`;
+      bits.push(line);
     }
     if (!bits.length) return "";
     return `Анкеты от ${date}: ${bits.join("; ")}.`;
