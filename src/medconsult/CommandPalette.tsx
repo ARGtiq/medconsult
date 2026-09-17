@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { allStudiesLive, liveComplaints, liveDrugsMerged, liveIcdMerged } from "./live";
+import { studyMatchesQuery } from "./data/studies";
 import { useAppStore } from "./store";
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -36,13 +37,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         }),
       );
     allStudiesLive()
-      .filter(
-        (st) =>
-          !s ||
-          st.label.toLowerCase().includes(s) ||
-          st.category?.toLowerCase().includes(s) ||
-          (st.fields || []).some((f) => f.label.toLowerCase().includes(s)),
-      )
+      .filter((st) => !s || studyMatchesQuery(st, s))
       .forEach((st) =>
         out.push({
           id: "s-" + st.key,

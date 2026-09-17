@@ -13,7 +13,7 @@ export type StudyField = {
   unit?: string;
   normal?: string;
   computed?: boolean;
-  formula?: "prostate_volume";
+  formula?: "prostate_volume" | "sperm_total";
 };
 
 export type StudyDef = {
@@ -23,6 +23,8 @@ export type StudyDef = {
   template: string;
   fields: StudyField[];
   referenceNotes: string;
+  hint?: string;
+  sparse?: boolean;
 };
 
 export type StudyInstance = {

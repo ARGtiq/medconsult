@@ -150,9 +150,155 @@ export const STUDIES: StudyDef[] = [
     referenceNotes: "ПСА интерпретировать вместе с объёмом простаты (плотность ПСА).",
   },
   {
+    key: "prostate_secret",
+    label: "Секрет простаты",
+    category: "lab",
+    sparse: true,
+    hint: "лейкоциты, лецитин, флора",
+    template: "Секрет простаты от {date}: лейк. {leukocytes} в п/зр, лецитиновые зёрна {lecithin}, флора {flora}.",
+    fields: [
+      { key: "leukocytes", label: "Лейкоциты", unit: "в п/зр", normal: "<10" },
+      { key: "lecithin", label: "Лецитиновые зёрна", normal: "обильно" },
+      { key: "flora", label: "Флора", normal: "нет" },
+      { key: "epithelium", label: "Эпителий" },
+      { key: "amyloid", label: "Амилоидные тельца" },
+    ],
+    referenceNotes: "Лейкоциты >10–15 в п/зр + снижение лецитиновых зёрен — воспалительный секрет. Не заменяет посев и ПЦР.",
+  },
+  {
+    key: "urine_culture",
+    label: "Посев мочи",
+    category: "lab",
+    sparse: true,
+    hint: "возбудитель, КОЕ, чувствительность",
+    template: "Посев мочи от {date}: {result}.",
+    fields: [
+      { key: "result", label: "Результат", normal: "стерильно" },
+      { key: "pathogen", label: "Возбудитель" },
+      { key: "cfu", label: "КОЕ/мл", normal: "значимо ≥10⁵" },
+      { key: "sensitivity", label: "Чувствительность" },
+    ],
+    referenceNotes: "Значимая бактериурия обычно ≥10⁵ КОЕ/мл. При цистите/простатите порог ниже, если клиника яркая.",
+  },
+  {
+    key: "pcr_sti",
+    label: "ПЦР ИППП",
+    category: "lab",
+    sparse: true,
+    hint: "хламидии, гонорея, M.genitalium…",
+    template: "ПЦР ИППП от {date}: {summary}.",
+    fields: [
+      { key: "ct", label: "C. trachomatis", normal: "не обнар." },
+      { key: "ng", label: "N. gonorrhoeae", normal: "не обнар." },
+      { key: "mg", label: "M. genitalium", normal: "не обнар." },
+      { key: "uu", label: "U. urealyticum", normal: "не обнар." },
+      { key: "up", label: "U. parvum", normal: "не обнар." },
+      { key: "mh", label: "M. hominis", normal: "не обнар." },
+      { key: "tv", label: "T. vaginalis", normal: "не обнар." },
+      { key: "hpv", label: "ВПЧ", normal: "не обнар." },
+    ],
+    referenceNotes: "В Медлок попадут только заполненные позиции. «не обнар.» / «обнар.» достаточно.",
+  },
+  {
+    key: "spermogram",
+    label: "Спермограмма",
+    category: "lab",
+    sparse: true,
+    hint: "ВОЗ 2021, объём × концентрация",
+    template: "Спермограмма от {date}: объём {volume} мл, концентрация {concentration} млн/мл.",
+    fields: [
+      { key: "volume", label: "Объём", unit: "мл", normal: "≥1,4 (ВОЗ 2021)" },
+      { key: "concentration", label: "Концентрация", unit: "млн/мл", normal: "≥16" },
+      {
+        key: "totalCount",
+        label: "Всего",
+        unit: "млн",
+        normal: "≥39",
+        computed: true,
+        formula: "sperm_total",
+      },
+      { key: "motilityPR", label: "PR (a+b)", unit: "%", normal: "≥30" },
+      { key: "motilityTotal", label: "Общая подвижность", unit: "%", normal: "≥42" },
+      { key: "morphology", label: "Морфология Крюгер", unit: "%", normal: "≥4" },
+      { key: "vitality", label: "Жизнеспособн.", unit: "%", normal: "≥54" },
+      { key: "leukocytes", label: "Лейкоциты", unit: "млн/мл", normal: "<1" },
+      { key: "ph", label: "pH", normal: "≥7,2" },
+      { key: "liquefaction", label: "Разжижение", unit: "мин", normal: "≤60" },
+      { key: "agglutination", label: "Агглютинация", normal: "нет" },
+      { key: "comment", label: "Заключение" },
+    ],
+    referenceNotes:
+      "Нижние референсы ВОЗ 2021. Всего = объём × концентрация. Предыдущий результат подставляется в скобках.",
+  },
+  {
+    key: "semen_culture",
+    label: "Посев эякулята",
+    category: "lab",
+    sparse: true,
+    hint: "посев спермы",
+    template: "Посев эякулята от {date}: {result}.",
+    fields: [
+      { key: "result", label: "Результат", normal: "роста нет" },
+      { key: "pathogen", label: "Возбудитель" },
+      { key: "cfu", label: "КОЕ/мл" },
+      { key: "sensitivity", label: "Чувствительность" },
+    ],
+    referenceNotes: "Интерпретировать вместе со спермограммой и клиникой (простатит, бесплодие).",
+  },
+  {
+    key: "hormones",
+    label: "Гормоны",
+    category: "lab",
+    sparse: true,
+    hint: "Т, ГСПГ, ЛГ, ФСГ, пролактин",
+    template: "Гормоны от {date}: Т {t} нмоль/л.",
+    fields: [
+      { key: "t", label: "Тестостерон", unit: "нмоль/л", normal: "утро 8,3–29" },
+      { key: "freeT", label: "Св. Т", unit: "пмоль/л" },
+      { key: "shbg", label: "ГСПГ", unit: "нмоль/л", normal: "18–54" },
+      { key: "lh", label: "ЛГ", unit: "МЕ/л", normal: "1,7–8,6" },
+      { key: "fsh", label: "ФСГ", unit: "МЕ/л", normal: "1,5–12,4" },
+      { key: "prl", label: "Пролактин", unit: "мМЕ/л", normal: "86–324" },
+      { key: "e2", label: "Эстрадиол", unit: "пмоль/л", normal: "40–160" },
+      { key: "tsh", label: "ТТГ", unit: "мМЕ/л", normal: "0,4–4,0" },
+    ],
+    referenceNotes:
+      "Т лучше утром. нг/мл × 3,47 = нмоль/л. Низкий Т + высокий ЛГ/ФСГ — первичный гипогонадизм; низкий Т + низкий/нормальный ЛГ — вторичный.",
+  },
+  {
+    key: "creatinine_gfr",
+    label: "Креатинин / СКФ",
+    category: "lab",
+    sparse: true,
+    hint: "почечная функция",
+    template: "Креатинин от {date}: {crea} мкмоль/л, СКФ {egfr}.",
+    fields: [
+      { key: "crea", label: "Креатинин", unit: "мкмоль/л", normal: "62–115 (муж)" },
+      { key: "egfr", label: "СКФ", unit: "мл/мин/1,73", normal: "≥90" },
+      { key: "urea", label: "Мочевина", unit: "ммоль/л", normal: "2,8–7,2" },
+    ],
+    referenceNotes: "СКФ <60 — снижение функции. Перед КТ с контрастом и НПВС смотреть креатинин.",
+  },
+  {
+    key: "urethral_smear",
+    label: "Мазок из уретры",
+    category: "lab",
+    sparse: true,
+    hint: "микроскопия",
+    template: "Мазок из уретры от {date}: лейк. {leukocytes} в п/зр.",
+    fields: [
+      { key: "leukocytes", label: "Лейкоциты", unit: "в п/зр", normal: "0–4" },
+      { key: "flora", label: "Флора", normal: "нет" },
+      { key: "gc", label: "Гонококки", normal: "не обнар." },
+      { key: "tv", label: "Трихомонады", normal: "не обнар." },
+    ],
+    referenceNotes: "Лейкоциты ≥5 в п/зр — уретрит. Гонококки/трихомонады — при микроскопии; ПЦР чувствительнее.",
+  },
+  {
     key: "questionnaires",
     label: "Анкеты",
     category: "questionnaire",
+    hint: "IPSS, МИЭФ-5, PEDT, NIH-CPSI, AMS",
     template: "Анкеты от {date}: {summary}.",
     fields: [
       { key: "ipss", label: "IPSS", normal: "0–7 лёгкие · 8–19 умеренные · 20–35 тяжёлые" },
@@ -181,11 +327,41 @@ export function prostateVolume(length: string, width: string, height: string) {
   return ((l * w * h * 0.52) / 1000).toFixed(0);
 }
 
+export function spermTotal(volume: string, concentration: string) {
+  const v = parseFloat(volume.replace(",", "."));
+  const c = parseFloat(concentration.replace(",", "."));
+  if (![v, c].every((n) => Number.isFinite(n) && n >= 0)) return "";
+  const n = v * c;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export const STUDY_GROUP_ORDER = ["questionnaire", "lab", "instrumental"] as const;
+export const STUDY_GROUP_LABEL: Record<string, string> = {
+  questionnaire: "Анкеты",
+  lab: "Лаборатория",
+  instrumental: "Инструментальные",
+  other: "Другое",
+};
+
+export function studyMatchesQuery(s: StudyDef, needle: string) {
+  const q = needle.trim().toLowerCase();
+  if (!q) return true;
+  if (s.label.toLowerCase().includes(q)) return true;
+  if ((s.hint || "").toLowerCase().includes(q)) return true;
+  if ((s.category || "").toLowerCase().includes(q)) return true;
+  const group = STUDY_GROUP_LABEL[s.category] || "";
+  if (group.toLowerCase().includes(q)) return true;
+  return (s.fields || []).some((f) => f.label.toLowerCase().includes(q));
+}
+
 export function applyComputed(def: StudyDef, fields: Record<string, string>) {
   const next = { ...fields };
   for (const f of def.fields) {
     if (f.formula === "prostate_volume") {
       next[f.key] = prostateVolume(next.length || "", next.width || "", next.height || "");
+    }
+    if (f.formula === "sperm_total") {
+      next[f.key] = spermTotal(next.volume || "", next.concentration || "");
     }
   }
   return next;
@@ -261,6 +437,20 @@ export function fillStudyTemplate(
     }
     if (!bits.length) return "";
     return `Анкеты от ${date}: ${bits.join("; ")}.`;
+  }
+
+  if (def.sparse) {
+    const bits: string[] = [];
+    for (const f of def.fields) {
+      const v = (fields[f.key] || "").trim();
+      if (!v) continue;
+      const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+      const unit = f.unit ? ` ${f.unit}` : "";
+      const shown = p && p !== v ? `${v}${unit} (${p})` : `${v}${unit}`;
+      bits.push(`${f.label} ${shown}`.trim());
+    }
+    if (!bits.length) return "";
+    return `${def.label} от ${date}: ${bits.join(", ")}.`;
   }
 
   let text = def.template.replaceAll("{date}", date);

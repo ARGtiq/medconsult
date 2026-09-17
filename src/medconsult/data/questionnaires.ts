@@ -38,6 +38,10 @@ export const QUESTION_SCALES: ScaleDef[] = [
       { key: "ipss_7", label: "Никтурия", min: 0, max: 5 },
     ],
     extra: { key: "ipssQol", label: "QoL · если так останется", min: 0, max: 6 },
+    domains: [
+      { key: "ipss_void", label: "опорожн.", itemKeys: ["ipss_1", "ipss_3", "ipss_5", "ipss_6"] },
+      { key: "ipss_store", label: "накопл.", itemKeys: ["ipss_2", "ipss_4", "ipss_7"] },
+    ],
   },
   {
     totalKey: "iief5",
