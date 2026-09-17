@@ -1,8 +1,9 @@
 import { Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { applyComputed, interpretScore } from "./data/studies";
+import { applyComputed } from "./data/studies";
 import { allStudiesLive, getStudyLive } from "./live";
+import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
@@ -59,12 +60,19 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   </button>
                 )}
               </div>
+              {def.category === "questionnaire" ? (
+                <QuestionnaireForm
+                  fields={inst.fields}
+                  previous={idx === 0 ? prevFields : null}
+                  prevDate={previous?.date}
+                  onChange={(next) => updateInstance(studyKey, inst.id, next, inst.date)}
+                />
+              ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {def.fields.map((f) => {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
-                  const interp = def.category === "questionnaire" && value ? interpretScore(f.key, value) : "";
                   return (
                     <label
                       key={f.key}
@@ -82,14 +90,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                             updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: e.target.value })
                           }
                           className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
-                          placeholder={def.category === "questionnaire" ? "балл" : undefined}
                         />
                       )}
-                      {interp && interp !== value ? (
-                        <span className="block text-[10px] font-medium text-teal">{interp}</span>
-                      ) : f.normal ? (
-                        <span className="block text-[10px] text-teal">{f.normal}</span>
-                      ) : null}
+                      {f.normal && <span className="block text-[10px] text-teal">{f.normal}</span>}
                       {was && (
                         <span className="mt-0.5 block text-[10px] text-mute">
                           было: {was}
@@ -100,6 +103,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   );
                 })}
               </div>
+              )}
               {def.referenceNotes && (
                 <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>
               )}
