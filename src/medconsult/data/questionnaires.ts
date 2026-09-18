@@ -133,6 +133,35 @@ export const QUESTION_SCALES: ScaleDef[] = [
   },
 ];
 
+export function studyKeyForScale(totalKey: string) {
+  return `q_${totalKey}`;
+}
+
+export function scaleFromStudyKey(key: string, scales: ScaleDef[] = QUESTION_SCALES): ScaleDef | undefined {
+  if (!key || key === "questionnaires") return undefined;
+  const total = key.startsWith("q_") ? key.slice(2) : key;
+  return scales.find((s) => s.totalKey === total);
+}
+
+export function cloneScales(list: ScaleDef[] = QUESTION_SCALES): ScaleDef[] {
+  return list.map((s) => ({
+    ...s,
+    items: s.items.map((i) => ({ ...i, values: i.values ? [...i.values] : undefined })),
+    extra: s.extra ? { ...s.extra } : undefined,
+    domains: s.domains?.map((d) => ({ ...d, itemKeys: [...d.itemKeys] })),
+  }));
+}
+
+export function emptyScale(): ScaleDef {
+  const id = `c${Date.now().toString(36)}`;
+  return {
+    totalKey: id,
+    title: "Новая анкета",
+    hint: "сумма баллов",
+    items: [{ key: `${id}_1`, label: "вопрос 1", min: 0, max: 5 }],
+  };
+}
+
 export function scaleRange(item: ScaleItem) {
   if (item.values?.length) return item.values;
   const out: number[] = [];

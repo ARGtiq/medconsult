@@ -515,7 +515,7 @@ export function ProtocolPage() {
               draft={session.anamnesisDraft || emptyAnamnesis()}
               text={session.anamnesis}
               chipMode={session.anamnesisChipMode ?? !session.anamnesis}
-              onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d) })}
+              onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d), anamnesisChipMode: true })}
               onText={(t) => setSession({ anamnesis: t })}
               onMode={(chipsMode) =>
                 setSession({
@@ -557,6 +557,7 @@ export function ProtocolPage() {
               onDraft={(d) =>
                 setSession({
                   vitaeDraft: d,
+                  vitaeChipMode: true,
                   anamnesisVitae: composeVitae(d, {
                     medications: patient?.currentMedications,
                     allergies: patient?.allergies,

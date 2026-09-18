@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   composeAnamnesis,
   composeVitae,
@@ -12,6 +12,7 @@ import {
   HERITAGE_PRESETS,
   TRANSFUSION_PRESETS,
   RELATED_PRESETS,
+  VITAE_LINES,
   type AnamnesisDraft,
   type VitaeDraft,
   type VitaeItem,
@@ -149,6 +150,34 @@ function PresetPicker({
   );
 }
 
+function VitaeSection({
+  id,
+  omitted,
+  onOmit,
+  children,
+}: {
+  id: string;
+  omitted: boolean;
+  onOmit: (id: string, hide: boolean) => void;
+  children: ReactNode;
+}) {
+  if (omitted) return null;
+  return (
+    <div className="group relative pr-5">
+      <button
+        type="button"
+        title="убрать пункт"
+        aria-label="убрать пункт"
+        onClick={() => onOmit(id, true)}
+        className="absolute top-1.5 right-0 z-[1] flex size-[16px] items-center justify-center rounded bg-danger-soft text-[10px] font-bold text-danger opacity-70 md:opacity-0 md:group-hover:opacity-100"
+      >
+        ×
+      </button>
+      {children}
+    </div>
+  );
+}
+
 function BlockLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div className="mt-1.5">
@@ -226,9 +255,24 @@ export function AnamnesisDisease({
     <div>
       <BlockLabel label="болеет" />
       <div className="mt-1 flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          onClick={() =>
+            patch({
+              onset: d.onset === "chronic" ? "" : "chronic",
+              amount: d.onset === "chronic" ? d.amount : "",
+              unit: d.onset === "chronic" ? d.unit : "",
+            })
+          }
+          className={`rounded-full px-2 py-0.5 text-xs ${
+            d.onset === "chronic" ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+          }`}
+        >
+          давно
+        </button>
         <input
           value={d.amount}
-          onChange={(e) => patch({ amount: e.target.value.replace(/\D/g, "").slice(0, 3) })}
+          onChange={(e) => patch({ amount: e.target.value.replace(/\D/g, "").slice(0, 3), onset: "" })}
           placeholder="N"
           className="w-12 rounded-md border border-line bg-paper px-1.5 py-0.5 text-sm tabular-nums"
         />
@@ -244,7 +288,7 @@ export function AnamnesisDisease({
           <button
             key={id}
             type="button"
-            onClick={() => patch({ unit: d.unit === id ? "" : id })}
+            onClick={() => patch({ unit: d.unit === id ? "" : id, onset: "" })}
             className={`rounded-full px-2 py-0.5 text-xs ${
               d.unit === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
             }`}
@@ -389,6 +433,14 @@ export function AnamnesisVitae({
   const openInf = d.infections === "has" || d.infectionItems.length > 0;
   const openHer = d.heritage === "burdened" || d.heritageItems.length > 0;
   const openTf = d.transfusion === "has" || d.transfusionItems.length > 0;
+  const omitted = (id: string) => (d.omit || []).includes(id);
+  const setOmit = (id: string, hide: boolean) => {
+    const set = new Set(d.omit || []);
+    if (hide) set.add(id);
+    else set.delete(id);
+    patch({ omit: [...set] });
+  };
+  const hiddenLines = VITAE_LINES.filter((l) => omitted(l.id));
 
   if (!chipMode) {
     return (
@@ -408,6 +460,7 @@ export function AnamnesisVitae({
 
   return (
     <div>
+      <VitaeSection id="development" omitted={omitted("development")} onOmit={setOmit}>
       <ChipRow
         label="развитие"
         value={d.development}
@@ -431,6 +484,8 @@ export function AnamnesisVitae({
           }
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="occupation" omitted={omitted("occupation")} onOmit={setOmit}>
       <ChipRow
         label="профвредности"
         value={d.occupation}
@@ -454,6 +509,8 @@ export function AnamnesisVitae({
           }
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="habits" omitted={omitted("habits")} onOmit={setOmit}>
       <ChipRow
         label="курение"
         value={d.smoke}
@@ -480,6 +537,8 @@ export function AnamnesisVitae({
           { id: "yes", text: "употребляет" },
         ]}
       />
+      </VitaeSection>
+      <VitaeSection id="past" omitted={omitted("past")} onOmit={setOmit}>
       <ChipRow
         label="перенесённые заболевания"
         value={d.pastIllness}
@@ -501,27 +560,8 @@ export function AnamnesisVitae({
           onChange={(pastItems) => patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" })}
         />
       )}
-      <ChipRow
-        label="хронические"
-        value={d.chronic}
-        onChange={(id) =>
-          patch({
-            chronic: id as VitaeDraft["chronic"],
-            chronicItems: id === "denies" ? [] : d.chronicItems,
-          })
-        }
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
-      />
-      {d.chronic === "has" && (
-        <PresetPicker
-          presets={chronicPresets}
-          selected={d.chronicItems}
-          onChange={(chronicItems) => patch({ chronicItems })}
-        />
-      )}
+      </VitaeSection>
+      <VitaeSection id="infections" omitted={omitted("infections")} onOmit={setOmit}>
       <ChipRow
         label="туберкулёз, гепатиты, вен. заб."
         value={d.infections}
@@ -545,6 +585,8 @@ export function AnamnesisVitae({
           }
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="heritage" omitted={omitted("heritage")} onOmit={setOmit}>
       <ChipRow
         label="наследственность"
         value={d.heritage}
@@ -568,8 +610,14 @@ export function AnamnesisVitae({
           }
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="allergy" omitted={omitted("allergy")} onOmit={setOmit}>
       <FromCard label="аллергия" items={patient?.allergies} />
+      </VitaeSection>
+      <VitaeSection id="meds" omitted={omitted("meds")} onOmit={setOmit}>
       <FromCard label="принимает постоянно" items={patient?.currentMedications} />
+      </VitaeSection>
+      <VitaeSection id="surgery" omitted={omitted("surgery")} onOmit={setOmit}>
       <ChipRow
         label="операции"
         value={d.surgery}
@@ -591,6 +639,8 @@ export function AnamnesisVitae({
           onChange={(surgeryItems) => patch({ surgeryItems })}
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="transfusion" omitted={omitted("transfusion")} onOmit={setOmit}>
       <ChipRow
         label="гемотрансфузии"
         value={d.transfusion}
@@ -613,6 +663,24 @@ export function AnamnesisVitae({
             patch({ transfusionItems, transfusion: transfusionItems.length ? "has" : "denies" })
           }
         />
+      )}
+      </VitaeSection>
+      {hiddenLines.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[10px] tracking-wide text-mute uppercase">убранные пункты</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {hiddenLines.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setOmit(l.id, false)}
+                className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs text-teal"
+              >
+                + {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} />
     </div>

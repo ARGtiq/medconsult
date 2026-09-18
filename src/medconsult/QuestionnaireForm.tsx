@@ -1,51 +1,57 @@
 import { useState } from "react";
-import { interpretScore } from "./data/studies";
-import { applyItem, domainLine, QUESTION_SCALES, scaleRange, type ScaleDef, type ScaleItem } from "./data/questionnaires";
+import { interpretScore, liveScales } from "./data/studies";
+import { applyItem, domainLine, scaleRange, type ScaleDef, type ScaleItem } from "./data/questionnaires";
 
 export function QuestionnaireForm({
+  scale,
   fields,
   previous,
   prevDate,
   onChange,
 }: {
+  scale?: ScaleDef | null;
   fields: Record<string, string>;
   previous?: Record<string, string> | null;
   prevDate?: string;
   onChange: (next: Record<string, string>) => void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const list = scale ? [scale] : liveScales();
+  const [open, setOpen] = useState<string | null>(scale ? scale.totalKey : null);
   const other = fields.other || "";
   const wasOther = previous ? (previous.other || "").trim() : "";
+  const bundled = !scale;
 
   return (
     <div className="space-y-1.5">
-      {QUESTION_SCALES.map((scale) => (
+      {list.map((s) => (
         <ScaleBlock
-          key={scale.totalKey}
-          scale={scale}
+          key={s.totalKey}
+          scale={s}
           fields={fields}
           previous={previous}
           prevDate={prevDate}
-          open={open === scale.totalKey}
-          onToggle={() => setOpen((v) => (v === scale.totalKey ? null : scale.totalKey))}
+          open={open === s.totalKey}
+          onToggle={() => setOpen((v) => (v === s.totalKey ? null : s.totalKey))}
           onChange={onChange}
         />
       ))}
-      <label className="block rounded-md bg-paper px-1.5 py-1">
-        <span className="block text-[10px] text-mute">Другая</span>
-        <input
-          value={other}
-          onChange={(e) => onChange({ ...fields, other: e.target.value })}
-          placeholder="название и балл"
-          className="w-full bg-transparent text-sm font-semibold outline-none"
-        />
-        {wasOther ? (
-          <span className="mt-0.5 block text-[10px] text-mute">
-            было: {wasOther}
-            {prevDate ? ` · ${prevDate}` : ""}
-          </span>
-        ) : null}
-      </label>
+      {bundled ? (
+        <label className="block rounded-md bg-paper px-1.5 py-1">
+          <span className="block text-[10px] text-mute">Другая</span>
+          <input
+            value={other}
+            onChange={(e) => onChange({ ...fields, other: e.target.value })}
+            placeholder="название и балл"
+            className="w-full bg-transparent text-sm font-semibold outline-none"
+          />
+          {wasOther ? (
+            <span className="mt-0.5 block text-[10px] text-mute">
+              было: {wasOther}
+              {prevDate ? ` · ${prevDate}` : ""}
+            </span>
+          ) : null}
+        </label>
+      ) : null}
     </div>
   );
 }

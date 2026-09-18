@@ -1,11 +1,12 @@
 import { Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { applyComputed, STUDY_GROUP_LABEL, STUDY_GROUP_ORDER, studyMatchesQuery } from "./data/studies";
+import { applyComputed, STUDY_GROUP_LABEL, STUDY_GROUP_ORDER, liveScales, studyMatchesQuery } from "./data/studies";
+import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive } from "./live";
+import { scaleFromStudyKey } from "./data/questionnaires";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
-import type { StudyDef } from "./types";
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
@@ -63,6 +64,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
               </div>
               {def.category === "questionnaire" ? (
                 <QuestionnaireForm
+                  scale={scaleFromStudyKey(studyKey, liveScales()) || null}
                   fields={inst.fields}
                   previous={idx === 0 ? prevFields : null}
                   prevDate={previous?.date}
@@ -129,43 +131,29 @@ export function PlusStudyButton() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
+  const [tab, setTab] = useState<(typeof STUDY_GROUP_ORDER)[number]>("lab");
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, maxH: 280, width: 280 });
   const { session, addStudy } = useAppStore();
-  const studies = useMemo(() => allStudiesLive(), []);
-  const grouped = useMemo(() => {
-    const matched = studies.filter((s) => studyMatchesQuery(s, q));
-    const buckets: Record<string, StudyDef[]> = {
-      questionnaire: [],
-      lab: [],
-      instrumental: [],
-      other: [],
-    };
-    for (const s of matched) {
-      const cat = STUDY_GROUP_ORDER.includes(s.category as (typeof STUDY_GROUP_ORDER)[number])
-        ? s.category
-        : "other";
-      buckets[cat].push(s);
-    }
-    const sections: { cat: string; items: StudyDef[] }[] = [];
-    const flat: StudyDef[] = [];
-    for (const cat of [...STUDY_GROUP_ORDER, "other"] as const) {
-      const items = buckets[cat];
-      if (!items.length) continue;
-      sections.push({ cat, items });
-      flat.push(...items);
-    }
-    return { sections, flat };
-  }, [studies, q]);
-  const filtered = grouped.flat;
+  const templates = useTemplates();
+  const studies = useMemo(() => allStudiesLive(), [templates.questionnaires]);
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const cat of STUDY_GROUP_ORDER) out[cat] = studies.filter((s) => s.category === cat).length;
+    return out;
+  }, [studies]);
+  const filtered = useMemo(
+    () => studies.filter((s) => s.category === tab && studyMatchesQuery(s, q)),
+    [studies, tab, q],
+  );
 
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
       if (!btnRef.current) return;
       const r = btnRef.current.getBoundingClientRect();
-      const width = 300;
+      const width = 340;
       const spaceBelow = window.innerHeight - r.bottom - 12;
       const spaceAbove = r.top - 12;
       const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
@@ -201,7 +189,7 @@ export function PlusStudyButton() {
     };
   }, [open]);
 
-  useEffect(() => setIdx(0), [q, open]);
+  useEffect(() => setIdx(0), [q, open, tab]);
 
   useEffect(() => {
     if (!open) return;
@@ -241,6 +229,21 @@ export function PlusStudyButton() {
             style={{ top: pos.top, left: pos.left, width: pos.width, height: pos.maxH }}
             className="fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
           >
+            <div className="flex shrink-0 gap-0.5 border-b border-line bg-paper px-1 pt-1">
+              {STUDY_GROUP_ORDER.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setTab(cat)}
+                  className={`flex-1 rounded-t-md px-1 py-1.5 text-[10px] font-semibold tracking-wide uppercase ${
+                    tab === cat ? "bg-surface text-teal" : "text-mute"
+                  }`}
+                >
+                  {STUDY_GROUP_LABEL[cat]}
+                  <span className="ml-0.5 font-normal opacity-70">{counts[cat] || 0}</span>
+                </button>
+              ))}
+            </div>
             <input
               autoFocus
               value={q}
@@ -257,45 +260,37 @@ export function PlusStudyButton() {
                   choose(idx);
                 }
               }}
-              placeholder="Найти обследование…  ↑↓ Enter"
+              placeholder={`Найти · ${STUDY_GROUP_LABEL[tab]}  ↑↓ Enter`}
               className="shrink-0 border-b border-line bg-paper px-2.5 py-2 text-sm outline-none"
             />
             <div className="min-h-0 flex-1 overflow-auto p-1.5">
               {filtered.length === 0 && <p className="px-2 py-3 text-xs text-mute">Ничего не нашлось</p>}
-              {grouped.sections.map((section) => (
-                <div key={section.cat} className="mb-1.5 last:mb-0">
-                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold tracking-wide text-mute uppercase">
-                    {STUDY_GROUP_LABEL[section.cat] || section.cat}
-                  </div>
-                  {section.items.map((s) => {
-                    const i = filtered.indexOf(s);
-                    const on = session.studies.some((e) => e.key === s.key);
-                    return (
-                      <button
-                        key={s.key}
-                        type="button"
-                        data-idx={i}
-                        disabled={on}
-                        onMouseEnter={() => setIdx(i)}
-                        onClick={() => choose(i)}
-                        className={`mb-1 w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium last:mb-0 ${
-                          on
-                            ? "border-teal/30 bg-teal-soft text-teal"
-                            : i === idx
-                              ? "border-teal bg-teal-soft text-teal"
-                              : "border-line bg-paper text-ink"
-                        }`}
-                      >
-                        {s.label}
-                        {s.hint ? (
-                          <span className="mt-0.5 block text-[10px] font-normal opacity-80">{s.hint}</span>
-                        ) : null}
-                        {on ? <span className="font-normal opacity-80"> · добавлен</span> : ""}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+              {filtered.map((s, i) => {
+                const on = session.studies.some((e) => e.key === s.key);
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    data-idx={i}
+                    disabled={on}
+                    onMouseEnter={() => setIdx(i)}
+                    onClick={() => choose(i)}
+                    className={`mb-1 w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium last:mb-0 ${
+                      on
+                        ? "border-teal/30 bg-teal-soft text-teal"
+                        : i === idx
+                          ? "border-teal bg-teal-soft text-teal"
+                          : "border-line bg-paper text-ink"
+                    }`}
+                  >
+                    {s.label}
+                    {s.hint ? (
+                      <span className="mt-0.5 block text-[10px] font-normal opacity-80">{s.hint}</span>
+                    ) : null}
+                    {on ? <span className="font-normal opacity-80"> · добавлен</span> : ""}
+                  </button>
+                );
+              })}
             </div>
           </div>,
           document.body,

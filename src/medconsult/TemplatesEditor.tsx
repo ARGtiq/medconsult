@@ -10,11 +10,12 @@ import {
   type VitaePreset,
   type VisitPack,
 } from "./data/templates";
+import { emptyScale, type ScaleDef, type ScaleItem } from "./data/questionnaires";
 import type { LocalPack, WorkKind } from "./types";
 
 export function TemplatesEditor() {
   const [layer, setLayer] = useState<"blocks" | "packs">("blocks");
-  const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs">("status");
+  const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
   useEffect(() => {
@@ -69,15 +70,16 @@ export function TemplatesEditor() {
       {layer === "blocks" && (
         <>
           <p className="mb-2 text-xs text-ink-soft">
-            Словари чипов: жалобы, статус, хронические, операции, виды доп. блоков. Из них потом собирается набор.
+            Словари чипов: жалобы, статус, перенесённые, операции, анкеты, виды доп. блоков. Из них потом собирается набор.
           </p>
           <div className="mb-3 flex flex-wrap gap-1">
             {(
               [
                 ["status", "локальный статус"],
                 ["complaints", "жалобы"],
-                ["chronic", "хронические"],
+                ["chronic", "перенесённые"],
                 ["surgery", "операции"],
+                ["questionnaires", "анкеты"],
                 ["docs", "виды блоков"],
               ] as const
             ).map(([id, label]) => (
@@ -106,7 +108,7 @@ export function TemplatesEditor() {
             <PresetEditor
               items={data.chronic}
               onChange={(chronic) => persist({ chronic })}
-              hint="Чипы анамнеза жизни. Дата — для ИМ, ОНМК и т.п."
+              hint="Чипы перенесённых заболеваний в анамнезе жизни. Дата — для ИМ, ОНМК и т.п."
             />
           )}
           {tab === "surgery" && (
@@ -114,6 +116,12 @@ export function TemplatesEditor() {
               items={data.surgeries}
               onChange={(surgeries) => persist({ surgeries })}
               hint="Пустая дата может дать «давно» (поле «если пусто»)."
+            />
+          )}
+          {tab === "questionnaires" && (
+            <QuestionnaireEditor
+              items={data.questionnaires}
+              onChange={(questionnaires) => persist({ questionnaires })}
             />
           )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
@@ -323,6 +331,140 @@ function VisitPacksEditor({
         </div>
       ) : (
         <p className="text-xs text-mute">Пока нет наборов — нажми «+ набор».</p>
+      )}
+    </div>
+  );
+}
+
+function QuestionnaireEditor({
+  items,
+  onChange,
+}: {
+  items: ScaleDef[];
+  onChange: (p: ScaleDef[]) => void;
+}) {
+  const [sel, setSel] = useState(items[0]?.totalKey || "");
+  const current = items.find((s) => s.totalKey === sel) || items[0];
+
+  function patch(p: Partial<ScaleDef>) {
+    if (!current) return;
+    onChange(items.map((x) => (x.totalKey === current.totalKey ? { ...x, ...p } : x)));
+  }
+
+  function patchItem(i: number, p: Partial<ScaleItem>) {
+    if (!current) return;
+    patch({ items: current.items.map((it, idx) => (idx === i ? { ...it, ...p } : it)) });
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs text-ink-soft">
+        Каждая анкета вставляется в протокол отдельно. Правь вопросы, добавляй свои шкалы, ненужные — удаляй.
+      </p>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {items.map((s) => (
+          <button
+            key={s.totalKey}
+            type="button"
+            onClick={() => setSel(s.totalKey)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              current?.totalKey === s.totalKey ? "bg-teal text-paper" : "border border-line bg-paper"
+            }`}
+          >
+            {s.title || "без названия"}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="rounded-full border border-dashed border-teal/50 px-2.5 py-1 text-xs font-medium text-teal"
+          onClick={() => {
+            const next = emptyScale();
+            onChange([...items, next]);
+            setSel(next.totalKey);
+          }}
+        >
+          + анкета
+        </button>
+      </div>
+      {current ? (
+        <div className="space-y-2 rounded-lg border border-line bg-paper p-2">
+          <div className="flex flex-wrap gap-1">
+            <input
+              value={current.title}
+              onChange={(e) => patch({ title: e.target.value })}
+              placeholder="название, напр. IPSS"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              className="text-xs text-danger"
+              onClick={() => {
+                const next = items.filter((s) => s.totalKey !== current.totalKey);
+                onChange(next);
+                setSel(next[0]?.totalKey || "");
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <input
+            value={current.hint}
+            onChange={(e) => patch({ hint: e.target.value })}
+            placeholder="подсказка под названием"
+            className="w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+          />
+          <div className="text-[10px] tracking-wide text-mute uppercase">вопросы · сумма = балл</div>
+          {current.items.map((it, i) => (
+            <div key={it.key} className="flex flex-wrap items-center gap-1">
+              <input
+                value={it.label}
+                onChange={(e) => patchItem(i, { label: e.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+              />
+              <input
+                value={it.min}
+                onChange={(e) => patchItem(i, { min: Number(e.target.value) || 0 })}
+                className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
+                title="мин"
+              />
+              <span className="text-[10px] text-mute">–</span>
+              <input
+                value={it.max}
+                onChange={(e) => patchItem(i, { max: Number(e.target.value) || 0 })}
+                className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
+                title="макс"
+              />
+              <button
+                type="button"
+                className="text-xs text-danger"
+                onClick={() => patch({ items: current.items.filter((_, j) => j !== i) })}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-xs font-medium text-teal"
+            onClick={() =>
+              patch({
+                items: [
+                  ...current.items,
+                  {
+                    key: `${current.totalKey}_${current.items.length + 1}_${Date.now().toString(36)}`,
+                    label: `вопрос ${current.items.length + 1}`,
+                    min: 0,
+                    max: 5,
+                  },
+                ],
+              })
+            }
+          >
+            + вопрос
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-mute">Пока нет анкет — нажми «+ анкета».</p>
       )}
     </div>
   );

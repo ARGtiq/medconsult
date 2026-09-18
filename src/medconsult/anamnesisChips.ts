@@ -113,12 +113,27 @@ export type VitaeDraft = {
   transfusion: "" | "denies" | "has";
   transfusionText: string;
   transfusionItems: VitaeItem[];
+  omit: string[];
 };
 
 export type VitaeContext = {
   medications?: string[];
   allergies?: string[];
 };
+
+export const VITAE_LINES: { id: string; label: string }[] = [
+  { id: "development", label: "развитие" },
+  { id: "occupation", label: "профвредности" },
+  { id: "habits", label: "вредные привычки" },
+  { id: "past", label: "перенесённые заболевания" },
+  { id: "meds", label: "лекарства" },
+  { id: "infections", label: "туберкулёз, гепатиты, вен. заб." },
+  { id: "heritage", label: "наследственность" },
+  { id: "allergy", label: "аллергия" },
+  { id: "surgery", label: "операции" },
+  { id: "transfusion", label: "гемотрансфузии" },
+];
+
 
 export const emptyAnamnesis = (): AnamnesisDraft => ({
   onset: "",
@@ -160,6 +175,7 @@ export const emptyVitae = (): VitaeDraft => ({
   transfusion: "",
   transfusionText: "",
   transfusionItems: [],
+  omit: [],
 });
 
 export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
@@ -174,6 +190,7 @@ export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
     infectionItems: d?.infectionItems || [],
     heritageItems: d?.heritageItems || [],
     transfusionItems: d?.transfusionItems || [],
+    omit: Array.isArray(d?.omit) ? d.omit : [],
   };
 }
 
@@ -208,7 +225,8 @@ export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
   const d = normalizeAnamnesis(raw);
   const parts: string[] = [];
   const howLong = span(d.amount, d.unit);
-  if (howLong) parts.push(`Болеет ${howLong}`);
+  if (d.onset === "chronic") parts.push("Болеет давно");
+  else if (howLong) parts.push(`Болеет ${howLong}`);
   if (d.related.length) parts.push(`связывает с ${d.related.join(", ")}`);
   if (d.treated === "no") parts.push("Не лечился");
   if (d.treated === "yes") {
@@ -253,32 +271,14 @@ function list(values?: string[]) {
   return (values || []).map((x) => x.trim()).filter(Boolean);
 }
 
-function cap(s: string) {
-  const t = s.trim();
-  if (!t) return t;
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
 function composeInfections(items: VitaeItem[], extraText: string) {
   const named = namedItems(items, INFECTION_PRESETS);
   const extra = extraText.trim();
-  if (!named.length && !extra) {
+  const all = [...named, extra].filter(Boolean);
+  if (!all.length) {
     return "Туберкулёз, вирусные гепатиты, венерические заболевания отрицает";
   }
-  const groupOf = (id: string) => INFECTION_PRESETS.find((p) => p.id === id)?.group;
-  const inGroup = (g: InfectionPreset["group"]) =>
-    items.filter((it) => groupOf(it.id) === g).map((it) => namedItems([it], INFECTION_PRESETS)[0]).filter(Boolean);
-  const custom = items.filter((it) => !groupOf(it.id));
-  const bits: string[] = [];
-  const tb = inGroup("tb");
-  bits.push(tb.length ? tb.join(", ") : "туберкулёз отрицает");
-  const hep = inGroup("hep");
-  bits.push(hep.length ? hep.join(", ") : "вирусные гепатиты отрицает");
-  const sti = inGroup("sti");
-  bits.push(sti.length ? sti.join(", ") : "венерические заболевания отрицает");
-  const rest = [...namedItems(custom, INFECTION_PRESETS), extra].filter(Boolean);
-  if (rest.length) bits.push(rest.join(", "));
-  return cap(bits.join(", "));
+  return `Туберкулёз, гепатиты, вен. заб.: перенес ${all.join(", ")}`;
 }
 
 export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContext) {
@@ -311,17 +311,11 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
 
   const pastExtra = [
     ...namedItems(d.pastItems, chronicPresets),
+    ...namedItems(d.chronicItems, chronicPresets),
     d.pastIllness === "other" ? d.pastIllnessText.trim() : "",
+    d.chronicText.trim(),
   ].filter(Boolean);
-  const past = `Перенесённые заболевания: ${[...PAST_ALWAYS, ...pastExtra].join(", ")}`;
-
-  let chronic = "Хронические заболевания: отрицает";
-  if (d.chronic === "has" || d.chronicItems.length) {
-    const named = namedItems(d.chronicItems, chronicPresets);
-    const extra = d.chronicText.trim();
-    const all = [...named, extra].filter(Boolean).join(", ");
-    chronic = all ? `Хронические заболевания: ${all}` : "Хронические заболевания: есть";
-  }
+  const past = `Перенесённые заболевания: ${[...PAST_ALWAYS, ...Array.from(new Set(pastExtra))].join(", ")}`;
 
   const medsFromCard = list(ctx?.medications);
   const meds = medsFromCard.length
@@ -355,8 +349,22 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
   const tfAll = [...tfNamed, tfExtra].filter(Boolean);
   const transfusion = tfAll.length ? `Гемотрансфузии: ${tfAll.join(", ")}` : "Гемотрансфузии: отрицает";
 
-  return [development, occupation, habits, past, chronic, meds, infections, heritage, allergy, surgery, transfusion]
-    .map(period)
+  const omit = new Set(d.omit || []);
+  const lines: [string, string][] = [
+    ["development", development],
+    ["occupation", occupation],
+    ["habits", habits],
+    ["past", past],
+    ["meds", meds],
+    ["infections", infections],
+    ["heritage", heritage],
+    ["allergy", allergy],
+    ["surgery", surgery],
+    ["transfusion", transfusion],
+  ];
+  return lines
+    .filter(([id]) => !omit.has(id))
+    .map(([, t]) => period(t))
     .filter(Boolean)
     .join("\n");
 }

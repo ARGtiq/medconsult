@@ -1,5 +1,6 @@
 import type { StudyDef, StudyInstance } from "../types";
-import { domainLine, QUESTION_SCALES } from "./questionnaires";
+import { domainLine, QUESTION_SCALES, scaleFromStudyKey, studyKeyForScale, type ScaleDef } from "./questionnaires";
+import { getQuestionScales } from "./templates";
 
 export const STUDIES: StudyDef[] = [
   {
@@ -335,13 +336,38 @@ export function spermTotal(volume: string, concentration: string) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-export const STUDY_GROUP_ORDER = ["questionnaire", "lab", "instrumental"] as const;
+export const STUDY_GROUP_ORDER = ["lab", "instrumental", "questionnaire"] as const;
 export const STUDY_GROUP_LABEL: Record<string, string> = {
-  questionnaire: "Анкеты",
   lab: "Лаборатория",
   instrumental: "Инструментальные",
+  questionnaire: "Анкеты",
   other: "Другое",
 };
+
+export function liveScales(): ScaleDef[] {
+  try {
+    const list = getQuestionScales();
+    if (list?.length) return list;
+  } catch {
+    /* seed */
+  }
+  return QUESTION_SCALES;
+}
+
+export function studiesFromScales(scales: ScaleDef[] = liveScales()): StudyDef[] {
+  return scales.map((scale) => ({
+    key: studyKeyForScale(scale.totalKey),
+    label: scale.title,
+    category: "questionnaire" as const,
+    hint: scale.hint,
+    template: `${scale.title} от {date}: {${scale.totalKey}}.`,
+    fields: [
+      { key: scale.totalKey, label: scale.title },
+      ...(scale.extra ? [{ key: scale.extra.key, label: scale.extra.label }] : []),
+    ],
+    referenceNotes: scale.hint || "",
+  }));
+}
 
 export function studyMatchesQuery(s: StudyDef, needle: string) {
   const q = needle.trim().toLowerCase();
@@ -423,20 +449,34 @@ export function fillStudyTemplate(
       : instance.date || "—";
 
   if (def.category === "questionnaire") {
+    const scales = liveScales();
+    const one = scaleFromStudyKey(def.key, scales);
+    const targets = one
+      ? [one]
+      : scales.filter((s) => def.fields.some((f) => f.key === s.totalKey));
     const bits: string[] = [];
-    for (const f of def.fields) {
-      const v = (fields[f.key] || "").trim();
+    for (const scale of targets.length ? targets : []) {
+      const v = (fields[scale.totalKey] || "").trim();
       if (!v) continue;
-      const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-      const shown = interpretScore(f.key, v);
-      const scale = QUESTION_SCALES.find((s) => s.totalKey === f.key);
-      const domains = scale ? domainLine(fields, scale) : "";
-      let line = p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`;
+      const p = prevFields ? (prevFields[scale.totalKey] || "").trim() : "";
+      const shown = interpretScore(scale.totalKey, v);
+      const domains = domainLine(fields, scale);
+      let line = p && p !== v ? `${scale.title} ${shown} (ранее ${interpretScore(scale.totalKey, p)})` : `${scale.title} ${shown}`;
       if (domains) line = `${line}; ${domains}`;
       bits.push(line);
     }
+    if (!bits.length) {
+      for (const f of def.fields) {
+        const v = (fields[f.key] || "").trim();
+        if (!v) continue;
+        const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+        const shown = interpretScore(f.key, v);
+        bits.push(p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`);
+      }
+    }
     if (!bits.length) return "";
-    return `Анкеты от ${date}: ${bits.join("; ")}.`;
+    const prefix = one ? one.title : "Анкеты";
+    return `${prefix} от ${date}: ${bits.join("; ")}.`;
   }
 
   if (def.sparse) {

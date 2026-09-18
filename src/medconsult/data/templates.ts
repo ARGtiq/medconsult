@@ -1,6 +1,7 @@
 import { COMPLAINTS, LOCAL_PACKS } from "./catalog";
 import type { LocalPack, WorkKind } from "../types";
 import { useEffect, useState } from "react";
+import { cloneScales, QUESTION_SCALES, type ScaleDef } from "./questionnaires";
 
 const KEY = "medconsult_v2_templates";
 
@@ -35,6 +36,7 @@ export type TemplatesState = {
   docKinds: DocKind[];
   complaints: string[];
   visitPacks: VisitPack[];
+  questionnaires: ScaleDef[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -134,6 +136,7 @@ export const seedTemplates = (): TemplatesState => ({
   docKinds: SEED_DOC_KINDS.map((x) => ({ ...x })),
   complaints: [...SEED_COMPLAINTS],
   visitPacks: SEED_VISIT_PACKS.map((x) => ({ ...x, codes: [...x.codes], stdBlocks: [...x.stdBlocks], extraKinds: [...x.extraKinds], localPackIds: [...x.localPackIds] })),
+  questionnaires: cloneScales(QUESTION_SCALES),
 });
 
 function read(): TemplatesState {
@@ -150,6 +153,10 @@ function read(): TemplatesState {
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
       complaints: Array.isArray(parsed.complaints) ? parsed.complaints : seed.complaints,
       visitPacks: Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks,
+      questionnaires:
+        Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
+          ? parsed.questionnaires
+          : seed.questionnaires,
     };
   } catch {
     return seed;
@@ -192,6 +199,10 @@ export function getComplaintPresets(): string[] {
 
 export function getVisitPacks(): VisitPack[] {
   return read().visitPacks;
+}
+
+export function getQuestionScales(): ScaleDef[] {
+  return read().questionnaires;
 }
 
 export function packsMatchingCode(code: string): VisitPack[] {

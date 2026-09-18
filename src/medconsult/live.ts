@@ -3,7 +3,7 @@ import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
 import { getComplaintPresets } from "./data/templates";
-import { STUDIES, getStudy as seedStudy } from "./data/studies";
+import { STUDIES, getStudy as seedStudy, studiesFromScales } from "./data/studies";
 import type { StudyDef } from "./types";
 
 export function liveIcd(): { code: string; title: string }[] {
@@ -197,16 +197,21 @@ export function complaintsForSession(code: string) {
 }
 
 export function allStudiesLive(): StudyDef[] {
+  const qStudies = studiesFromScales();
+  const qKeys = new Set(qStudies.map((s) => s.key));
+  let base: StudyDef[] = [];
   try {
     const live = store.getAllStudies() as StudyDef[];
     if (live?.length) {
       const keys = new Set(live.map((s) => s.key));
-      return [...live.map((s) => overlayComputed(s)), ...STUDIES.filter((s) => !keys.has(s.key))];
+      base = [...live.map((s) => overlayComputed(s)), ...STUDIES.filter((s) => !keys.has(s.key))];
     }
   } catch {
     /* seed */
   }
-  return STUDIES;
+  if (!base.length) base = STUDIES;
+  const rest = base.filter((s) => s.category !== "questionnaire" && s.key !== "questionnaires" && !qKeys.has(s.key));
+  return [...rest, ...qStudies];
 }
 
 export function getStudyLive(key: string): StudyDef | null {
