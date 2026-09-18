@@ -7,8 +7,7 @@ export function ReferencePage() {
   return (
     <AppShell>
       <div className="legacy-surface min-h-[calc(100dvh-3rem)] bg-paper p-3 pb-24 md:p-6">
-        <TemplatesEditor />
-        <LegacyReference />
+        <LegacyReference templatesContent={<TemplatesEditor />} />
       </div>
     </AppShell>
   );

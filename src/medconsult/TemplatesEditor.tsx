@@ -4,13 +4,16 @@ import {
   resetTemplates,
   saveTemplates,
   seedTemplates,
+  STD_DOC_BLOCKS,
   type DocKind,
   type TemplatesState,
   type VitaePreset,
+  type VisitPack,
 } from "./data/templates";
-import type { LocalPack } from "./types";
+import type { LocalPack, WorkKind } from "./types";
 
 export function TemplatesEditor() {
+  const [layer, setLayer] = useState<"blocks" | "packs">("blocks");
   const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
@@ -32,7 +35,7 @@ export function TemplatesEditor() {
     <section className="mb-4 rounded-[10px] border border-line bg-surface p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="font-display text-lg">Шаблоны</h2>
-        <span className="text-xs text-mute">правятся здесь — сразу живут в протоколе</span>
+        <span className="text-xs text-mute">сначала блоки, потом набор из них</span>
         <button
           type="button"
           className="ml-auto text-xs text-mute"
@@ -47,50 +50,281 @@ export function TemplatesEditor() {
       <div className="mb-3 flex flex-wrap gap-1">
         {(
           [
-            ["status", "локальный статус"],
-            ["complaints", "жалобы"],
-            ["chronic", "хронические"],
-            ["surgery", "операции"],
-            ["docs", "блоки документа"],
+            ["blocks", "блоки"],
+            ["packs", "наборы"],
           ] as const
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              tab === id ? "bg-teal text-paper" : "border border-line bg-paper"
+            onClick={() => setLayer(id)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              layer === id ? "bg-teal text-paper" : "border border-line bg-paper"
             }`}
           >
             {label}
           </button>
         ))}
       </div>
-      {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
-      {tab === "complaints" && (
-        <StringListEditor
-          items={data.complaints}
-          onChange={(complaints) => persist({ complaints })}
-          hint="Словарь жалоб. Свои формулировки из протокола попадают сюда сами."
-          addLabel="+ жалоба"
+      {layer === "blocks" && (
+        <>
+          <p className="mb-2 text-xs text-ink-soft">
+            Словари чипов: жалобы, статус, хронические, операции, виды доп. блоков. Из них потом собирается набор.
+          </p>
+          <div className="mb-3 flex flex-wrap gap-1">
+            {(
+              [
+                ["status", "локальный статус"],
+                ["complaints", "жалобы"],
+                ["chronic", "хронические"],
+                ["surgery", "операции"],
+                ["docs", "виды блоков"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                  tab === id ? "bg-teal-soft font-semibold text-teal" : "border border-line bg-paper"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
+          {tab === "complaints" && (
+            <StringListEditor
+              items={data.complaints}
+              onChange={(complaints) => persist({ complaints })}
+              hint="Словарь жалоб. Свои формулировки из протокола попадают сюда сами."
+              addLabel="+ жалоба"
+            />
+          )}
+          {tab === "chronic" && (
+            <PresetEditor
+              items={data.chronic}
+              onChange={(chronic) => persist({ chronic })}
+              hint="Чипы анамнеза жизни. Дата — для ИМ, ОНМК и т.п."
+            />
+          )}
+          {tab === "surgery" && (
+            <PresetEditor
+              items={data.surgeries}
+              onChange={(surgeries) => persist({ surgeries })}
+              hint="Пустая дата может дать «давно» (поле «если пусто»)."
+            />
+          )}
+          {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
+        </>
+      )}
+      {layer === "packs" && (
+        <VisitPacksEditor
+          packs={data.visitPacks}
+          localPacks={data.localPacks}
+          docKinds={data.docKinds}
+          onChange={(visitPacks) => persist({ visitPacks })}
         />
       )}
-      {tab === "chronic" && (
-        <PresetEditor
-          items={data.chronic}
-          onChange={(chronic) => persist({ chronic })}
-          hint="Чипы анамнеза жизни. Дата — для ИМ, ОНМК и т.п."
-        />
-      )}
-      {tab === "surgery" && (
-        <PresetEditor
-          items={data.surgeries}
-          onChange={(surgeries) => persist({ surgeries })}
-          hint="Пустая дата может дать «давно» (поле «если пусто»)."
-        />
-      )}
-      {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
     </section>
+  );
+}
+
+function VisitPacksEditor({
+  packs,
+  localPacks,
+  docKinds,
+  onChange,
+}: {
+  packs: VisitPack[];
+  localPacks: LocalPack[];
+  docKinds: DocKind[];
+  onChange: (p: VisitPack[]) => void;
+}) {
+  const [sel, setSel] = useState(packs[0]?.id || "");
+  const current = packs.find((p) => p.id === sel) || packs[0];
+
+  function patch(p: Partial<VisitPack>) {
+    if (!current) return;
+    onChange(packs.map((x) => (x.id === current.id ? { ...x, ...p } : x)));
+  }
+
+  function toggleArr(key: "stdBlocks" | "extraKinds" | "localPackIds", id: string) {
+    if (!current) return;
+    const set = new Set(current[key]);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    patch({ [key]: [...set] } as Partial<VisitPack>);
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs text-ink-soft">
+        Набор — готовый документ: вид приёма, какие блоки, какие пакеты статуса, коды МКБ. На протоколе выбирается кнопкой
+        «набор».
+      </p>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {packs.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setSel(p.id)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              current?.id === p.id ? "bg-teal text-paper" : "border border-line bg-paper"
+            }`}
+          >
+            {p.name || "без названия"}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="rounded-full border border-dashed border-teal/50 px-2.5 py-1 text-xs font-medium text-teal"
+          onClick={() => {
+            const id = `pack_${Date.now()}`;
+            const next: VisitPack = {
+              id,
+              name: "новый набор",
+              kind: "primary",
+              codes: [],
+              stdBlocks: STD_DOC_BLOCKS.map((b) => b.id),
+              extraKinds: [],
+              localPackIds: [],
+            };
+            onChange([...packs, next]);
+            setSel(id);
+          }}
+        >
+          + набор
+        </button>
+      </div>
+      {current ? (
+        <div className="space-y-2 rounded-lg border border-line bg-paper p-2">
+          <div className="flex flex-wrap gap-1">
+            <input
+              value={current.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              placeholder="название, напр. ДГПЖ первичный"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              className="text-xs text-danger"
+              onClick={() => {
+                const next = packs.filter((p) => p.id !== current.id);
+                onChange(next);
+                setSel(next[0]?.id || "");
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <input
+            value={current.codes.join(", ")}
+            onChange={(e) =>
+              patch({
+                codes: e.target.value
+                  .split(/[,;\s]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+            placeholder="МКБ, через запятую — пусто = любой диагноз"
+            className="w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+          />
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">вид</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(
+                [
+                  ["primary", "первичный"],
+                  ["followup", "повторный"],
+                  ["study", "обследование"],
+                  ["document", "другой документ"],
+                ] as [WorkKind, string][]
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => patch({ kind: id })}
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    current.kind === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">блоки протокола</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {STD_DOC_BLOCKS.map((b) => {
+                const on = current.stdBlocks.includes(b.id);
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => toggleArr("stdBlocks", b.id)}
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                    }`}
+                  >
+                    {b.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {docKinds.length > 0 && (
+            <div>
+              <div className="text-[10px] tracking-wide text-mute uppercase">доп. блоки</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {docKinds.map((b) => {
+                  const on = current.extraKinds.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleArr("extraKinds", b.id)}
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                      }`}
+                    >
+                      {b.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {localPacks.length > 0 && (
+            <div>
+              <div className="text-[10px] tracking-wide text-mute uppercase">пакеты локального статуса</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {localPacks.map((b) => {
+                  const on = current.localPackIds.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleArr("localPackIds", b.id)}
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-mute">Пока нет наборов — нажми «+ набор».</p>
+      )}
+    </div>
   );
 }
 

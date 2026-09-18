@@ -295,6 +295,37 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
   return hits.slice(0, 24);
 }
 
+export type AllergyHit = { id: string; label: string; hint: string; name: string };
+
+export function searchAllergy(query: string): AllergyHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const out: AllergyHit[] = [];
+  const seen = new Set<string>();
+  const push = (label: string, hint: string) => {
+    const key = label.toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ id: key, label, hint, name: label });
+  };
+  const wordStart = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[^a-zа-яё0-9+]+/i)
+      .some((w) => w.startsWith(q));
+  for (const g of groupCatalog()) {
+    if (wordStart(g.label)) push(g.label, "группа");
+  }
+  for (const d of liveDrugRecords()) {
+    if (d.name && wordStart(d.name)) push(d.name, "ДВ");
+  }
+  for (const d of liveDrugRecords()) {
+    const brands = (d.brandNames || "").split(/[,;]/);
+    if (brands.some((b) => wordStart(b.trim()))) push(d.name, "торговое");
+  }
+  return out.slice(0, 14);
+}
+
 export function learnedDrugs(complaints: string[], code: string): string[] {
   const names = new Set<string>();
   try {

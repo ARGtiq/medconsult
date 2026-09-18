@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { COMPLAINTS, LOCAL_PACKS } from "./catalog";
-import type { LocalPack } from "../types";
+import type { LocalPack, WorkKind } from "../types";
+import { useEffect, useState } from "react";
 
 const KEY = "medconsult_v2_templates";
 
@@ -17,12 +17,24 @@ export type DocKind = {
   copyPrevious?: boolean;
 };
 
+/** Document/visit template = named set of block-templates. */
+export type VisitPack = {
+  id: string;
+  name: string;
+  codes: string[];
+  kind: WorkKind;
+  stdBlocks: string[];
+  extraKinds: string[];
+  localPackIds: string[];
+};
+
 export type TemplatesState = {
   localPacks: LocalPack[];
   chronic: VitaePreset[];
   surgeries: VitaePreset[];
   docKinds: DocKind[];
   complaints: string[];
+  visitPacks: VisitPack[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -74,12 +86,54 @@ export const STD_DOC_BLOCKS = [
   { id: "recommendations", title: "Назначения" },
 ] as const;
 
+const ALL_STD = STD_DOC_BLOCKS.map((b) => b.id);
+
+export const SEED_VISIT_PACKS: VisitPack[] = [
+  {
+    id: "pack_primary",
+    name: "Первичный осмотр",
+    kind: "primary",
+    codes: [],
+    stdBlocks: [...ALL_STD],
+    extraKinds: [],
+    localPackIds: [],
+  },
+  {
+    id: "pack_followup",
+    name: "Повторный осмотр",
+    kind: "followup",
+    codes: [],
+    stdBlocks: ["complaints", "anamnesis", "status", "diagnosis", "recommendations"],
+    extraKinds: [],
+    localPackIds: [],
+  },
+  {
+    id: "pack_epicrisis",
+    name: "Эпикриз",
+    kind: "document",
+    codes: [],
+    stdBlocks: ["diagnosis", "recommendations"],
+    extraKinds: ["epicrisis"],
+    localPackIds: [],
+  },
+  {
+    id: "pack_op",
+    name: "Протокол операции",
+    kind: "document",
+    codes: [],
+    stdBlocks: [],
+    extraKinds: ["op_protocol"],
+    localPackIds: [],
+  },
+];
+
 export const seedTemplates = (): TemplatesState => ({
   localPacks: LOCAL_PACKS.map((p) => ({ ...p, chips: [...p.chips] })),
   chronic: SEED_CHRONIC.map((x) => ({ ...x })),
   surgeries: SEED_SURGERIES.map((x) => ({ ...x })),
   docKinds: SEED_DOC_KINDS.map((x) => ({ ...x })),
   complaints: [...SEED_COMPLAINTS],
+  visitPacks: SEED_VISIT_PACKS.map((x) => ({ ...x, codes: [...x.codes], stdBlocks: [...x.stdBlocks], extraKinds: [...x.extraKinds], localPackIds: [...x.localPackIds] })),
 });
 
 function read(): TemplatesState {
@@ -95,6 +149,7 @@ function read(): TemplatesState {
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
       complaints: Array.isArray(parsed.complaints) ? parsed.complaints : seed.complaints,
+      visitPacks: Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks,
     };
   } catch {
     return seed;
@@ -133,6 +188,17 @@ export function getDocKinds(): DocKind[] {
 
 export function getComplaintPresets(): string[] {
   return read().complaints;
+}
+
+export function getVisitPacks(): VisitPack[] {
+  return read().visitPacks;
+}
+
+export function packsMatchingCode(code: string): VisitPack[] {
+  const all = getVisitPacks();
+  if (!code) return [];
+  const prefix = code.split(".")[0];
+  return all.filter((p) => p.codes.includes(code) || (prefix && p.codes.includes(prefix)));
 }
 
 export function addComplaintTemplate(text: string) {

@@ -106,6 +106,7 @@ export type SessionState = {
   headerOverride: string;
   docStd: string[];
   extraBlocks: ExtraBlock[];
+  templateId?: string;
 };
 
 export type SettingsState = {

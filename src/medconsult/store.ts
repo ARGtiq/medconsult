@@ -3,7 +3,7 @@ import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { applyComputed } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getDocKinds, packsForCodeLive } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { getStudyLive } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
@@ -274,6 +274,7 @@ type AppStore = {
   removeExtraBlock: (id: string) => void;
   toggleDocStd: (id: string) => void;
   applyLocalFromIcd: (code: string) => void;
+  applyVisitPack: (id: string) => void;
   ensureGlobals: () => void;
   saveVisit: () => void;
   loadVisit: (id: string) => void;
@@ -628,6 +629,64 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (!localStatus.includes(c)) localStatus.push(c);
     });
     get().setSession({ localStatus, localStatusAutoFor: code });
+  },
+
+  applyVisitPack(id) {
+    const pack = getVisitPacks().find((p) => p.id === id);
+    if (!pack) return;
+    const session = get().session;
+    const kinds = getDocKinds();
+    const extraBlocks: ExtraBlock[] = [];
+    pack.extraKinds.forEach((kindId) => {
+      const existing = (session.extraBlocks || []).find((b) => b.kindId === kindId);
+      if (existing) {
+        extraBlocks.push(existing);
+        return;
+      }
+      const kind = kinds.find((k) => k.id === kindId);
+      const patient = get().patients.find((p) => p.id === session.patientId);
+      let text = "";
+      if (kind?.copyPrevious) {
+        text =
+          findPreviousExtra(get().visits, session.patientId, kindId, get().patients) ||
+          patient?.globals?.extraLast?.[kindId] ||
+          "";
+      }
+      extraBlocks.push({ id: uid("xb"), kindId, title: kind?.title || "Блок", text });
+    });
+    const allStd = STD_DOC_BLOCKS.map((b) => b.id);
+    const hidden = allStd.filter((b) => !pack.stdBlocks.includes(b));
+    let mode = session.mode;
+    let visitKind = session.visitKind;
+    if (pack.kind === "document") {
+      mode = "document";
+    } else if (pack.kind === "study") {
+      mode = "study";
+    } else {
+      visitKind = pack.kind;
+      mode = session.studies.length ? "consult_study" : "consult";
+    }
+    let localStatus = [...session.localStatus];
+    if (pack.localPackIds.length) {
+      getLocalPacks()
+        .filter((p) => pack.localPackIds.includes(p.id))
+        .forEach((p) => {
+          p.chips.forEach((c) => {
+            if (!localStatus.includes(c)) localStatus.push(c);
+          });
+        });
+    }
+    get().setSession({
+      templateId: pack.id,
+      visitKind,
+      mode,
+      docStd: pack.stdBlocks,
+      extraBlocks,
+      hiddenBlocks: hidden,
+      localStatus,
+      openSection: pack.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
+    });
+    get().setToast(`Набор: ${pack.name}`);
   },
 
   ensureGlobals() {

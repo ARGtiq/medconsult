@@ -2,14 +2,12 @@ import { useState } from 'react'
 import GuidelinesPage from './GuidelinesPage'
 import DrugsTab from './DrugsTab'
 import DrugGroupsTab from './DrugGroupsTab'
-import TemplateEditor from './TemplateEditor'
 import StudiesTab from './StudiesTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import TreatmentSchemesTab from './TreatmentSchemesTab'
 import Mkb10Page from './Mkb10Page'
-import { store } from '../lib/store'
 
-export default function ReferencePage({ initialTab, initialItemId }) {
+export default function ReferencePage({ initialTab, initialItemId, templatesContent }) {
   const [tab, setTab] = useState(initialTab || 'guidelines')
 
   return (
@@ -44,11 +42,8 @@ export default function ReferencePage({ initialTab, initialItemId }) {
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
           МКБ-10
         </button>
-        <button type="button" className={tab === 'complaints' ? 'active' : ''} onClick={() => setTab('complaints')}>
-          Жалобы
-        </button>
       </div>
-      {tab === 'templates' && <TemplateEditor initialSelectedId={initialTab === 'templates' ? initialItemId : null} />}
+      {tab === 'templates' && (templatesContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
       {tab === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
       {tab === 'drugs' && <DrugsTab initialItemId={initialTab === 'drugs' ? initialItemId : null} />}
       {tab === 'groups' && <DrugGroupsTab />}
@@ -56,29 +51,6 @@ export default function ReferencePage({ initialTab, initialItemId }) {
       {tab === 'print' && <PrintTemplatesTab />}
       {tab === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
       {tab === 'mkb' && <Mkb10Page />}
-      {tab === 'complaints' && <ComplaintBank />}
-    </div>
-  )
-}
-
-function ComplaintBank() {
-  const suggestions = Object.values(store.get().complaintSuggestions || {}).sort(
-    (a, b) => (b.count || 0) - (a.count || 0),
-  )
-  return (
-    <div className="guidelines-editor">
-      <p className="settings-note-inline">
-        Словарь копится сам: каждый чип на приёме увеличивает вес. Ниже — то, что уже использовалось.
-        Новые формулировки добавляются на протоколе (чипы + Ctrl+K).
-      </p>
-      {suggestions.length === 0 && <p className="empty-hint">Пока пусто — натыкайте жалобы на протоколе.</p>}
-      <div className="chip-row">
-        {suggestions.map((s) => (
-          <span key={s.text} className="selected-chip">
-            {s.text} <small>×{s.count}</small>
-          </span>
-        ))}
-      </div>
     </div>
   )
 }

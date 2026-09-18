@@ -6,7 +6,7 @@ import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/openrouter";
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
-import { PlusDocBlockButton } from "./DocBlocks";
+import { PlusDocBlockButton, PlusPackButton } from "./DocBlocks";
 import { EditableChips, ToggleChips } from "./EditableChip";
 import { packsForCodeLive, useTemplates } from "./data/templates";
 import { AppShell } from "./AppShell";
@@ -19,6 +19,7 @@ import {
   learnedDrugs,
   liveComplaints,
   liveIcdMerged,
+  searchAllergy,
   searchDrugs,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
@@ -182,14 +183,14 @@ export function ProtocolPage() {
 
   function setWork(kind: "primary" | "followup" | "study" | "document") {
     if (kind === "primary") {
-      setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult" });
+      setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
     } else if (kind === "followup") {
-      setSession({ visitKind: "followup", mode: session.studies.length ? "consult_study" : "consult" });
+      setSession({ visitKind: "followup", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
     } else if (kind === "study") {
-      setSession({ mode: "study" });
+      setSession({ mode: "study", templateId: undefined });
     } else {
       store.ensureGlobals();
-      setSession({ mode: "document" });
+      setSession({ mode: "document", templateId: undefined });
     }
   }
 
@@ -228,6 +229,7 @@ export function ProtocolPage() {
         {kindBtn("followup", "повторный")}
         {kindBtn("study", "обследование")}
         {kindBtn("document", "другой документ")}
+        <PlusPackButton />
         <PlusStudyButton />
         {documentMode && <PlusDocBlockButton />}
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>
@@ -248,7 +250,9 @@ export function ProtocolPage() {
                 anamnesisVitae: composeVitae(d, { medications: patient.currentMedications, allergies }),
               });
             }}
-            placeholder="аллерген + Enter"
+            placeholder="аллерген или препарат + Enter"
+            drugs
+            allergy
           />
           <GlobalField
             label="Принимает постоянно"
@@ -909,26 +913,39 @@ function GlobalField({
   onChange,
   placeholder,
   drugs,
+  allergy,
 }: {
   label: string;
   items: string[];
   onChange: (next: string[]) => void;
   placeholder: string;
   drugs?: boolean;
+  allergy?: boolean;
 }) {
   const [q, setQ] = useState("");
-  const hits = useMemo(() => (drugs && q.trim().length >= 2 ? searchDrugs(q).slice(0, 10) : []), [drugs, q]);
+  const hits = useMemo(() => {
+    if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
+    if (allergy) return searchAllergy(q);
+    if (drugs) {
+      return searchDrugs(q)
+        .slice(0, 10)
+        .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
+    }
+    return [];
+  }, [allergy, drugs, q]);
+  const suggest = drugs || allergy;
   return (
     <div className="mt-1">
       <div className="text-[10px] font-semibold tracking-wide uppercase">{label}</div>
       <EditableChips items={items} onChange={onChange} />
-      {drugs ? (
+      {suggest ? (
         <Typeahead
           value={q}
           onChange={setQ}
-          items={hits.map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }))}
+          items={hits}
           onPick={(it) => {
-            if (!items.includes(it.name || it.label)) onChange([...items, it.name || it.label]);
+            const name = it.name || it.label;
+            if (!items.includes(name)) onChange([...items, name]);
           }}
           onSubmitCustom={(raw) => {
             if (!items.includes(raw)) onChange([...items, raw]);
