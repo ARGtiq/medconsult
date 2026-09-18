@@ -5,6 +5,9 @@ import {
   emptyAnamnesis,
   emptyVitae,
   normalizeVitae,
+  DEV_PRESETS,
+  OCC_PRESETS,
+  INFECTION_PRESETS,
   type AnamnesisDraft,
   type VitaeDraft,
   type VitaeItem,
@@ -137,6 +140,15 @@ function PresetPicker({
           className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-xs"
         />
       </div>
+    </div>
+  );
+}
+
+function BlockLabel({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <div className="mt-1.5">
+      <div className="text-[10px] tracking-wide text-mute uppercase">{label}</div>
+      {hint ? <div className="text-[10px] text-ink-soft">{hint}</div> : null}
     </div>
   );
 }
@@ -338,40 +350,18 @@ export function AnamnesisVitae({
 
   return (
     <div>
-      <ChipRow
-        label="развитие"
-        value={d.development}
-        onChange={(id) => patch({ development: id as VitaeDraft["development"] })}
-        options={[
-          { id: "normal", text: "без особенностей" },
-          { id: "features", text: "особенности" },
-        ]}
+      <BlockLabel label="развитие" hint="пусто = без особенностей" />
+      <PresetPicker
+        presets={DEV_PRESETS}
+        selected={d.developmentItems}
+        onChange={(developmentItems) => patch({ developmentItems, development: developmentItems.length ? "features" : "normal" })}
       />
-      {d.development === "features" && (
-        <input
-          value={d.developmentText}
-          onChange={(e) => patch({ developmentText: e.target.value })}
-          placeholder="какие особенности"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        />
-      )}
-      <ChipRow
-        label="профвредности"
-        value={d.occupation}
-        onChange={(id) => patch({ occupation: id as VitaeDraft["occupation"] })}
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
+      <BlockLabel label="профвредности" hint="пусто = отрицает" />
+      <PresetPicker
+        presets={OCC_PRESETS}
+        selected={d.occupationItems}
+        onChange={(occupationItems) => patch({ occupationItems, occupation: occupationItems.length ? "has" : "denies" })}
       />
-      {d.occupation === "has" && (
-        <input
-          value={d.occupationText}
-          onChange={(e) => patch({ occupationText: e.target.value })}
-          placeholder="какие"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        />
-      )}
       <ChipRow
         label="курение"
         value={d.smoke}
@@ -398,23 +388,15 @@ export function AnamnesisVitae({
           { id: "yes", text: "употребляет" },
         ]}
       />
-      <ChipRow
+      <BlockLabel
         label="перенесённые"
-        value={d.pastIllness}
-        onChange={(id) => patch({ pastIllness: id as VitaeDraft["pastIllness"] })}
-        options={[
-          { id: "typical", text: "простудные, детские" },
-          { id: "other", text: "другое" },
-        ]}
+        hint="в тексте всегда: простудные заболевания, детские инфекции"
       />
-      {d.pastIllness === "other" && (
-        <input
-          value={d.pastIllnessText}
-          onChange={(e) => patch({ pastIllnessText: e.target.value })}
-          placeholder="какие перенёс"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        />
-      )}
+      <PresetPicker
+        presets={chronicPresets}
+        selected={d.pastItems}
+        onChange={(pastItems) => patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" })}
+      />
       <ChipRow
         label="хронические"
         value={d.chronic}
@@ -436,23 +418,14 @@ export function AnamnesisVitae({
           onChange={(chronicItems) => patch({ chronicItems })}
         />
       )}
-      <ChipRow
-        label="туберкулёз, гепатиты, вен. заб."
-        value={d.infections}
-        onChange={(id) => patch({ infections: id as VitaeDraft["infections"] })}
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
+      <BlockLabel label="туберкулёз, гепатиты, вен. заб." hint="если болел — отметь" />
+      <PresetPicker
+        presets={INFECTION_PRESETS}
+        selected={d.infectionItems}
+        onChange={(infectionItems) =>
+          patch({ infectionItems, infections: infectionItems.length ? "has" : "denies" })
+        }
       />
-      {d.infections === "has" && (
-        <input
-          value={d.infectionsText}
-          onChange={(e) => patch({ infectionsText: e.target.value })}
-          placeholder="что перенёс"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        />
-      )}
       <ChipRow
         label="наследственность"
         value={d.heritage}
