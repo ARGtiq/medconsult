@@ -248,14 +248,23 @@ export function ProtocolPage() {
                 allergy: allergies.length ? ("has" as const) : d.allergy,
                 allergyText: allergies.join(", ") || d.allergyText,
               };
-              store.setSession({ vitaeDraft: next, anamnesisVitae: composeVitae(next) });
+              store.setSession({
+                vitaeDraft: next,
+                anamnesisVitae: composeVitae(next, { medications: patient.currentMedications, allergies }),
+              });
             }}
             placeholder="аллерген + Enter"
           />
           <GlobalField
             label="Принимает постоянно"
             items={patient.currentMedications || []}
-            onChange={(currentMedications) => store.updatePatient(patient.id, { currentMedications })}
+            onChange={(currentMedications) => {
+              store.updatePatient(patient.id, { currentMedications });
+              const d = session.vitaeDraft || emptyVitae();
+              store.setSession({
+                anamnesisVitae: composeVitae(d, { medications: currentMedications, allergies: patient.allergies }),
+              });
+            }}
             placeholder="препарат + Enter"
           />
         </div>
@@ -505,7 +514,10 @@ export function ProtocolPage() {
             open={session.openSection === "anamnesisVitae"}
             onOpen={() => {
               if (session.openSection === "anamnesisVitae") {
-                const t = composeVitae(session.vitaeDraft || emptyVitae());
+                const t = composeVitae(session.vitaeDraft || emptyVitae(), {
+                  medications: patient?.currentMedications,
+                  allergies: patient?.allergies,
+                });
                 setSession({
                   openSection: null,
                   vitaeChipMode: t ? false : session.vitaeChipMode,
@@ -522,12 +534,23 @@ export function ProtocolPage() {
               draft={session.vitaeDraft || emptyVitae()}
               text={session.anamnesisVitae}
               chipMode={session.vitaeChipMode ?? !session.anamnesisVitae}
-              onDraft={(d) => setSession({ vitaeDraft: d, anamnesisVitae: composeVitae(d) })}
+              onDraft={(d) =>
+                setSession({
+                  vitaeDraft: d,
+                  anamnesisVitae: composeVitae(d, {
+                    medications: patient?.currentMedications,
+                    allergies: patient?.allergies,
+                  }),
+                })
+              }
               onText={(t) => setSession({ anamnesisVitae: t })}
               onMode={(chipsMode) =>
                 setSession({
                   vitaeChipMode: chipsMode,
-                  anamnesisVitae: chipsMode ? composeVitae(session.vitaeDraft || emptyVitae()) : session.anamnesisVitae,
+                  anamnesisVitae: composeVitae(session.vitaeDraft || emptyVitae(), {
+                    medications: patient?.currentMedications,
+                    allergies: patient?.allergies,
+                  }),
                 })
               }
             />

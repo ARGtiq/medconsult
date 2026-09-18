@@ -11,6 +11,7 @@ import {
 } from "./anamnesisChips";
 import { useTemplates, type VitaePreset } from "./data/templates";
 import { searchDrugs } from "./live";
+import { useAppStore } from "./store";
 import { Typeahead } from "./Typeahead";
 
 function ChipRow({
@@ -49,7 +50,7 @@ function DoneBar({ sentence, onDone }: { sentence: string; onDone: () => void })
   return (
     <div className="mt-2">
       {sentence ? (
-        <p className="text-sm leading-relaxed text-ink-soft">{sentence}</p>
+        <p className="text-sm leading-relaxed whitespace-pre-line text-ink-soft">{sentence}</p>
       ) : (
         <p className="text-xs text-mute">Собери фразу чипами — потом станет обычным текстом.</p>
       )}
@@ -315,6 +316,9 @@ export function AnamnesisVitae({
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
+  const { session, patients } = useAppStore();
+  const patient = patients.find((p) => p.id === session.patientId);
+  const ctx = { medications: patient?.currentMedications, allergies: patient?.allergies };
 
   if (!chipMode) {
     return (
@@ -322,8 +326,8 @@ export function AnamnesisVitae({
         <textarea
           value={text}
           onChange={(e) => onText(e.target.value)}
-          rows={3}
-          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+          rows={11}
+          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
         />
         <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={() => onMode(true)}>
           вернуть чипы
@@ -335,61 +339,36 @@ export function AnamnesisVitae({
   return (
     <div>
       <ChipRow
-        label="хронические"
-        value={d.chronic}
-        onChange={(id) =>
-          patch({
-            chronic: id as VitaeDraft["chronic"],
-            chronicItems: id === "denies" ? [] : d.chronicItems,
-          })
-        }
+        label="развитие"
+        value={d.development}
+        onChange={(id) => patch({ development: id as VitaeDraft["development"] })}
         options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
+          { id: "normal", text: "без особенностей" },
+          { id: "features", text: "особенности" },
         ]}
       />
-      {d.chronic === "has" && (
-        <PresetPicker
-          presets={chronicPresets}
-          selected={d.chronicItems}
-          onChange={(chronicItems) => patch({ chronicItems })}
-        />
-      )}
-      <ChipRow
-        label="операции"
-        value={d.surgery}
-        onChange={(id) =>
-          patch({
-            surgery: id as VitaeDraft["surgery"],
-            surgeryItems: id === "none" ? [] : d.surgeryItems,
-          })
-        }
-        options={[
-          { id: "none", text: "не было" },
-          { id: "has", text: "были" },
-        ]}
-      />
-      {d.surgery === "has" && (
-        <PresetPicker
-          presets={surgeryPresets}
-          selected={d.surgeryItems}
-          onChange={(surgeryItems) => patch({ surgeryItems })}
-        />
-      )}
-      <ChipRow
-        label="аллергия"
-        value={d.allergy}
-        onChange={(id) => patch({ allergy: id as VitaeDraft["allergy"] })}
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
-      />
-      {d.allergy === "has" && (
+      {d.development === "features" && (
         <input
-          value={d.allergyText}
-          onChange={(e) => patch({ allergyText: e.target.value })}
-          placeholder="на что"
+          value={d.developmentText}
+          onChange={(e) => patch({ developmentText: e.target.value })}
+          placeholder="какие особенности"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
+      <ChipRow
+        label="профвредности"
+        value={d.occupation}
+        onChange={(id) => patch({ occupation: id as VitaeDraft["occupation"] })}
+        options={[
+          { id: "denies", text: "отрицает" },
+          { id: "has", text: "есть" },
+        ]}
+      />
+      {d.occupation === "has" && (
+        <input
+          value={d.occupationText}
+          onChange={(e) => patch({ occupationText: e.target.value })}
+          placeholder="какие"
           className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
         />
       )}
@@ -420,6 +399,61 @@ export function AnamnesisVitae({
         ]}
       />
       <ChipRow
+        label="перенесённые"
+        value={d.pastIllness}
+        onChange={(id) => patch({ pastIllness: id as VitaeDraft["pastIllness"] })}
+        options={[
+          { id: "typical", text: "простудные, детские" },
+          { id: "other", text: "другое" },
+        ]}
+      />
+      {d.pastIllness === "other" && (
+        <input
+          value={d.pastIllnessText}
+          onChange={(e) => patch({ pastIllnessText: e.target.value })}
+          placeholder="какие перенёс"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
+      <ChipRow
+        label="хронические"
+        value={d.chronic}
+        onChange={(id) =>
+          patch({
+            chronic: id as VitaeDraft["chronic"],
+            chronicItems: id === "denies" ? [] : d.chronicItems,
+          })
+        }
+        options={[
+          { id: "denies", text: "отрицает" },
+          { id: "has", text: "есть" },
+        ]}
+      />
+      {d.chronic === "has" && (
+        <PresetPicker
+          presets={chronicPresets}
+          selected={d.chronicItems}
+          onChange={(chronicItems) => patch({ chronicItems })}
+        />
+      )}
+      <ChipRow
+        label="туберкулёз, гепатиты, вен. заб."
+        value={d.infections}
+        onChange={(id) => patch({ infections: id as VitaeDraft["infections"] })}
+        options={[
+          { id: "denies", text: "отрицает" },
+          { id: "has", text: "есть" },
+        ]}
+      />
+      {d.infections === "has" && (
+        <input
+          value={d.infectionsText}
+          onChange={(e) => patch({ infectionsText: e.target.value })}
+          placeholder="что перенёс"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
+      <ChipRow
         label="наследственность"
         value={d.heritage}
         onChange={(id) => patch({ heritage: id as VitaeDraft["heritage"] })}
@@ -436,7 +470,62 @@ export function AnamnesisVitae({
           className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
         />
       )}
-      <DoneBar sentence={composeVitae(d)} onDone={() => onMode(false)} />
+      <ChipRow
+        label="аллергия"
+        value={d.allergy}
+        onChange={(id) => patch({ allergy: id as VitaeDraft["allergy"] })}
+        options={[
+          { id: "denies", text: "отрицает" },
+          { id: "has", text: "есть" },
+        ]}
+      />
+      {d.allergy === "has" && (
+        <input
+          value={d.allergyText}
+          onChange={(e) => patch({ allergyText: e.target.value })}
+          placeholder="на что"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
+      <ChipRow
+        label="операции"
+        value={d.surgery}
+        onChange={(id) =>
+          patch({
+            surgery: id as VitaeDraft["surgery"],
+            surgeryItems: id === "none" ? [] : d.surgeryItems,
+          })
+        }
+        options={[
+          { id: "none", text: "не было" },
+          { id: "has", text: "были" },
+        ]}
+      />
+      {d.surgery === "has" && (
+        <PresetPicker
+          presets={surgeryPresets}
+          selected={d.surgeryItems}
+          onChange={(surgeryItems) => patch({ surgeryItems })}
+        />
+      )}
+      <ChipRow
+        label="гемотрансфузии"
+        value={d.transfusion}
+        onChange={(id) => patch({ transfusion: id as VitaeDraft["transfusion"] })}
+        options={[
+          { id: "denies", text: "отрицает" },
+          { id: "has", text: "были" },
+        ]}
+      />
+      {d.transfusion === "has" && (
+        <input
+          value={d.transfusionText}
+          onChange={(e) => patch({ transfusionText: e.target.value })}
+          placeholder="когда / что"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
+      <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} />
     </div>
   );
 }
