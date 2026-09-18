@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { InfoDot, drugMarked } from "./DrugInfo";
 
 export type TypeaheadItem = {
   id: string;
   label: string;
   hint?: string;
+  name?: string;
 };
 
 export function Typeahead({
@@ -150,30 +152,38 @@ export function Typeahead({
               <div className="px-2 py-1.5 text-xs text-mute">{emptyHint}</div>
             ) : (
               <ul role="listbox">
-                {items.map((it, i) => (
-                  <li key={it.id} role="presentation">
-                    <button
-                      type="button"
-                      id={`ta-opt-${i}`}
-                      data-idx={i}
-                      role="option"
-                      aria-selected={i === idx}
-                      onMouseEnter={() => setIdx(i)}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pick(it)}
-                      className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${
-                        i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                      {it.hint && (
-                        <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
-                          {it.hint}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
+                {items.map((it, i) => {
+                  const marked = drugMarked(it.name || it.label);
+                  return (
+                    <li key={it.id} role="presentation">
+                      <div
+                        data-idx={i}
+                        className={`flex w-full items-center gap-1.5 px-2 py-1.5 text-sm ${
+                          i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
+                        } ${marked ? "border-l-2 border-l-teal" : ""}`}
+                      >
+                        <button
+                          type="button"
+                          id={`ta-opt-${i}`}
+                          role="option"
+                          aria-selected={i === idx}
+                          onMouseEnter={() => setIdx(i)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pick(it)}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                          {it.hint && (
+                            <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
+                              {it.hint}
+                            </span>
+                          )}
+                        </button>
+                        {marked ? <InfoDot query={it.name || it.label} /> : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>,

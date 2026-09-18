@@ -25,9 +25,33 @@ declare module "@/legacy/lib/store" {
         brandNames?: string;
         group?: string;
         mkb10Codes?: string;
+        sideEffects?: string;
+        contraindications?: string;
+        interactions?: string;
+        monitoring?: string;
+        evidenceLevel?: string;
       }
     >;
-    getDrugInfo: (name: string) => { name?: string; brandNames?: string; dosage?: string; frequency?: string } | null;
+    getDrugInfo: (name: string) => {
+      name?: string;
+      brandNames?: string;
+      dosage?: string;
+      frequency?: string;
+      duration?: string;
+      group?: string;
+      mkb10Codes?: string;
+      sideEffects?: string;
+      contraindications?: string;
+      interactions?: string;
+      monitoring?: string;
+      evidenceLevel?: string;
+    } | null;
+    getGroupMeta: (key: string) => {
+      sideEffects?: string;
+      contraindications?: string;
+      crossAllergyNote?: string;
+      mkb10Codes?: string;
+    } | null;
     getGuidelines: () => Record<string, unknown> | unknown[];
     getGuidelinesForCodes: (codes: string[]) => Record<string, unknown>[];
     getAllStudies: () => unknown[];
@@ -87,7 +111,25 @@ declare module "@/legacy/data/drugSafety" {
     groupMeta?: unknown,
     customCrossReactivity?: unknown,
   ): { level: string; message: string }[];
-  export const DRUG_GROUPS: Record<string, { label: string; drugs: string[] }>;
+  export function getBuiltinGroupMeta(key: string): {
+    sideEffects?: string;
+    contraindications?: string;
+    crossAllergyNote?: string;
+    mkb10Codes?: string;
+  } | null;
+  export const DRUG_GROUPS: Record<
+    string,
+    {
+      label: string;
+      drugs: string[];
+      meta?: {
+        sideEffects?: string;
+        contraindications?: string;
+        crossAllergyNote?: string;
+        mkb10Codes?: string;
+      };
+    }
+  >;
 }
 
 declare module "@/legacy/data/mkb10" {

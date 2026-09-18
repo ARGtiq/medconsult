@@ -1,4 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import { InfoDot, drugMarked } from "./DrugInfo";
+
+function chipClass(on: boolean, dashed?: boolean, marked?: boolean) {
+  if (on) {
+    return marked
+      ? "rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal ring-1 ring-teal/70"
+      : "rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal";
+  }
+  if (marked) {
+    return dashed
+      ? "rounded-full border border-dashed border-teal bg-teal-soft/40 px-2 py-0.5 text-xs font-medium text-teal"
+      : "rounded-full border border-teal/50 bg-teal-soft/40 px-2 py-0.5 text-xs font-medium text-teal";
+  }
+  return dashed
+    ? "rounded-full border border-dashed border-teal/40 bg-surface px-2 py-0.5 text-xs text-teal"
+    : "rounded-full border border-line bg-paper px-2 py-0.5 text-xs";
+}
 
 export function EditableChips({
   items,
@@ -45,18 +62,19 @@ export function EditableChips({
             className="min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
           />
         ) : (
-          <button
-            key={`${t}-${i}`}
-            type="button"
-            title="Нажми — править как текст"
-            onClick={() => {
-              setEdit(i);
-              setDraft(t);
-            }}
-            className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
-          >
-            {t}
-          </button>
+          <span key={`${t}-${i}`} className={`inline-flex items-center gap-0.5 ${chipClass(true, false, drugMarked(t))}`}>
+            <button
+              type="button"
+              title="Нажми — править как текст"
+              onClick={() => {
+                setEdit(i);
+                setDraft(t);
+              }}
+            >
+              {t}
+            </button>
+            <InfoDot query={t} />
+          </span>
         ),
       )}
     </div>
@@ -88,6 +106,7 @@ export function ToggleChips({
     <div className="mt-1 flex flex-wrap gap-1">
       {texts.map((t) => {
         const on = selected.includes(t);
+        const marked = drugMarked(t);
         if (on && onRename && edit === t) {
           return (
             <input
@@ -113,28 +132,23 @@ export function ToggleChips({
           );
         }
         return (
-          <button
-            key={t}
-            type="button"
-            title={on && onRename ? "Нажми — править как текст" : undefined}
-            onClick={() => {
-              if (on && onRename) {
-                setEdit(t);
-                setDraft(t);
-                return;
-              }
-              onToggle(t);
-            }}
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              on
-                ? "bg-teal-soft text-teal"
-                : dashed
-                  ? "border border-dashed border-teal/40 bg-surface text-teal"
-                  : "border border-line bg-paper"
-            }`}
-          >
-            {t}
-          </button>
+          <span key={t} className={`inline-flex items-center gap-0.5 ${chipClass(on, dashed, marked)}`}>
+            <button
+              type="button"
+              title={on && onRename ? "Нажми — править как текст" : undefined}
+              onClick={() => {
+                if (on && onRename) {
+                  setEdit(t);
+                  setDraft(t);
+                  return;
+                }
+                onToggle(t);
+              }}
+            >
+              {t}
+            </button>
+            {marked ? <InfoDot query={t} /> : null}
+          </span>
         );
       })}
     </div>

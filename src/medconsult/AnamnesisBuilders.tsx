@@ -17,6 +17,7 @@ import {
   type VitaeItem,
 } from "./anamnesisChips";
 import { useTemplates, type VitaePreset } from "./data/templates";
+import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchDrugs } from "./live";
 import { useAppStore } from "./store";
 import { Typeahead } from "./Typeahead";
@@ -162,7 +163,23 @@ function FromCard({ label, items }: { label: string; items?: string[] }) {
   return (
     <div className="mt-1.5">
       <div className="text-[10px] tracking-wide text-mute uppercase">{label} · из карточки</div>
-      <div className="text-xs text-ink-soft">{list.length ? list.join(", ") : "отрицает"}</div>
+      {list.length ? (
+        <div className="mt-0.5 flex flex-wrap gap-1">
+          {list.map((t) => (
+            <span
+              key={t}
+              className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs ${
+                drugMarked(t) ? "bg-teal-soft font-medium text-teal ring-1 ring-teal/70" : "border border-line bg-paper"
+              }`}
+            >
+              {t}
+              <InfoDot query={t} />
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs text-ink-soft">отрицает</div>
+      )}
     </div>
   );
 }
@@ -272,7 +289,7 @@ export function AnamnesisDisease({
           <Typeahead
             value={drugQ}
             onChange={setDrugQ}
-            items={hits.map((h) => ({ id: h.name, label: h.name, hint: h.via }))}
+            items={hits.map((h) => ({ id: h.name, label: h.name, hint: h.via, name: h.name }))}
             onPick={(it) => {
               if (!d.drugs.includes(it.id)) patch({ drugs: [...d.drugs, it.id] });
             }}
@@ -280,7 +297,7 @@ export function AnamnesisDisease({
               if (!d.drugs.includes(raw)) patch({ drugs: [...d.drugs, raw] });
             }}
             placeholder="препарат из базы…  ↑↓ Enter"
-            emptyHint="Enter — вписать как есть"
+            emptyHint="Enter — вписать как есть. i — карточка, если в базе"
           />
           {d.drugs.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
@@ -304,17 +321,23 @@ export function AnamnesisDisease({
                     className="w-32 rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
                   />
                 ) : (
-                  <button
+                  <span
                     key={name}
-                    type="button"
-                    className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
-                    onClick={() => {
-                      setEditDrug(i);
-                      setDrugDraft(name);
-                    }}
+                    className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs ${
+                      drugMarked(name) ? "bg-teal-soft font-medium text-teal ring-1 ring-teal/70" : "bg-teal-soft text-teal"
+                    }`}
                   >
-                    {name}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditDrug(i);
+                        setDrugDraft(name);
+                      }}
+                    >
+                      {name}
+                    </button>
+                    <InfoDot query={name} />
+                  </span>
                 ),
               )}
             </div>

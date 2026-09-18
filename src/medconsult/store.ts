@@ -251,6 +251,7 @@ type AppStore = {
   recentChips: string[];
   toast: string | null;
   aiUndo: { section: string; before: string } | null;
+  drugInfoQuery: string | null;
   hydrate: () => void;
   setSession: (patch: Partial<SessionState>) => void;
   setSettings: (patch: Partial<SettingsState>) => void;
@@ -281,6 +282,8 @@ type AppStore = {
   undoAi: () => void;
   exportData: () => string;
   importData: (raw: string) => boolean;
+  openDrugInfo: (query: string) => void;
+  closeDrugInfo: () => void;
 };
 
 function persistSession(session: SessionState) {
@@ -296,6 +299,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   recentChips: [],
   toast: null,
   aiUndo: null,
+  drugInfoQuery: null,
 
   hydrate() {
     const v2Patients = readJson<Patient[]>(PATIENTS_KEY, []);
@@ -762,6 +766,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       get().setToast("Файл не прочитался");
       return false;
     }
+  },
+
+  openDrugInfo(query) {
+    set({ drugInfoQuery: query });
+  },
+
+  closeDrugInfo() {
+    set({ drugInfoQuery: null });
   },
 }));
 

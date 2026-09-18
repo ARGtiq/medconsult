@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { allStudiesLive, liveComplaints, liveDrugsMerged, liveIcdMerged } from "./live";
 import { studyMatchesQuery } from "./data/studies";
+import { InfoDot, drugMarked } from "./DrugInfo";
 import { useAppStore } from "./store";
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
@@ -9,7 +10,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const items = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const out: { id: string; label: string; hint: string; run: () => void }[] = [];
+    const out: { id: string; label: string; hint: string; drugName?: string; run: () => void }[] = [];
     liveComplaints()
       .filter((text) => s.length >= 2 && text.toLowerCase().includes(s))
       .forEach((text) =>
@@ -30,6 +31,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           id: "d-" + d.name,
           label: `${d.name} ${d.dose}`.trim(),
           hint: "назначение",
+          drugName: d.name,
           run: () => {
             addRecommendation(`${d.name} ${d.dose}`.trim());
             setToast(`Назначение: ${d.name}`);
@@ -94,19 +96,24 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           {items.length === 0 && <li className="px-3 py-6 text-center text-sm text-mute">Ничего не нашлось</li>}
           {items.map((it, i) => (
             <li key={it.id}>
-              <button
-                type="button"
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${
+              <div
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${
                   i === 0 ? "bg-teal-soft text-teal" : "hover:bg-paper"
-                }`}
-                onClick={() => {
-                  it.run();
-                  onClose();
-                }}
+                } ${it.drugName && drugMarked(it.drugName) ? "border-l-2 border-l-teal" : ""}`}
               >
-                <span>{it.label}</span>
-                <span className="text-[11px] text-mute">{it.hint}</span>
-              </button>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center justify-between text-left"
+                  onClick={() => {
+                    it.run();
+                    onClose();
+                  }}
+                >
+                  <span className="truncate">{it.label}</span>
+                  <span className="ml-2 shrink-0 text-[11px] text-mute">{it.hint}</span>
+                </button>
+                {it.drugName ? <InfoDot query={it.drugName} /> : null}
+              </div>
             </li>
           ))}
         </ul>

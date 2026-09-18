@@ -14,6 +14,7 @@ import { initAutoSync } from "@/legacy/lib/autoSync";
 import { initTheme } from "@/legacy/lib/theme";
 import "@/legacy/legacy.css";
 import { CommandPalette } from "./CommandPalette";
+import { DrugInfoModal } from "./DrugInfo";
 import { NavLink, useNav } from "./NavContext";
 import { PatientPicker } from "./PatientPicker";
 import { useAppStore } from "./store";
@@ -62,7 +63,14 @@ export function AppShell({
         e.preventDefault();
         setSearchOpen(true);
       }
-      if (e.key === "Escape") setSearchOpen(false);
+      if (e.key === "Escape") {
+        const st = useAppStore.getState();
+        if (st.drugInfoQuery) {
+          st.closeDrugInfo();
+          return;
+        }
+        setSearchOpen(false);
+      }
       if (!typing && (e.ctrlKey || e.metaKey) && e.key === "Enter") {
         window.dispatchEvent(new CustomEvent("medconsult-copy-all"));
       }
@@ -186,6 +194,7 @@ export function AppShell({
         <ToastContainer />
       </div>
       {searchOpen && <CommandPalette onClose={() => setSearchOpen(false)} />}
+      <DrugInfoModal />
     </div>
   );
 }

@@ -39,6 +39,7 @@ export function ProtocolPage() {
   const [ixBusy, setIxBusy] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [complaintQ, setComplaintQ] = useState("");
+  const [dictOpen, setDictOpen] = useState(false);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
   const patient = patients.find((p) => p.id === session.patientId);
@@ -260,6 +261,7 @@ export function ProtocolPage() {
               });
             }}
             placeholder="препарат + Enter"
+            drugs
           />
         </div>
       ) : null}
@@ -441,21 +443,37 @@ export function ProtocolPage() {
               dashed
               onRename={renameInserted("complaints")}
             />
-            {complaintQ.trim().length >= 2 ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  dictOpen ? "bg-teal text-paper" : "border border-dashed border-teal/50 text-teal"
+                }`}
+                onClick={() => setDictOpen((v) => !v)}
+              >
+                {dictOpen ? "скрыть словарь" : "+ словарь"}
+              </button>
+              {!dictOpen && complaintQ.trim().length < 2 ? (
+                <span className="text-[10px] text-mute">или две буквы</span>
+              ) : null}
+            </div>
+            {dictOpen || complaintQ.trim().length >= 2 ? (
               <>
                 <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
                 <ToggleChips
-                  texts={chips.rest
-                    .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
-                    .slice(0, 16)}
+                  texts={
+                    complaintQ.trim().length >= 2
+                      ? chips.rest
+                          .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
+                          .slice(0, 24)
+                      : chips.rest
+                  }
                   onToggle={toggleComplaint}
                   selected={session.complaints}
                   onRename={renameInserted("complaints")}
                 />
               </>
-            ) : (
-              <div className="mt-1 text-[10px] text-mute">словарь — после двух букв</div>
-            )}
+            ) : null}
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
             <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
             {session.diagnosisCode && (
@@ -890,30 +908,49 @@ function GlobalField({
   items,
   onChange,
   placeholder,
+  drugs,
 }: {
   label: string;
   items: string[];
   onChange: (next: string[]) => void;
   placeholder: string;
+  drugs?: boolean;
 }) {
   const [q, setQ] = useState("");
+  const hits = useMemo(() => (drugs && q.trim().length >= 2 ? searchDrugs(q).slice(0, 10) : []), [drugs, q]);
   return (
     <div className="mt-1">
       <div className="text-[10px] font-semibold tracking-wide uppercase">{label}</div>
       <EditableChips items={items} onChange={onChange} />
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && q.trim()) {
-            e.preventDefault();
-            if (!items.includes(q.trim())) onChange([...items, q.trim()]);
-            setQ("");
-          }
-        }}
-        placeholder={placeholder}
-        className="mt-1 w-full rounded-md border border-warn-line bg-surface px-2 py-1 text-xs"
-      />
+      {drugs ? (
+        <Typeahead
+          value={q}
+          onChange={setQ}
+          items={hits.map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }))}
+          onPick={(it) => {
+            if (!items.includes(it.name || it.label)) onChange([...items, it.name || it.label]);
+          }}
+          onSubmitCustom={(raw) => {
+            if (!items.includes(raw)) onChange([...items, raw]);
+          }}
+          placeholder={placeholder}
+          emptyHint={q.trim().length >= 2 ? "Enter — как есть. i — карточка, если в базе" : undefined}
+        />
+      ) : (
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && q.trim()) {
+              e.preventDefault();
+              if (!items.includes(q.trim())) onChange([...items, q.trim()]);
+              setQ("");
+            }
+          }}
+          placeholder={placeholder}
+          className="mt-1 w-full rounded-md border border-warn-line bg-surface px-2 py-1 text-xs"
+        />
+      )}
     </div>
   );
 }
@@ -931,7 +968,7 @@ function DrugSearch({
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
   const items = hits
     .filter((h) => !selected.includes(h.line))
-    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.via }));
+    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.via, name: h.name }));
 
   return (
     <div className="mt-1">
@@ -942,7 +979,7 @@ function DrugSearch({
         onPick={(it) => onAdd(it.label)}
         onSubmitCustom={(raw) => onAdd(raw)}
         placeholder="ДВ, торговое, группа, МКБ…  ↑↓ Enter"
-        emptyHint="Нет в справочнике. Enter — вставить как есть"
+        emptyHint="Нет в справочнике. Enter — вставить как есть. i — карточка, если в базе"
       />
       {!q.trim() && !diagnosisCode && (
         <p className="mt-1.5 text-xs text-mute">
