@@ -2,6 +2,7 @@ import { store } from "@/legacy/lib/store";
 import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
+import { getComplaintPresets } from "./data/templates";
 import { STUDIES, getStudy as seedStudy } from "./data/studies";
 import type { StudyDef } from "./types";
 
@@ -98,14 +99,21 @@ export function compactGuideline(code: string): CompactGuideline | null {
 }
 
 export function liveComplaints(): string[] {
+  const fromTemplates = (() => {
+    try {
+      return getComplaintPresets();
+    } catch {
+      return [] as string[];
+    }
+  })();
   const learned = (() => {
     try {
       return store.getComplaintSuggestions("").map((s) => s.text);
     } catch {
-      return [];
+      return [] as string[];
     }
   })();
-  return Array.from(new Set([...learned, ...COMPLAINTS.map((c) => c.text)]));
+  return Array.from(new Set([...fromTemplates, ...learned, ...COMPLAINTS.map((c) => c.text)]));
 }
 
 export function complaintsForSession(code: string) {

@@ -11,7 +11,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const s = q.trim().toLowerCase();
     const out: { id: string; label: string; hint: string; run: () => void }[] = [];
     liveComplaints()
-      .filter((text) => !s || text.toLowerCase().includes(s))
+      .filter((text) => s.length >= 2 && text.toLowerCase().includes(s))
       .forEach((text) =>
         out.push({
           id: "c-" + text,

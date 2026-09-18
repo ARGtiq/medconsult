@@ -11,7 +11,7 @@ import {
 import type { LocalPack } from "./types";
 
 export function TemplatesEditor() {
-  const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "docs">("status");
+  const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
   useEffect(() => {
@@ -48,6 +48,7 @@ export function TemplatesEditor() {
         {(
           [
             ["status", "локальный статус"],
+            ["complaints", "жалобы"],
             ["chronic", "хронические"],
             ["surgery", "операции"],
             ["docs", "блоки документа"],
@@ -66,6 +67,14 @@ export function TemplatesEditor() {
         ))}
       </div>
       {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
+      {tab === "complaints" && (
+        <StringListEditor
+          items={data.complaints}
+          onChange={(complaints) => persist({ complaints })}
+          hint="Словарь жалоб. Свои формулировки из протокола попадают сюда сами."
+          addLabel="+ жалоба"
+        />
+      )}
       {tab === "chronic" && (
         <PresetEditor
           items={data.chronic}
@@ -133,6 +142,76 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
       >
         + пакет статуса
       </button>
+    </div>
+  );
+}
+
+function StringListEditor({
+  items,
+  onChange,
+  hint,
+  addLabel,
+}: {
+  items: string[];
+  onChange: (p: string[]) => void;
+  hint: string;
+  addLabel: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const shown = [...items].sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
+  function patchShown(i: number, next: string) {
+    const old = shown[i];
+    onChange(items.map((x) => (x === old ? next : x)));
+  }
+  function removeShown(i: number) {
+    const old = shown[i];
+    onChange(items.filter((x) => x !== old));
+  }
+  return (
+    <div>
+      <p className="mb-2 text-xs text-ink-soft">{hint}</p>
+      <div className="space-y-1">
+        {shown.map((it, i) => (
+          <div key={`${it}-${i}`} className="flex items-center gap-1">
+            <input
+              value={it}
+              onChange={(e) => patchShown(i, e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            />
+            <button type="button" className="text-xs text-danger" onClick={() => removeShown(i)}>
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && draft.trim()) {
+              e.preventDefault();
+              const t = draft.trim();
+              if (!items.some((x) => x.toLowerCase() === t.toLowerCase())) onChange([...items, t]);
+              setDraft("");
+            }
+          }}
+          placeholder="новая формулировка + Enter"
+          className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+        <button
+          type="button"
+          className="text-xs font-medium text-teal"
+          onClick={() => {
+            const t = draft.trim();
+            if (!t) return;
+            if (!items.some((x) => x.toLowerCase() === t.toLowerCase())) onChange([...items, t]);
+            setDraft("");
+          }}
+        >
+          {addLabel}
+        </button>
+      </div>
     </div>
   );
 }

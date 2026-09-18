@@ -3,7 +3,8 @@ import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { applyComputed } from "./data/studies";
-import { addLocalChipToCode, getDocKinds, packsForCodeLive } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getDocKinds, packsForCodeLive } from "./data/templates";
+import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { getStudyLive } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
@@ -156,19 +157,6 @@ function writePatient(p: Patient) {
   }
 }
 
-function allergiesFromVitae(session: SessionState): string[] | undefined {
-  const d = session.vitaeDraft;
-  if (!d) return undefined;
-  if (d.allergy === "denies") return [];
-  if (d.allergy === "has" && d.allergyText.trim()) {
-    return d.allergyText
-      .split(/[,;]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return undefined;
-}
-
 function pickFilledInstance(instances?: StudyInstance[]): StudyInstance | undefined {
   const filled = (instances || []).filter((i) =>
     Object.values(i.fields || {}).some((x) => String(x || "").trim()),
@@ -182,7 +170,6 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
   const idx = patients.findIndex((p) => p.id === session.patientId);
   if (idx < 0) return patients;
   const prev = patients[idx];
-  const fromVitae = allergiesFromVitae(session);
   const extraLast = { ...(prev.globals?.extraLast || {}) };
   (session.extraBlocks || []).forEach((b) => {
     if (b.text.trim()) extraLast[b.kindId] = b.text;
@@ -194,7 +181,6 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
   });
   const next: Patient = {
     ...prev,
-    allergies: fromVitae !== undefined ? fromVitae : prev.allergies,
     anamnesisVitae: session.anamnesisVitae || prev.anamnesisVitae,
     globals: {
       ...(prev.globals || {}),
@@ -202,7 +188,7 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
       anamnesisVitae: session.anamnesisVitae || prev.globals?.anamnesisVitae,
       extraLast,
       studyLast,
-      allergies: fromVitae !== undefined ? fromVitae : prev.allergies,
+      allergies: prev.allergies || [],
       currentMedications: prev.currentMedications || [],
     },
   };
@@ -216,9 +202,13 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   if (!patient) return session;
   const draft = patient.globals?.vitaeDraft;
   const vitaeText = patient.anamnesisVitae || patient.globals?.anamnesisVitae || "";
+  const composed = composeVitae(draft || emptyVitae(), {
+    medications: patient.currentMedications,
+    allergies: patient.allergies,
+  });
   return {
     ...session,
-    anamnesisVitae: vitaeText,
+    anamnesisVitae: composed || vitaeText,
     vitaeDraft: draft,
     vitaeChipMode: vitaeText ? false : true,
   };
@@ -463,7 +453,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     persistSession({ ...session, complaints });
     set({ session: { ...session, complaints }, recentChips: recent });
     try {
-      if (!has) legacy.recordComplaint(text);
+      if (!has) {
+        legacy.recordComplaint(text);
+        addComplaintTemplate(text);
+      }
     } catch {
       /* */
     }
@@ -488,6 +481,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   renameList(field, next) {
     get().setSession({ [field]: next } as Partial<SessionState>);
+    if (field === "complaints") {
+      next.forEach((t) => {
+        try {
+          addComplaintTemplate(t);
+        } catch {
+          /* */
+        }
+      });
+    }
   },
 
   addRecommendation(text) {

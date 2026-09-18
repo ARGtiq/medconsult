@@ -3,10 +3,11 @@ import { getChronicPresets, getSurgeryPresets, type VitaePreset } from "./data/t
 export type AnamnesisDraft = {
   onset: "" | "first" | "chronic";
   amount: string;
-  unit: "" | "days" | "weeks" | "months" | "years";
+  unit: "" | "hours" | "days" | "weeks" | "months" | "years";
   treated: "" | "no" | "yes";
   drugs: string[];
   effect: "" | "none" | "temp" | "full" | "worse";
+  related: string[];
 };
 
 export type VitaeItem = {
@@ -50,6 +51,36 @@ export const INFECTION_PRESETS: InfectionPreset[] = [
   { id: "trich", label: "трихомониаз", group: "sti" },
 ];
 
+export const HERITAGE_PRESETS: VitaePreset[] = [
+  { id: "oncology", label: "онкология" },
+  { id: "urolith", label: "мочекаменная болезнь" },
+  { id: "dm", label: "сахарный диабет" },
+  { id: "htn", label: "гипертоническая болезнь" },
+  { id: "pkd", label: "поликистоз почек" },
+  { id: "bph", label: "ДГПЖ" },
+  { id: "infertility", label: "бесплодие" },
+  { id: "tb", label: "туберкулёз" },
+  { id: "anomalies", label: "аномалии развития мочеполовой системы" },
+];
+
+export const TRANSFUSION_PRESETS: VitaePreset[] = [
+  { id: "rbc", label: "эритроцитарная масса", needsDate: true },
+  { id: "ffp", label: "свежезамороженная плазма", needsDate: true },
+  { id: "plt", label: "тромбоконцентрат", needsDate: true },
+  { id: "whole", label: "цельная кровь", needsDate: true },
+  { id: "cryo", label: "криопреципитат", needsDate: true },
+  { id: "albumin", label: "альбумин", needsDate: true },
+];
+
+export const RELATED_PRESETS: VitaePreset[] = [
+  { id: "cold", label: "переохлаждением" },
+  { id: "exertion", label: "физической нагрузкой" },
+  { id: "fall", label: "падением" },
+  { id: "hit", label: "ударом" },
+  { id: "unprotected", label: "незащищенным половым актом" },
+  { id: "partner", label: "сменой полового партнера" },
+];
+
 export const PAST_ALWAYS = ["простудные заболевания", "детские инфекции"];
 
 export type VitaeDraft = {
@@ -75,11 +106,13 @@ export type VitaeDraft = {
   alcohol: "" | "no" | "yes";
   heritage: "" | "clear" | "burdened";
   heritageText: string;
+  heritageItems: VitaeItem[];
   infections: "" | "denies" | "has";
   infectionsText: string;
   infectionItems: VitaeItem[];
   transfusion: "" | "denies" | "has";
   transfusionText: string;
+  transfusionItems: VitaeItem[];
 };
 
 export type VitaeContext = {
@@ -94,6 +127,7 @@ export const emptyAnamnesis = (): AnamnesisDraft => ({
   treated: "",
   drugs: [],
   effect: "",
+  related: [],
 });
 
 export const emptyVitae = (): VitaeDraft => ({
@@ -119,11 +153,13 @@ export const emptyVitae = (): VitaeDraft => ({
   smokePacks: "",
   heritage: "",
   heritageText: "",
+  heritageItems: [],
   infections: "",
   infectionsText: "",
   infectionItems: [],
   transfusion: "",
   transfusionText: "",
+  transfusionItems: [],
 });
 
 export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
@@ -136,6 +172,17 @@ export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
     chronicItems: d?.chronicItems || [],
     surgeryItems: d?.surgeryItems || [],
     infectionItems: d?.infectionItems || [],
+    heritageItems: d?.heritageItems || [],
+    transfusionItems: d?.transfusionItems || [],
+  };
+}
+
+export function normalizeAnamnesis(d?: Partial<AnamnesisDraft> | null): AnamnesisDraft {
+  return {
+    ...emptyAnamnesis(),
+    ...(d || {}),
+    drugs: d?.drugs || [],
+    related: d?.related || [],
   };
 }
 
@@ -150,20 +197,19 @@ function ruCount(n: number, one: string, few: string, many: string) {
 function span(amount: string, unit: AnamnesisDraft["unit"]) {
   const n = parseInt(amount, 10);
   if (!Number.isFinite(n) || n <= 0 || !unit) return "";
+  if (unit === "hours") return `${n} ${ruCount(n, "час", "часа", "часов")}`;
   if (unit === "days") return `${n} ${ruCount(n, "день", "дня", "дней")}`;
   if (unit === "weeks") return `${n} ${ruCount(n, "неделю", "недели", "недель")}`;
   if (unit === "months") return `${n} ${ruCount(n, "месяц", "месяца", "месяцев")}`;
   return `${n} ${ruCount(n, "год", "года", "лет")}`;
 }
 
-export function composeAnamnesis(d: AnamnesisDraft) {
+export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
+  const d = normalizeAnamnesis(raw);
   const parts: string[] = [];
   const howLong = span(d.amount, d.unit);
-  if (d.onset === "first") {
-    parts.push(howLong ? `Заболел впервые ${howLong} назад` : "Заболел впервые");
-  } else if (d.onset === "chronic") {
-    parts.push(howLong ? `Болеет давно, около ${howLong}` : "Болеет давно");
-  }
+  if (howLong) parts.push(`Болеет ${howLong}`);
+  if (d.related.length) parts.push(`связывает с ${d.related.join(", ")}`);
   if (d.treated === "no") parts.push("Не лечился");
   if (d.treated === "yes") {
     const drugs = d.drugs.filter(Boolean).join(", ");
@@ -267,7 +313,7 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
     ...namedItems(d.pastItems, chronicPresets),
     d.pastIllness === "other" ? d.pastIllnessText.trim() : "",
   ].filter(Boolean);
-  const past = `Перенесённые и хронические заболевания: ${[...PAST_ALWAYS, ...pastExtra].join(", ")}`;
+  const past = `Перенесённые заболевания: ${[...PAST_ALWAYS, ...pastExtra].join(", ")}`;
 
   let chronic = "Хронические заболевания: отрицает";
   if (d.chronic === "has" || d.chronicItems.length) {
@@ -284,19 +330,17 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
 
   const infections = composeInfections(d.infectionItems, d.infections === "has" ? d.infectionsText : "");
 
-  const heritage =
-    d.heritage === "burdened"
-      ? d.heritageText.trim()
-        ? `Наследственность: отягощена (${d.heritageText.trim()})`
-        : "Наследственность: отягощена"
-      : "Наследственность: не отягощена";
+  const heritageNamed = namedItems(d.heritageItems, HERITAGE_PRESETS);
+  const heritageExtra = d.heritage === "burdened" ? d.heritageText.trim() : "";
+  const heritageAll = [...heritageNamed, heritageExtra].filter(Boolean);
+  const heritage = heritageAll.length
+    ? `Наследственность: отягощена (${heritageAll.join(", ")})`
+    : "Наследственность: не отягощена";
 
   const allergyFromCard = list(ctx?.allergies);
-  let allergy = "Аллергические реакции: отрицает";
-  if (d.allergy === "has" || (d.allergy !== "denies" && allergyFromCard.length)) {
-    const t = d.allergyText.trim() || allergyFromCard.join(", ");
-    allergy = t ? `Аллергические реакции: ${t}` : "Аллергические реакции: есть";
-  }
+  const allergy = allergyFromCard.length
+    ? `Аллергические реакции: ${allergyFromCard.join(", ")}`
+    : "Аллергические реакции: отрицает";
 
   let surgery = "Операций не было";
   if (d.surgery === "has" || d.surgeryItems.length) {
@@ -306,10 +350,10 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
     surgery = all ? `Операции: ${all}` : "Операции в анамнезе";
   }
 
-  const transfusion =
-    d.transfusion === "has" && d.transfusionText.trim()
-      ? `Гемотрансфузии: ${d.transfusionText.trim()}`
-      : "Гемотрансфузии: отрицает";
+  const tfNamed = namedItems(d.transfusionItems, TRANSFUSION_PRESETS);
+  const tfExtra = d.transfusion === "has" ? d.transfusionText.trim() : "";
+  const tfAll = [...tfNamed, tfExtra].filter(Boolean);
+  const transfusion = tfAll.length ? `Гемотрансфузии: ${tfAll.join(", ")}` : "Гемотрансфузии: отрицает";
 
   return [development, occupation, habits, past, chronic, meds, infections, heritage, allergy, surgery, transfusion]
     .map(period)

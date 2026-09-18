@@ -494,7 +494,7 @@ export const store = {
     return Object.values(state.complaintSuggestions)
       .filter((s) => !q || s.text.toLowerCase().includes(q))
       .sort((a, b) => b.count - a.count || b.lastUsedAt - a.lastUsedAt)
-      .slice(0, 8)
+      .slice(0, 80)
   },
 
   // --- связка жалоба -> препарат с весом ---

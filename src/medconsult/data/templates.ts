@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LOCAL_PACKS } from "./catalog";
+import { COMPLAINTS, LOCAL_PACKS } from "./catalog";
 import type { LocalPack } from "../types";
 
 const KEY = "medconsult_v2_templates";
@@ -22,6 +22,7 @@ export type TemplatesState = {
   chronic: VitaePreset[];
   surgeries: VitaePreset[];
   docKinds: DocKind[];
+  complaints: string[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -62,6 +63,8 @@ export const SEED_DOC_KINDS: DocKind[] = [
   { id: "certificate", title: "Справка" },
 ];
 
+export const SEED_COMPLAINTS: string[] = COMPLAINTS.map((c) => c.text);
+
 export const STD_DOC_BLOCKS = [
   { id: "complaints", title: "Жалобы" },
   { id: "anamnesis", title: "Анамнез заболевания" },
@@ -76,6 +79,7 @@ export const seedTemplates = (): TemplatesState => ({
   chronic: SEED_CHRONIC.map((x) => ({ ...x })),
   surgeries: SEED_SURGERIES.map((x) => ({ ...x })),
   docKinds: SEED_DOC_KINDS.map((x) => ({ ...x })),
+  complaints: [...SEED_COMPLAINTS],
 });
 
 function read(): TemplatesState {
@@ -90,6 +94,7 @@ function read(): TemplatesState {
       chronic: Array.isArray(parsed.chronic) && parsed.chronic.length ? parsed.chronic : seed.chronic,
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
+      complaints: Array.isArray(parsed.complaints) ? parsed.complaints : seed.complaints,
     };
   } catch {
     return seed;
@@ -124,6 +129,19 @@ export function getSurgeryPresets(): VitaePreset[] {
 
 export function getDocKinds(): DocKind[] {
   return read().docKinds;
+}
+
+export function getComplaintPresets(): string[] {
+  return read().complaints;
+}
+
+export function addComplaintTemplate(text: string) {
+  const t = text.trim();
+  if (!t) return;
+  const state = read();
+  const key = t.toLowerCase();
+  if (state.complaints.some((c) => c.toLowerCase() === key)) return;
+  write({ ...state, complaints: [...state.complaints, t] });
 }
 
 export function packsForCodeLive(code: string) {

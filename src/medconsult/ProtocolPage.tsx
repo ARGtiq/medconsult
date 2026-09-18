@@ -243,14 +243,8 @@ export function ProtocolPage() {
             onChange={(allergies) => {
               store.updatePatient(patient.id, { allergies });
               const d = session.vitaeDraft || emptyVitae();
-              const next = {
-                ...d,
-                allergy: allergies.length ? ("has" as const) : d.allergy,
-                allergyText: allergies.join(", ") || d.allergyText,
-              };
               store.setSession({
-                vitaeDraft: next,
-                anamnesisVitae: composeVitae(next, { medications: patient.currentMedications, allergies }),
+                anamnesisVitae: composeVitae(d, { medications: patient.currentMedications, allergies }),
               });
             }}
             placeholder="аллерген + Enter"
@@ -417,16 +411,20 @@ export function ProtocolPage() {
             <Typeahead
               value={complaintQ}
               onChange={setComplaintQ}
-              items={liveComplaints()
-                .filter((t) => !complaintQ.trim() || t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
-                .slice(0, 12)
-                .map((t) => ({ id: t, label: t }))}
+              items={
+                complaintQ.trim().length >= 2
+                  ? liveComplaints()
+                      .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
+                      .slice(0, 12)
+                      .map((t) => ({ id: t, label: t }))
+                  : []
+              }
               onPick={(it) => {
                 if (!session.complaints.includes(it.label)) toggleComplaint(it.label);
               }}
               onSubmitCustom={(raw) => toggleComplaint(raw)}
               placeholder="Начать вводить жалобу…  ↑↓ Enter"
-              emptyHint="Enter — добавить свою формулировку"
+              emptyHint={complaintQ.trim().length >= 2 ? "Enter — добавить свою формулировку" : undefined}
             />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
             <ToggleChips
@@ -443,13 +441,21 @@ export function ProtocolPage() {
               dashed
               onRename={renameInserted("complaints")}
             />
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
-            <ToggleChips
-              texts={chips.rest.slice(0, 12)}
-              onToggle={toggleComplaint}
-              selected={session.complaints}
-              onRename={renameInserted("complaints")}
-            />
+            {complaintQ.trim().length >= 2 ? (
+              <>
+                <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
+                <ToggleChips
+                  texts={chips.rest
+                    .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
+                    .slice(0, 16)}
+                  onToggle={toggleComplaint}
+                  selected={session.complaints}
+                  onRename={renameInserted("complaints")}
+                />
+              </>
+            ) : (
+              <div className="mt-1 text-[10px] text-mute">словарь — после двух букв</div>
+            )}
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
             <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
             {session.diagnosisCode && (
