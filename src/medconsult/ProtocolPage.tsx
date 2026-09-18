@@ -17,7 +17,8 @@ import {
   complaintsForSession,
   drugLine,
   learnedDrugs,
-  liveComplaints,
+  matchPhraseOrWord,
+  suggestComplaints,
   liveIcdMerged,
   searchAllergy,
   searchDrugs,
@@ -417,14 +418,7 @@ export function ProtocolPage() {
             <Typeahead
               value={complaintQ}
               onChange={setComplaintQ}
-              items={
-                complaintQ.trim().length >= 2
-                  ? liveComplaints()
-                      .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
-                      .slice(0, 12)
-                      .map((t) => ({ id: t, label: t }))
-                  : []
-              }
+              items={complaintQ.trim().length >= 2 ? suggestComplaints(complaintQ, 12) : []}
               onPick={(it) => {
                 if (!session.complaints.includes(it.label)) toggleComplaint(it.label);
               }}
@@ -467,9 +461,7 @@ export function ProtocolPage() {
                 <ToggleChips
                   texts={
                     complaintQ.trim().length >= 2
-                      ? chips.rest
-                          .filter((t) => t.toLowerCase().includes(complaintQ.trim().toLowerCase()))
-                          .slice(0, 24)
+                      ? chips.rest.filter((t) => matchPhraseOrWord(t, complaintQ)).slice(0, 24)
                       : chips.rest
                   }
                   onToggle={toggleComplaint}

@@ -116,6 +116,76 @@ export function liveComplaints(): string[] {
   return Array.from(new Set([...fromTemplates, ...learned, ...COMPLAINTS.map((c) => c.text)]));
 }
 
+const WORD_SPLIT = /[^a-zа-яё0-9+]+/i;
+
+export function tokensOf(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(WORD_SPLIT)
+    .filter((w) => w.length >= 2);
+}
+
+export function lastQueryToken(query: string): string {
+  const parts = query.trim().toLowerCase().split(/\s+/);
+  return parts[parts.length - 1] || "";
+}
+
+/** Whole phrase contains the query, or any token starts with the last typed word. */
+export function matchPhraseOrWord(text: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return false;
+  const hay = text.toLowerCase();
+  if (hay.includes(q)) return true;
+  const last = lastQueryToken(query);
+  if (last.length < 2) return false;
+  return tokensOf(text).some((w) => w.startsWith(last));
+}
+
+export type SuggestHit = { id: string; label: string; hint?: string };
+
+/** Words from the dictionary plus matching phrases (словосочетания). */
+export function suggestFromPhrases(query: string, phrases: string[], limit = 12): SuggestHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const last = lastQueryToken(query);
+  const seen = new Set<string>();
+  const words: SuggestHit[] = [];
+  const combo: SuggestHit[] = [];
+
+  if (last.length >= 2) {
+    for (const t of phrases) {
+      for (const w of tokensOf(t)) {
+        if (!w.startsWith(last) || seen.has(w)) continue;
+        seen.add(w);
+        words.push({ id: "w-" + w, label: w, hint: "слово" });
+      }
+    }
+  }
+
+  for (const t of phrases) {
+    const low = t.toLowerCase();
+    if (seen.has(low)) continue;
+    if (!matchPhraseOrWord(t, query)) continue;
+    seen.add(low);
+    const multi = tokensOf(t).length > 1;
+    combo.push({ id: "p-" + t, label: t, hint: multi ? "фраза" : undefined });
+  }
+
+  words.sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label, "ru"));
+  combo.sort((a, b) => {
+    const as = a.label.toLowerCase().startsWith(q) ? 0 : 1;
+    const bs = b.label.toLowerCase().startsWith(q) ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return a.label.localeCompare(b.label, "ru");
+  });
+
+  return [...words, ...combo].slice(0, limit);
+}
+
+export function suggestComplaints(query: string, limit = 12): SuggestHit[] {
+  return suggestFromPhrases(query, liveComplaints(), limit);
+}
+
 export function complaintsForSession(code: string) {
   const fromCode = [
     ...complaintsForCode(code).map((c) => c.text),
@@ -257,18 +327,23 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
     return hits.slice(0, 16);
   }
 
+  const wordStart = (s: string) =>
+    tokensOf(s).some((w) => w.startsWith(q)) || s.toLowerCase().startsWith(q);
+
   for (const d of records) {
-    if (d.name.toLowerCase().includes(q)) push(d, "ДВ", d.name);
+    if (wordStart(d.name) || d.name.toLowerCase().includes(q)) push(d, "ДВ", d.name);
   }
   for (const d of records) {
     const brands = (d.brandNames || "").toLowerCase();
-    if (brands.includes(q)) push(d, "торговое", d.brandNames || "");
+    if (tokensOf(d.brandNames || "").some((w) => w.startsWith(q)) || brands.includes(q)) {
+      push(d, "торговое", d.brandNames || "");
+    }
   }
   for (const d of records) {
-    if ((d.group || "").toLowerCase().includes(q)) push(d, "группа", d.group || "");
+    if (wordStart(d.group || "") || (d.group || "").toLowerCase().includes(q)) push(d, "группа", d.group || "");
   }
   for (const g of groupCatalog()) {
-    if (!g.label.toLowerCase().includes(q)) continue;
+    if (!wordStart(g.label) && !g.label.toLowerCase().includes(q)) continue;
     for (const n of g.drugs) {
       const rec = records.find((r) => r.name.toLowerCase() === n.toLowerCase()) || { name: n, dose: "" };
       push(rec, "группа", g.label);
@@ -280,7 +355,7 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
   }
   if (q.length >= 3) {
     liveIcdMerged()
-      .filter((i) => i.code.toLowerCase().includes(q) || i.title.toLowerCase().includes(q))
+      .filter((i) => i.code.toLowerCase().includes(q) || matchPhraseOrWord(i.title, q) || i.title.toLowerCase().includes(q))
       .slice(0, 8)
       .forEach((i) => {
         const stem = i.code.split(".")[0].toUpperCase();

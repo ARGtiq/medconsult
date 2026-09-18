@@ -335,16 +335,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setSession(patch) {
     const prev = get().session;
     let patients = get().patients;
+    let session: SessionState;
     if (patch.patientId && patch.patientId !== prev.patientId) {
       patients = persistGlobals(prev, patients);
+      const { patientId, ...rest } = patch;
+      session = applyGlobals(
+        blankSession({
+          patientId,
+          visitKind: rest.visitKind ?? prev.visitKind,
+          mode: rest.mode ?? prev.mode,
+        }),
+        patients.find((p) => p.id === patientId),
+      );
+      session = { ...session, ...rest, patientId };
+    } else {
+      session = { ...prev, ...patch };
     }
-    let session = { ...prev, ...patch };
-    if (patch.patientId && patch.patientId !== prev.patientId) {
-      session = applyGlobals(session, patients.find((p) => p.id === patch.patientId));
-    }
+    const switched = !!(patch.patientId && patch.patientId !== prev.patientId);
     const vitaeTouched =
       "vitaeDraft" in patch || "anamnesisVitae" in patch || "extraBlocks" in patch || "studies" in patch;
-    if (vitaeTouched) patients = persistGlobals(session, patients);
+    if (vitaeTouched && !switched) patients = persistGlobals(session, patients);
     persistSession(session);
     set({ session, patients });
   },

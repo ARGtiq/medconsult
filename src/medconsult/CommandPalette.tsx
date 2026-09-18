@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { allStudiesLive, liveComplaints, liveDrugsMerged, liveIcdMerged } from "./live";
+import { allStudiesLive, liveDrugsMerged, liveIcdMerged, matchPhraseOrWord, suggestComplaints } from "./live";
 import { studyMatchesQuery } from "./data/studies";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import { useAppStore } from "./store";
@@ -11,19 +11,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const items = useMemo(() => {
     const s = q.trim().toLowerCase();
     const out: { id: string; label: string; hint: string; drugName?: string; run: () => void }[] = [];
-    liveComplaints()
-      .filter((text) => s.length >= 2 && text.toLowerCase().includes(s))
-      .forEach((text) =>
-        out.push({
-          id: "c-" + text,
-          label: text,
-          hint: "жалоба",
-          run: () => {
-            toggleComplaint(text);
-            setToast(`Жалоба: ${text}`);
-          },
-        }),
-      );
+    suggestComplaints(s, 8).forEach((hit) =>
+      out.push({
+        id: "c-" + hit.id,
+        label: hit.label,
+        hint: hit.hint === "слово" ? "слово" : "жалоба",
+        run: () => {
+          toggleComplaint(hit.label);
+          setToast(`Жалоба: ${hit.label}`);
+        },
+      }),
+    );
     liveDrugsMerged()
       .filter((d) => !s || d.name.toLowerCase().includes(s))
       .forEach((d) =>
@@ -52,7 +50,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         }),
       );
     liveIcdMerged()
-      .filter((i) => !s || i.code.toLowerCase().includes(s) || i.title.toLowerCase().includes(s))
+      .filter((i) => !s || i.code.toLowerCase().includes(s) || matchPhraseOrWord(i.title, s) || i.title.toLowerCase().includes(s))
       .forEach((i) =>
         out.push({
           id: "i-" + i.code,
