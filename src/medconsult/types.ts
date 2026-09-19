@@ -118,6 +118,7 @@ export type SettingsState = {
   guidelineDisplay: GuidelineDisplay;
   railCollapsed: boolean;
   blocksAsSpoiler: boolean;
+  splitPct: number;
   openRouterKey: string;
   aiModel: string;
 };

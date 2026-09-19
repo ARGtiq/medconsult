@@ -47,6 +47,21 @@ export function SettingsPage() {
             <p className="mt-1 text-xs text-ink-soft">
               Вкл — клик по заголовку открывает один блок. Выкл — все поля сразу на виду.
             </p>
+            <label className="mt-3 block text-sm">
+              Ширина сборки / Медлок
+              <input
+                type="range"
+                min={22}
+                max={70}
+                value={settings.splitPct ?? 38}
+                onChange={(e) => setSettings({ splitPct: Number(e.target.value) })}
+                className="mt-1 w-full accent-teal"
+              />
+              <span className="mt-0.5 block text-xs text-ink-soft">
+                сборка {settings.splitPct ?? 38}% · Медлок {100 - (settings.splitPct ?? 38)}%. На протоколе можно тянуть
+                разделитель.
+              </span>
+            </label>
           </Card>
           <Card title="Сеанс станка">
             <p className="mt-2 text-xs text-ink-soft">Протокол v2 + старые неймспейсы в одном файле.</p>

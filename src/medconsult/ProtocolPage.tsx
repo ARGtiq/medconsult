@@ -1,5 +1,5 @@
 import { Copy, Plus, Printer, Eraser } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
@@ -29,6 +29,14 @@ import { PlusStudyButton, StudyCard } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 
+const SPLIT_MIN = 22;
+const SPLIT_MAX = 70;
+const SPLIT_DEFAULT = 38;
+
+function clampSplit(n: number) {
+  return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, Math.round(n)));
+}
+
 export function ProtocolPage() {
   const store = useAppStore();
   const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation } =
@@ -44,6 +52,10 @@ export function ProtocolPage() {
   const [dictOpen, setDictOpen] = useState(false);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
+  const [liveSplit, setLiveSplit] = useState<number | null>(null);
+  const splitWrap = useRef<HTMLDivElement>(null);
+  const splitDragging = useRef(false);
+  const splitLive = useRef(SPLIT_DEFAULT);
   const patient = patients.find((p) => p.id === session.patientId);
   const guideline = compactGuideline(session.diagnosisCode);
   const packs = useMemo(
@@ -225,6 +237,23 @@ export function ProtocolPage() {
       currentMedications,
       anamnesisVitae: composeVitae(d, { medications: currentMedications, allergies }),
     });
+  };
+
+  const splitPct = clampSplit(liveSplit ?? settings.splitPct ?? SPLIT_DEFAULT);
+  splitLive.current = splitPct;
+
+  const moveSplit = (clientX: number) => {
+    const wrap = splitWrap.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    if (rect.width < 8) return;
+    setLiveSplit(clampSplit(((clientX - rect.left) / rect.width) * 100));
+  };
+
+  const commitSplit = () => {
+    splitDragging.current = false;
+    store.setSettings({ splitPct: splitLive.current });
+    setLiveSplit(null);
   };
 
   const kindBtn = (id: "primary" | "followup" | "study" | "document", label: string) => (
@@ -897,9 +926,67 @@ export function ProtocolPage() {
           </button>
         </div>
       </div>
-      <div className="grid min-h-[calc(100dvh-3rem)] grid-cols-1 pb-16 md:grid-cols-[minmax(280px,420px)_1fr] md:pb-0">
-        <div className={`min-h-0 border-r border-line ${mobileTab === "build" ? "block" : "hidden md:block"}`}>{assembly}</div>
-        <div className={`min-h-0 ${mobileTab === "preview" ? "block" : "hidden md:block"}`}>{preview}</div>
+      <div
+        ref={splitWrap}
+        className={`grid min-h-[calc(100dvh-3rem)] grid-cols-1 pb-16 md:pb-0 md:[grid-template-columns:minmax(240px,var(--split))_8px_minmax(280px,1fr)] ${
+          liveSplit != null ? "select-none" : ""
+        }`}
+        style={{ ["--split" as string]: `${splitPct}%` }}
+      >
+        <div className={`min-h-0 min-w-0 ${mobileTab === "build" ? "block" : "hidden md:block"}`}>{assembly}</div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ширина сборки и Медлок"
+          aria-valuemin={SPLIT_MIN}
+          aria-valuemax={SPLIT_MAX}
+          aria-valuenow={splitPct}
+          tabIndex={0}
+          className="relative hidden cursor-col-resize touch-none outline-none md:block"
+          onPointerDown={(e) => {
+            splitDragging.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            moveSplit(e.clientX);
+          }}
+          onPointerMove={(e) => {
+            if (!splitDragging.current) return;
+            moveSplit(e.clientX);
+          }}
+          onPointerUp={commitSplit}
+          onPointerCancel={commitSplit}
+          onDoubleClick={() => {
+            store.setSettings({ splitPct: SPLIT_DEFAULT });
+            setLiveSplit(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              store.setSettings({ splitPct: clampSplit(splitPct - 2) });
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              store.setSettings({ splitPct: clampSplit(splitPct + 2) });
+            } else if (e.key === "Home") {
+              e.preventDefault();
+              store.setSettings({ splitPct: SPLIT_MIN });
+            } else if (e.key === "End") {
+              e.preventDefault();
+              store.setSettings({ splitPct: SPLIT_MAX });
+            }
+          }}
+        >
+          <span
+            className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 ${
+              liveSplit != null ? "bg-teal" : "bg-line"
+            }`}
+          />
+          <span
+            className={`absolute top-1/2 left-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+              liveSplit != null ? "bg-teal" : "bg-mute"
+            }`}
+          />
+        </div>
+        <div className={`min-h-0 min-w-0 ${mobileTab === "preview" ? "block" : "hidden md:block"}`}>{preview}</div>
       </div>
     </AppShell>
   );
