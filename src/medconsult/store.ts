@@ -279,6 +279,7 @@ type AppStore = {
   saveVisit: () => void;
   loadVisit: (id: string) => void;
   loadLastForPatient: () => void;
+  clearProtocol: () => void;
   setAiUndo: (u: { section: string; before: string } | null) => void;
   undoAi: () => void;
   exportData: () => string;
@@ -336,25 +337,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const prev = get().session;
     let patients = get().patients;
     let session: SessionState;
-    if (patch.patientId && patch.patientId !== prev.patientId) {
+    const switching = "patientId" in patch && (patch.patientId || "") !== (prev.patientId || "");
+    if (switching) {
       patients = persistGlobals(prev, patients);
-      const { patientId, ...rest } = patch;
-      session = applyGlobals(
-        blankSession({
-          patientId,
-          visitKind: rest.visitKind ?? prev.visitKind,
-          mode: rest.mode ?? prev.mode,
-        }),
-        patients.find((p) => p.id === patientId),
-      );
+      const patientId = patch.patientId || "";
+      const rest = { ...patch };
+      delete rest.patientId;
+      session = blankSession({
+        patientId,
+        visitKind: rest.visitKind ?? prev.visitKind,
+        mode: rest.mode ?? prev.mode,
+      });
+      if (patientId) {
+        session = applyGlobals(session, patients.find((p) => p.id === patientId));
+      }
       session = { ...session, ...rest, patientId };
     } else {
       session = { ...prev, ...patch };
     }
-    const switched = !!(patch.patientId && patch.patientId !== prev.patientId);
     const vitaeTouched =
       "vitaeDraft" in patch || "anamnesisVitae" in patch || "extraBlocks" in patch || "studies" in patch;
-    if (vitaeTouched && !switched) patients = persistGlobals(session, patients);
+    if (vitaeTouched && !switching) patients = persistGlobals(session, patients);
     persistSession(session);
     set({ session, patients });
   },
@@ -771,6 +774,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
     persistSession(next);
     set({ session: next });
     get().setToast("Повторил прошлый сеанс");
+  },
+
+  clearProtocol() {
+    const prev = get().session;
+    const patients = persistGlobals(prev, get().patients);
+    let session = blankSession({
+      patientId: prev.patientId,
+      visitKind: prev.visitKind,
+      mode: "consult",
+    });
+    if (prev.patientId) {
+      session = applyGlobals(session, patients.find((p) => p.id === prev.patientId));
+    }
+    persistSession(session);
+    set({ session, patients, aiUndo: null });
+    get().setToast(prev.patientId ? "Протокол очищен · карточка на месте" : "Протокол очищен");
   },
 
   setAiUndo(u) {

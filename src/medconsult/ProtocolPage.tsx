@@ -1,4 +1,4 @@
-import { Copy, Plus, Printer } from "lucide-react";
+import { Copy, Plus, Printer, Eraser } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
@@ -269,7 +269,11 @@ export function ProtocolPage() {
             drugs
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="rounded-[10px] border border-dashed border-line px-2.5 py-1.5 text-[11px] text-mute">
+          Протокол без карточки. Аллергии и постоянные препараты не подтянутся.
+        </div>
+      )}
 
       {documentMode && !(session.docStd || []).length && !(session.extraBlocks || []).length && !session.notes.trim() && (
         <p className="rounded-[10px] border border-dashed border-line px-3 py-3 text-sm text-ink-soft">
@@ -809,7 +813,7 @@ export function ProtocolPage() {
           {composeHeaderLine(session, patient).split("  ")[0]}
         </span>
         <span className="hidden shrink-0 font-semibold sm:inline">
-          {patient ? `${formatPatient(patient)}, ${patient.age}` : ""}
+          {patient ? `${formatPatient(patient)}, ${patient.age}` : "без пациента"}
         </span>
         <button
           type="button"
@@ -869,9 +873,20 @@ export function ProtocolPage() {
   return (
     <AppShell
       topRight={
-        <button type="button" className="rounded-lg border border-line px-2 py-1 text-xs" onClick={() => store.saveVisit()}>
-          Сохранить в историю
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            title="Очистить протокол. Карточка пациента не трогается."
+            className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs text-ink-soft hover:border-danger hover:bg-danger-soft hover:text-danger"
+            onClick={() => store.clearProtocol()}
+          >
+            <Eraser className="size-3.5" />
+            стереть
+          </button>
+          <button type="button" className="rounded-lg border border-line px-2 py-1 text-xs" onClick={() => store.saveVisit()}>
+            Сохранить в историю
+          </button>
+        </div>
       }
     >
       <div className="border-b border-line bg-surface px-2 md:hidden">

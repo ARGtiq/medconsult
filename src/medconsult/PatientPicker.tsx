@@ -26,10 +26,13 @@ export function PatientPicker() {
   const items: TypeaheadItem[] = useMemo(() => {
     const s = q.trim().toLowerCase();
     const list = s ? patients.filter((p) => haystack(p).includes(s)) : patients;
-    return list.slice(0, 12).map((p) => ({
+    const mapped = list.slice(0, 12).map((p) => ({
       id: p.id,
       label: `${formatPatient(p)}${p.age ? `, ${p.age}` : ""}${p.dob ? ` · ${(p.dob || "").slice(0, 4)}` : ""}`,
     }));
+    const none = { id: "__none__", label: "без пациента" };
+    if (!s || "без пациента".includes(s) || "без".startsWith(s) || s.startsWith("без")) return [none, ...mapped];
+    return mapped;
   }, [patients, q]);
 
   useLayoutEffect(() => {
@@ -71,16 +74,16 @@ export function PatientPicker() {
           onChange={setQ}
           items={items}
           onPick={(it) => {
-            setSession({ patientId: it.id });
+            setSession({ patientId: it.id === "__none__" ? "" : it.id });
             setQ("");
           }}
           idleLabel={
             selected
               ? `${formatPatient(selected)}${selected.age ? `, ${selected.age}` : ""}${selected.dob ? ` · ${(selected.dob || "").slice(0, 4)}` : ""}`
-              : undefined
+              : "без пациента"
           }
-          placeholder="Пациент: фамилия, имя, отчество, год"
-          emptyHint={q.trim() ? "Никого не нашлось. «+» — завести карточку" : "Начните вводить фамилию"}
+          placeholder="Пациент: фамилия, имя — или без карточки"
+          emptyHint={q.trim() ? "Никого не нашлось. «+» — завести карточку. Или выбери «без пациента»" : "без пациента — черновик без карточки"}
         />
       </div>
       <button

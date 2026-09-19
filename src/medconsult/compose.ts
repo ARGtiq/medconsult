@@ -12,7 +12,7 @@ export type PreviewBlock = {
 
 export function composeHeader(session: SessionState, patient: Patient | undefined) {
   if (session.headerOverride.trim()) return session.headerOverride.trim();
-  const who = patient ? `${patient.lastName} ${patient.firstName}, ${patient.age} года` : "Пациент не выбран";
+  const who = patient ? `${patient.lastName} ${patient.firstName}, ${patient.age} года` : "Без пациента";
   const kind = visitKindLabel(session.visitKind);
   const what = modeLabel(session.mode, session.studies);
   if (session.mode === "document") {
