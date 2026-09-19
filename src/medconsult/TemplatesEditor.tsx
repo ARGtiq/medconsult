@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getTemplates,
   resetTemplates,
@@ -10,8 +10,81 @@ import {
   type VitaePreset,
   type VisitPack,
 } from "./data/templates";
-import { emptyScale, type ScaleDef, type ScaleItem } from "./data/questionnaires";
+import { emptyScale, itemKind, type ScaleDef, type ScaleItem, type ScaleItemKind, type ScaleVerdict } from "./data/questionnaires";
+import { searchIcd } from "./live";
+import { Typeahead } from "./Typeahead";
 import type { LocalPack, WorkKind } from "./types";
+
+function IcdCodesField({
+  codes,
+  onChange,
+  placeholder = "МКБ: N40, гиперплаз… неполный код тоже",
+}: {
+  codes: string[];
+  onChange: (c: string[]) => void;
+  placeholder?: string;
+}) {
+  const [q, setQ] = useState("");
+  const hits = useMemo(() => searchIcd(q, 12), [q]);
+  function add(code: string) {
+    const c = code.trim();
+    if (!c) return;
+    if (codes.some((x) => x.toUpperCase() === c.toUpperCase())) return;
+    onChange([...codes, c]);
+  }
+  return (
+    <div>
+      {codes.length > 0 && (
+        <div className="mb-1 flex flex-wrap gap-1">
+          {codes.map((c) => (
+            <span
+              key={c}
+              className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
+            >
+              {c}
+              <button type="button" className="text-mute" onClick={() => onChange(codes.filter((x) => x !== c))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <Typeahead
+        value={q}
+        onChange={setQ}
+        items={hits.map((h) => ({ id: h.code, label: h.code, hint: h.title }))}
+        onPick={(it) => add(it.id)}
+        onSubmitCustom={add}
+        placeholder={placeholder}
+        emptyHint={q.trim() ? "Enter — как есть" : undefined}
+      />
+    </div>
+  );
+}
+
+const ITEM_KINDS: { id: ScaleItemKind; label: string }[] = [
+  { id: "score", label: "балл" },
+  { id: "yesno", label: "да/нет" },
+  { id: "choice", label: "варианты" },
+  { id: "text", label: "текст" },
+  { id: "heading", label: "заголовок" },
+];
+
+function formatOptions(it: ScaleItem) {
+  return (it.options || []).map((o) => `${o.label}=${o.score ?? o.value}`).join("; ");
+}
+
+function parseOptions(raw: string): ScaleItem["options"] {
+  return raw
+    .split(/[;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s, i) => {
+      const m = s.match(/^(.*?)\s*=\s*(-?\d+(?:[.,]\d+)?)$/);
+      if (m) return { value: String(i), label: m[1].trim(), score: Number(m[2].replace(",", ".")) };
+      return { value: String(i), label: s, score: i };
+    });
+}
 
 export function TemplatesEditor() {
   const [layer, setLayer] = useState<"blocks" | "packs">("blocks");
@@ -227,19 +300,14 @@ function VisitPacksEditor({
               ×
             </button>
           </div>
-          <input
-            value={current.codes.join(", ")}
-            onChange={(e) =>
-              patch({
-                codes: e.target.value
-                  .split(/[,;\s]+/)
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="МКБ, через запятую — пусто = любой диагноз"
-            className="w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
-          />
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+            <IcdCodesField
+              codes={current.codes}
+              onChange={(codes) => patch({ codes })}
+              placeholder="коды или кусок названия — пусто = любой диагноз"
+            />
+          </div>
           <div>
             <div className="text-[10px] tracking-wide text-mute uppercase">вид</div>
             <div className="mt-1 flex flex-wrap gap-1">
@@ -356,10 +424,18 @@ function QuestionnaireEditor({
     patch({ items: current.items.map((it, idx) => (idx === i ? { ...it, ...p } : it)) });
   }
 
+  function patchVerdict(i: number, p: Partial<ScaleVerdict>) {
+    if (!current) return;
+    const list = [...(current.verdicts || [])];
+    list[i] = { ...list[i], ...p };
+    patch({ verdicts: list });
+  }
+
   return (
     <div>
       <p className="mb-2 text-xs text-ink-soft">
-        Каждая анкета вставляется в протокол отдельно. Правь вопросы, добавляй свои шкалы, ненужные — удаляй.
+        Каждая анкета вставляется отдельно. МКБ — чтобы предлагать её при диагнозе. Типы вопросов: балл, да/нет, варианты,
+        текст, заголовок блока. Сумма и вердикт — если нужно.
       </p>
       <div className="mb-2 flex flex-wrap gap-1">
         {items.map((s) => (
@@ -413,55 +489,186 @@ function QuestionnaireEditor({
             placeholder="подсказка под названием"
             className="w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
           />
-          <div className="text-[10px] tracking-wide text-mute uppercase">вопросы · сумма = балл</div>
-          {current.items.map((it, i) => (
-            <div key={it.key} className="flex flex-wrap items-center gap-1">
-              <input
-                value={it.label}
-                onChange={(e) => patchItem(i, { label: e.target.value })}
-                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
-              />
-              <input
-                value={it.min}
-                onChange={(e) => patchItem(i, { min: Number(e.target.value) || 0 })}
-                className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
-                title="мин"
-              />
-              <span className="text-[10px] text-mute">–</span>
-              <input
-                value={it.max}
-                onChange={(e) => patchItem(i, { max: Number(e.target.value) || 0 })}
-                className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
-                title="макс"
-              />
-              <button
-                type="button"
-                className="text-xs text-danger"
-                onClick={() => patch({ items: current.items.filter((_, j) => j !== i) })}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="text-xs font-medium text-teal"
-            onClick={() =>
-              patch({
-                items: [
-                  ...current.items,
-                  {
-                    key: `${current.totalKey}_${current.items.length + 1}_${Date.now().toString(36)}`,
-                    label: `вопрос ${current.items.length + 1}`,
-                    min: 0,
-                    max: 5,
-                  },
-                ],
-              })
-            }
-          >
-            + вопрос
-          </button>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+            <IcdCodesField codes={current.codes || []} onChange={(codes) => patch({ codes })} />
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={current.sum !== false}
+              onChange={(e) => patch({ sum: e.target.checked })}
+            />
+            считать сумму баллов
+          </label>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">вердикт по сумме</div>
+            {(current.verdicts || []).map((v, i) => (
+              <div key={i} className="mt-1 flex flex-wrap items-center gap-1">
+                <input
+                  value={v.min}
+                  onChange={(e) => patchVerdict(i, { min: Number(e.target.value) })}
+                  className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
+                  title="от"
+                />
+                <span className="text-[10px] text-mute">–</span>
+                <input
+                  value={v.max}
+                  onChange={(e) => patchVerdict(i, { max: Number(e.target.value) })}
+                  className="w-12 rounded-md border border-line bg-surface px-1 py-1 text-center text-xs tabular-nums"
+                  title="до"
+                />
+                <input
+                  value={v.text}
+                  onChange={(e) => patchVerdict(i, { text: e.target.value })}
+                  placeholder="лёгкие"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+                />
+                <label className="flex items-center gap-1 text-[10px] text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={!!v.flag}
+                    onChange={(e) => patchVerdict(i, { flag: e.target.checked })}
+                  />
+                  откл.
+                </label>
+                <button
+                  type="button"
+                  className="text-xs text-danger"
+                  onClick={() => patch({ verdicts: (current.verdicts || []).filter((_, j) => j !== i) })}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="mt-1 text-xs font-medium text-teal"
+              onClick={() =>
+                patch({
+                  verdicts: [...(current.verdicts || []), { min: 0, max: 0, text: "норма" }],
+                })
+              }
+            >
+              + вердикт
+            </button>
+          </div>
+          <div className="text-[10px] tracking-wide text-mute uppercase">вопросы</div>
+          {current.items.map((it, i) => {
+            const kind = itemKind(it);
+            return (
+              <div key={it.key} className="rounded-md border border-line bg-surface p-1.5">
+                <div className="flex flex-wrap items-center gap-1">
+                  <input
+                    value={it.label}
+                    onChange={(e) => patchItem(i, { label: e.target.value })}
+                    placeholder={kind === "heading" ? "заголовок блока" : "вопрос"}
+                    className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                  />
+                  <select
+                    value={kind}
+                    onChange={(e) => {
+                      const next = e.target.value as ScaleItemKind;
+                      const extra: Partial<ScaleItem> = { kind: next };
+                      if (next === "yesno") {
+                        extra.min = 0;
+                        extra.max = 1;
+                        extra.binary = true;
+                      } else if (next === "heading" || next === "text") {
+                        extra.skipSum = true;
+                      } else {
+                        extra.binary = false;
+                        extra.skipSum = false;
+                      }
+                      patchItem(i, extra);
+                    }}
+                    className="rounded-md border border-line bg-paper px-1 py-1 text-[11px]"
+                  >
+                    {ITEM_KINDS.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-xs text-danger"
+                    onClick={() => patch({ items: current.items.filter((_, j) => j !== i) })}
+                  >
+                    ×
+                  </button>
+                </div>
+                {kind === "score" && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <input
+                      value={it.min}
+                      onChange={(e) => patchItem(i, { min: Number(e.target.value) || 0 })}
+                      className="w-12 rounded-md border border-line bg-paper px-1 py-1 text-center text-xs tabular-nums"
+                      title="мин"
+                    />
+                    <span className="text-[10px] text-mute">–</span>
+                    <input
+                      value={it.max}
+                      onChange={(e) => patchItem(i, { max: Number(e.target.value) || 0 })}
+                      className="w-12 rounded-md border border-line bg-paper px-1 py-1 text-center text-xs tabular-nums"
+                      title="макс"
+                    />
+                  </div>
+                )}
+                {kind === "choice" && (
+                  <input
+                    value={formatOptions(it)}
+                    onChange={(e) => patchItem(i, { options: parseOptions(e.target.value) })}
+                    placeholder="нет=0; редко=1; часто=2"
+                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+                  />
+                )}
+              </div>
+            );
+          })}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="text-xs font-medium text-teal"
+              onClick={() =>
+                patch({
+                  items: [
+                    ...current.items,
+                    {
+                      key: `${current.totalKey}_${current.items.length + 1}_${Date.now().toString(36)}`,
+                      label: `вопрос ${current.items.length + 1}`,
+                      min: 0,
+                      max: 5,
+                      kind: "score",
+                    },
+                  ],
+                })
+              }
+            >
+              + вопрос
+            </button>
+            <button
+              type="button"
+              className="text-xs font-medium text-teal"
+              onClick={() =>
+                patch({
+                  items: [
+                    ...current.items,
+                    {
+                      key: `${current.totalKey}_h_${Date.now().toString(36)}`,
+                      label: "блок",
+                      min: 0,
+                      max: 0,
+                      kind: "heading",
+                      skipSum: true,
+                    },
+                  ],
+                })
+              }
+            >
+              + заголовок
+            </button>
+          </div>
         </div>
       ) : (
         <p className="text-xs text-mute">Пока нет анкет — нажми «+ анкета».</p>
@@ -484,22 +691,13 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
               onChange={(e) => patch(i, { label: e.target.value })}
               className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
             />
-            <input
-              value={p.codes.join(", ")}
-              onChange={(e) =>
-                patch(i, {
-                  codes: e.target.value
-                    .split(/[,;\s]+/)
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="МКБ"
-              className="w-36 rounded-md border border-line bg-surface px-2 py-1 text-sm"
-            />
             <button type="button" className="text-xs text-danger" onClick={() => onChange(packs.filter((_, j) => j !== i))}>
               ×
             </button>
+          </div>
+          <div className="mt-1">
+            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+            <IcdCodesField codes={p.codes} onChange={(codes) => patch(i, { codes })} />
           </div>
           <textarea
             value={p.chips.join("\n")}

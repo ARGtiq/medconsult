@@ -62,6 +62,17 @@ export function SettingsPage() {
                 разделитель.
               </span>
             </label>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.studyDeviations !== false}
+                onChange={(e) => setSettings({ studyDeviations: e.target.checked })}
+              />
+              Итог отклонений в обследованиях
+            </label>
+            <p className="mt-1 text-xs text-ink-soft">
+              Спойлер со всеми значениями вне нормы. Выкл — не показывать ни на станке, ни в Медлок.
+            </p>
           </Card>
           <Card title="Сеанс станка">
             <p className="mt-2 text-xs text-ink-soft">Протокол v2 + старые неймспейсы в одном файле.</p>

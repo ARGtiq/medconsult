@@ -1,9 +1,17 @@
 import { Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { applyComputed, STUDY_GROUP_LABEL, STUDY_GROUP_ORDER, liveScales, studyMatchesQuery } from "./data/studies";
+import {
+  applyComputed,
+  collectDeviations,
+  fieldAbnormal,
+  STUDY_GROUP_LABEL,
+  STUDY_GROUP_ORDER,
+  liveScales,
+  studyMatchesQuery,
+} from "./data/studies";
 import { useTemplates } from "./data/templates";
-import { allStudiesLive, getStudyLive } from "./live";
+import { allStudiesLive, getStudyLive, icdMatches } from "./live";
 import { scaleFromStudyKey } from "./data/questionnaires";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
@@ -76,10 +84,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
+                  const bad = !f.computed && fieldAbnormal(inst.fields[f.key] || value, f.normal);
                   return (
                     <label
                       key={f.key}
-                      className={`rounded-md px-1.5 py-1 ${f.computed ? "bg-teal-soft" : "bg-paper"}`}
+                      className={`rounded-md px-1.5 py-1 ${
+                        f.computed ? "bg-teal-soft" : bad ? "bg-danger-soft" : "bg-paper"
+                      }`}
                     >
                       <span className="block text-[10px] text-mute">{f.label}</span>
                       {f.computed ? (
@@ -95,7 +106,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                           className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
                         />
                       )}
-                      {f.normal && <span className="block text-[10px] text-teal">{f.normal}</span>}
+                      {f.normal && (
+                        <span className={`block text-[10px] ${bad ? "text-danger" : "text-teal"}`}>{f.normal}</span>
+                      )}
                       {was && (
                         <span className="mt-0.5 block text-[10px] text-mute">
                           было: {was}
@@ -138,15 +151,24 @@ export function PlusStudyButton() {
   const { session, addStudy } = useAppStore();
   const templates = useTemplates();
   const studies = useMemo(() => allStudiesLive(), [templates.questionnaires]);
+  const dx = session.diagnosisCode;
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const cat of STUDY_GROUP_ORDER) out[cat] = studies.filter((s) => s.category === cat).length;
     return out;
   }, [studies]);
-  const filtered = useMemo(
-    () => studies.filter((s) => s.category === tab && studyMatchesQuery(s, q)),
-    [studies, tab, q],
-  );
+  const filtered = useMemo(() => {
+    let list = studies.filter((s) => s.category === tab && studyMatchesQuery(s, q));
+    if (tab === "questionnaire" && dx) {
+      const scales = liveScales();
+      list = [...list].sort((a, b) => {
+        const am = icdMatches(scaleFromStudyKey(a.key, scales)?.codes, dx) ? 0 : 1;
+        const bm = icdMatches(scaleFromStudyKey(b.key, scales)?.codes, dx) ? 0 : 1;
+        return am - bm;
+      });
+    }
+    return list;
+  }, [studies, tab, q, dx]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -267,6 +289,10 @@ export function PlusStudyButton() {
               {filtered.length === 0 && <p className="px-2 py-3 text-xs text-mute">Ничего не нашлось</p>}
               {filtered.map((s, i) => {
                 const on = session.studies.some((e) => e.key === s.key);
+                const byIcd =
+                  tab === "questionnaire" && dx
+                    ? icdMatches(scaleFromStudyKey(s.key, liveScales())?.codes, dx)
+                    : false;
                 return (
                   <button
                     key={s.key}
@@ -284,6 +310,9 @@ export function PlusStudyButton() {
                     }`}
                   >
                     {s.label}
+                    {byIcd ? (
+                      <span className="ml-1 rounded bg-teal-soft px-1 text-[10px] font-semibold text-teal">по МКБ</span>
+                    ) : null}
                     {s.hint ? (
                       <span className="mt-0.5 block text-[10px] font-normal opacity-80">{s.hint}</span>
                     ) : null}
@@ -296,5 +325,35 @@ export function PlusStudyButton() {
           document.body,
         )}
     </div>
+  );
+}
+
+export function DeviationsSpoiler() {
+  const { session, settings } = useAppStore();
+  const templates = useTemplates();
+  const list = useMemo(
+    () => collectDeviations(session.studies, getStudyLive),
+    [session.studies, templates.questionnaires],
+  );
+  const [open, setOpen] = useState(true);
+  if (settings.studyDeviations === false || !list.length) return null;
+  return (
+    <section className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2">
+      <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setOpen((v) => !v)}>
+        <h4 className="text-sm font-medium">Отклонения</h4>
+        <span className="rounded bg-danger-soft px-1.5 text-[10px] font-semibold text-danger">{list.length}</span>
+        <span className="ml-auto text-[10px] text-mute">{open ? "скрыть" : "показать"}</span>
+      </button>
+      {open && (
+        <ul className="mt-1.5 space-y-1 text-xs leading-snug">
+          {list.map((d, i) => (
+            <li key={`${d.studyKey}-${d.label}-${i}`}>
+              <span className="font-medium">{d.study}.</span> {d.label}: {d.value}
+              {d.normal ? <span className="text-ink-soft"> · норма {d.normal}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

@@ -21,6 +21,43 @@ export function liveIcdMerged(): { code: string; title: string }[] {
   return [...live, ...ICD.filter((i) => !codes.has(i.code))];
 }
 
+function compactIcd(s: string) {
+  return s.toLowerCase().replace(/[.\s]/g, "");
+}
+
+export function searchIcd(query: string, limit = 12): { code: string; title: string }[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const compact = compactIcd(q);
+  const scored: { code: string; title: string; score: number }[] = [];
+  for (const i of liveIcdMerged()) {
+    const code = i.code.toLowerCase();
+    const cc = compactIcd(i.code);
+    const title = i.title.toLowerCase();
+    let score = 0;
+    if (code === q || cc === compact) score = 100;
+    else if (code.startsWith(q) || cc.startsWith(compact)) score = 90;
+    else if (cc.includes(compact) || code.includes(q)) score = 70;
+    else if (title.startsWith(q)) score = 55;
+    else if (title.split(/[\s,;:()]+/).some((w) => w.startsWith(q))) score = 45;
+    else if (title.includes(q)) score = 30;
+    if (score) scored.push({ code: i.code, title: i.title, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code, "ru"));
+  return scored.slice(0, limit).map(({ code, title }) => ({ code, title }));
+}
+
+export function icdMatches(codes: string[] | undefined, diagnosis: string) {
+  if (!codes?.length || !diagnosis) return false;
+  const d = compactIcd(diagnosis);
+  if (!d) return false;
+  return codes.some((c) => {
+    const u = compactIcd(c);
+    if (!u) return false;
+    return d === u || d.startsWith(u) || u.startsWith(d);
+  });
+}
+
 export function liveDrugs(): { name: string; dose: string }[] {
   try {
     return Object.values(store.getDrugInfoAll() || {})

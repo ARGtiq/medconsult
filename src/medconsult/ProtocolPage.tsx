@@ -25,7 +25,7 @@ import {
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
-import { PlusStudyButton, StudyCard } from "./StudyCard";
+import { PlusStudyButton, StudyCard, DeviationsSpoiler } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 
@@ -70,13 +70,16 @@ export function ProtocolPage() {
   const documentMode = session.mode === "document";
   const want = (id: string) => consult || (documentMode && (session.docStd || []).includes(id));
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
-  const blocks = useMemo(() => composeBlocks(session, patient), [session, patient]);
+  const blocks = useMemo(
+    () => composeBlocks(session, patient, { deviations: settings.studyDeviations !== false }),
+    [session, patient, settings.studyDeviations],
+  );
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
   const diagnosisText = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
 
   useEffect(() => {
     function copyAll() {
-      copyText(composeAll(session, patient, false)).then((ok) =>
+      copyText(composeAll(session, patient, false, { deviations: settings.studyDeviations !== false })).then((ok) =>
         store.setToast(ok ? "В буфере — без шапки" : "Не скопировалось"),
       );
     }
@@ -669,6 +672,7 @@ export function ProtocolPage() {
       {session.studies.map((s) => (
         <StudyCard key={s.key} studyKey={s.key} />
       ))}
+      <DeviationsSpoiler />
 
       {(session.extraBlocks || []).map((b) => (
         <Sec
@@ -814,7 +818,7 @@ export function ProtocolPage() {
           type="button"
           className="shrink-0 rounded-lg bg-teal px-3 py-1.5 text-sm font-semibold text-paper whitespace-nowrap"
           onClick={() =>
-            copyText(composeAll(session, patient, false)).then((ok) =>
+            copyText(composeAll(session, patient, false, { deviations: settings.studyDeviations !== false })).then((ok) =>
               store.setToast(ok ? "В буфере — без шапки" : "Не скопировалось"),
             )
           }

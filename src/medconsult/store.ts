@@ -30,6 +30,7 @@ export const defaultSettings = (): SettingsState => ({
   railCollapsed: true,
   blocksAsSpoiler: true,
   splitPct: 38,
+  studyDeviations: true,
   openRouterKey: "",
   aiModel: "openai/gpt-4o-mini",
 });

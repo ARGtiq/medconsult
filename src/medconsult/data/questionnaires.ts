@@ -1,3 +1,18 @@
+export type ScaleItemKind = "score" | "yesno" | "choice" | "heading" | "text";
+
+export type ScaleOption = {
+  value: string;
+  label: string;
+  score?: number;
+};
+
+export type ScaleVerdict = {
+  min: number;
+  max: number;
+  text: string;
+  flag?: boolean;
+};
+
 export type ScaleItem = {
   key: string;
   label: string;
@@ -6,6 +21,9 @@ export type ScaleItem = {
   values?: number[];
   binary?: boolean;
   group?: string;
+  kind?: ScaleItemKind;
+  options?: ScaleOption[];
+  skipSum?: boolean;
 };
 
 export type ScaleDomain = {
@@ -21,13 +39,34 @@ export type ScaleDef = {
   items: ScaleItem[];
   extra?: ScaleItem;
   domains?: ScaleDomain[];
+  codes?: string[];
+  sum?: boolean;
+  verdicts?: ScaleVerdict[];
 };
+
+export function itemKind(it: ScaleItem): ScaleItemKind {
+  if (it.kind) return it.kind;
+  if (it.binary) return "yesno";
+  return "score";
+}
+
+export function itemCountable(it: ScaleItem) {
+  const k = itemKind(it);
+  return k !== "heading" && k !== "text" && !it.skipSum;
+}
 
 export const QUESTION_SCALES: ScaleDef[] = [
   {
     totalKey: "ipss",
     title: "IPSS",
     hint: "симптомы за месяц · 0–5",
+    codes: ["N40", "N40.0", "N40.1"],
+    sum: true,
+    verdicts: [
+      { min: 0, max: 7, text: "лёгкие" },
+      { min: 8, max: 19, text: "умеренные", flag: true },
+      { min: 20, max: 35, text: "тяжёлые", flag: true },
+    ],
     items: [
       { key: "ipss_1", label: "Неполное опорожнение", min: 0, max: 5 },
       { key: "ipss_2", label: "Повторно мочиться < 2 ч", min: 0, max: 5 },
@@ -47,6 +86,15 @@ export const QUESTION_SCALES: ScaleDef[] = [
     totalKey: "iief5",
     title: "МИЭФ-5",
     hint: "4 недели · 1–5, 0 = не было активности",
+    codes: ["N48.4", "N52"],
+    sum: true,
+    verdicts: [
+      { min: 22, max: 25, text: "нет ЭД" },
+      { min: 17, max: 21, text: "лёгкая ЭД", flag: true },
+      { min: 12, max: 16, text: "лёгкая/умеренная ЭД", flag: true },
+      { min: 8, max: 11, text: "умеренная ЭД", flag: true },
+      { min: 5, max: 7, text: "тяжёлая ЭД", flag: true },
+    ],
     items: [
       { key: "iief_1", label: "Уверенность в эрекции", min: 1, max: 5 },
       { key: "iief_2", label: "Эрекция достаточна для введения", min: 0, max: 5 },
@@ -59,6 +107,13 @@ export const QUESTION_SCALES: ScaleDef[] = [
     totalKey: "pedt",
     title: "PEDT",
     hint: "0–4",
+    codes: ["F52.4", "N53"],
+    sum: true,
+    verdicts: [
+      { min: 0, max: 8, text: "ПЭ нет" },
+      { min: 9, max: 10, text: "вероятная ПЭ", flag: true },
+      { min: 11, max: 20, text: "ПЭ", flag: true },
+    ],
     items: [
       { key: "pedt_1", label: "Трудно отсрочить эякуляцию", min: 0, max: 4 },
       { key: "pedt_2", label: "Эякуляция раньше желания", min: 0, max: 4 },
@@ -71,6 +126,14 @@ export const QUESTION_SCALES: ScaleDef[] = [
     totalKey: "iciq",
     title: "ICIQ-SF",
     hint: "недержание",
+    codes: ["N39.3", "N39.4"],
+    sum: true,
+    verdicts: [
+      { min: 0, max: 0, text: "нет" },
+      { min: 1, max: 5, text: "лёгкая", flag: true },
+      { min: 6, max: 12, text: "умеренная", flag: true },
+      { min: 13, max: 21, text: "тяжёлая", flag: true },
+    ],
     items: [
       { key: "iciq_1", label: "Как часто подтекает", min: 0, max: 5 },
       { key: "iciq_2", label: "Сколько мочи", min: 0, max: 6, values: [0, 2, 4, 6] },
@@ -81,6 +144,13 @@ export const QUESTION_SCALES: ScaleDef[] = [
     totalKey: "nihcpsi",
     title: "NIH-CPSI",
     hint: "простатит · 0–43",
+    codes: ["N41", "N41.1"],
+    sum: true,
+    verdicts: [
+      { min: 0, max: 14, text: "лёгкие" },
+      { min: 15, max: 29, text: "умеренные", flag: true },
+      { min: 30, max: 43, text: "тяжёлые", flag: true },
+    ],
     domains: [
       { key: "nihcpsi_pain", label: "боль", itemKeys: ["cpsi_p1", "cpsi_p2", "cpsi_p3", "cpsi_p4", "cpsi_p5", "cpsi_p6", "cpsi_p7", "cpsi_p8"] },
       { key: "nihcpsi_urinary", label: "мочеиспуск.", itemKeys: ["cpsi_u1", "cpsi_u2"] },
@@ -106,6 +176,14 @@ export const QUESTION_SCALES: ScaleDef[] = [
     totalKey: "ams",
     title: "AMS",
     hint: "1 нет — 5 очень сильно",
+    codes: ["E29", "E29.1"],
+    sum: true,
+    verdicts: [
+      { min: 17, max: 26, text: "нет" },
+      { min: 27, max: 36, text: "лёгкие", flag: true },
+      { min: 37, max: 49, text: "умеренные", flag: true },
+      { min: 50, max: 85, text: "тяжёлые", flag: true },
+    ],
     domains: [
       { key: "ams_psych", label: "псих.", itemKeys: ["ams_6", "ams_7", "ams_8", "ams_11", "ams_13"] },
       { key: "ams_somatic", label: "сомат.", itemKeys: ["ams_1", "ams_2", "ams_3", "ams_4", "ams_5", "ams_9", "ams_10"] },
@@ -146,8 +224,20 @@ export function scaleFromStudyKey(key: string, scales: ScaleDef[] = QUESTION_SCA
 export function cloneScales(list: ScaleDef[] = QUESTION_SCALES): ScaleDef[] {
   return list.map((s) => ({
     ...s,
-    items: s.items.map((i) => ({ ...i, values: i.values ? [...i.values] : undefined })),
-    extra: s.extra ? { ...s.extra } : undefined,
+    codes: s.codes ? [...s.codes] : [],
+    verdicts: s.verdicts ? s.verdicts.map((v) => ({ ...v })) : [],
+    items: s.items.map((i) => ({
+      ...i,
+      values: i.values ? [...i.values] : undefined,
+      options: i.options ? i.options.map((o) => ({ ...o })) : undefined,
+    })),
+    extra: s.extra
+      ? {
+          ...s.extra,
+          values: s.extra.values ? [...s.extra.values] : undefined,
+          options: s.extra.options ? s.extra.options.map((o) => ({ ...o })) : undefined,
+        }
+      : undefined,
     domains: s.domains?.map((d) => ({ ...d, itemKeys: [...d.itemKeys] })),
   }));
 }
@@ -158,7 +248,10 @@ export function emptyScale(): ScaleDef {
     totalKey: id,
     title: "Новая анкета",
     hint: "сумма баллов",
-    items: [{ key: `${id}_1`, label: "вопрос 1", min: 0, max: 5 }],
+    codes: [],
+    sum: true,
+    verdicts: [],
+    items: [{ key: `${id}_1`, label: "вопрос 1", min: 0, max: 5, kind: "score" }],
   };
 }
 
@@ -183,8 +276,10 @@ export function applyItem(
   value: string,
 ) {
   const next = { ...fields, [itemKey]: value };
-  const nums = scale.items.map((it) => num(next, it.key));
-  if (nums.every((n) => n !== null)) {
+  if (scale.sum === false) return next;
+  const countable = scale.items.filter(itemCountable);
+  const nums = countable.map((it) => num(next, it.key));
+  if (countable.length && nums.every((n) => n !== null)) {
     next[scale.totalKey] = String(nums.reduce((a, b) => a + (b as number), 0));
   }
   (scale.domains || []).forEach((d) => {
@@ -194,6 +289,20 @@ export function applyItem(
     }
   });
   return next;
+}
+
+export function verdictFor(scale: ScaleDef | undefined, n: number): ScaleVerdict | undefined {
+  if (!scale?.verdicts?.length) return undefined;
+  return scale.verdicts.find((v) => n >= v.min && n <= v.max);
+}
+
+export function interpretScale(scale: ScaleDef | undefined, raw: string) {
+  const v = (raw || "").trim();
+  if (!v) return "";
+  const n = parseFloat(v.replace(",", "."));
+  if (!Number.isFinite(n) || !scale) return v;
+  const hit = verdictFor(scale, n);
+  return hit ? `${n} (${hit.text})` : v;
 }
 
 export function domainLine(fields: Record<string, string>, scale: ScaleDef) {

@@ -119,6 +119,7 @@ export type SettingsState = {
   railCollapsed: boolean;
   blocksAsSpoiler: boolean;
   splitPct: number;
+  studyDeviations: boolean;
   openRouterKey: string;
   aiModel: string;
 };

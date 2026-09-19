@@ -1,5 +1,5 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
-import { fillStudyTemplate } from "./data/studies";
+import { fillStudyTemplate, collectDeviations, formatDeviations } from "./data/studies";
 import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
 
@@ -40,7 +40,11 @@ function includeStd(session: SessionState, id: string) {
   return true;
 }
 
-export function composeBlocks(session: SessionState, patient?: Patient): PreviewBlock[] {
+export function composeBlocks(
+  session: SessionState,
+  patient?: Patient,
+  opts?: { deviations?: boolean },
+): PreviewBlock[] {
   const out: PreviewBlock[] = [];
   const push = (id: string, title: string, text: string) => {
     if (hidden(session, id)) return;
@@ -84,6 +88,11 @@ export function composeBlocks(session: SessionState, patient?: Patient): Preview
     })
     .filter(Boolean);
   if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));
+  if (opts?.deviations) {
+    const dev = collectDeviations(session.studies || [], getStudyLive);
+    const text = formatDeviations(dev);
+    if (text) push("deviations", "Отклонения", `${text}.`);
+  }
 
   if (includeStd(session, "diagnosis")) {
     const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
@@ -104,8 +113,13 @@ export function composeBlocks(session: SessionState, patient?: Patient): Preview
   return out.map((b, i) => ({ ...b, n: i + 1 }));
 }
 
-export function composeAll(session: SessionState, patient: Patient | undefined, includeHeader: boolean) {
-  const blocks = composeBlocks(session, patient);
+export function composeAll(
+  session: SessionState,
+  patient: Patient | undefined,
+  includeHeader: boolean,
+  opts?: { deviations?: boolean },
+) {
+  const blocks = composeBlocks(session, patient, opts);
   const body = blocks.map((b) => `${b.title}. ${b.text}`).join("\n\n");
   if (!includeHeader) return body;
   return `${composeHeader(session, patient)}\n\n${body}`;

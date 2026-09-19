@@ -139,6 +139,20 @@ export const seedTemplates = (): TemplatesState => ({
   questionnaires: cloneScales(QUESTION_SCALES),
 });
 
+function mergeQuestionnaires(saved: ScaleDef[], seed: ScaleDef[]): ScaleDef[] {
+  const seedBy = Object.fromEntries(seed.map((s) => [s.totalKey, s]));
+  return saved.map((s) => {
+    const base = seedBy[s.totalKey];
+    if (!base) return s;
+    return {
+      ...s,
+      codes: s.codes?.length ? s.codes : base.codes,
+      verdicts: s.verdicts?.length ? s.verdicts : base.verdicts,
+      sum: s.sum ?? base.sum,
+    };
+  });
+}
+
 function read(): TemplatesState {
   const seed = seedTemplates();
   if (typeof window === "undefined") return seed;
@@ -155,7 +169,7 @@ function read(): TemplatesState {
       visitPacks: Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks,
       questionnaires:
         Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
-          ? parsed.questionnaires
+          ? mergeQuestionnaires(parsed.questionnaires, seed.questionnaires)
           : seed.questionnaires,
     };
   } catch {

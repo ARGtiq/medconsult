@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { interpretScore, liveScales } from "./data/studies";
-import { applyItem, domainLine, scaleRange, type ScaleDef, type ScaleItem } from "./data/questionnaires";
+import {
+  applyItem,
+  domainLine,
+  itemKind,
+  scaleRange,
+  verdictFor,
+  type ScaleDef,
+  type ScaleItem,
+} from "./data/questionnaires";
 
 export function QuestionnaireForm({
   scale,
@@ -74,10 +82,14 @@ function ScaleBlock({
   onChange: (next: Record<string, string>) => void;
 }) {
   const value = fields[scale.totalKey] || "";
-  const interp = value ? interpretScore(scale.totalKey, value) : "";
-  const filled = scale.items.filter((it) => (fields[it.key] || "") !== "").length;
+  const shown = value ? interpretScore(scale.totalKey, value, scale) : "";
+  const n = parseFloat(String(value).replace(",", "."));
+  const verdict = Number.isFinite(n) ? verdictFor(scale, n) : undefined;
+  const filled = scale.items.filter((it) => itemKind(it) !== "heading" && (fields[it.key] || "") !== "").length;
+  const askable = scale.items.filter((it) => itemKind(it) !== "heading").length;
   const was = previous ? (previous[scale.totalKey] || "").trim() : "";
   const domains = domainLine(fields, scale);
+  const showSum = scale.sum !== false;
 
   return (
     <div className="rounded-md border border-line bg-paper px-2 py-1.5">
@@ -85,8 +97,12 @@ function ScaleBlock({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
             <span className="text-sm font-medium">{scale.title}</span>
-            {interp && interp !== value ? (
-              <span className="text-[11px] font-medium text-teal">{interp}</span>
+            {verdict ? (
+              <span className={`text-[11px] font-medium ${verdict.flag ? "text-danger" : "text-teal"}`}>
+                {shown}
+              </span>
+            ) : shown && shown !== value ? (
+              <span className="text-[11px] font-medium text-teal">{shown}</span>
             ) : (
               <span className="text-[10px] text-mute">{scale.hint}</span>
             )}
@@ -99,12 +115,14 @@ function ScaleBlock({
             </div>
           ) : null}
         </div>
-        <input
-          value={value}
-          onChange={(e) => onChange({ ...fields, [scale.totalKey]: e.target.value })}
-          placeholder="балл"
-          className="w-14 rounded-md border border-line bg-surface px-1.5 py-0.5 text-sm font-semibold tabular-nums outline-none"
-        />
+        {showSum ? (
+          <input
+            value={value}
+            onChange={(e) => onChange({ ...fields, [scale.totalKey]: e.target.value })}
+            placeholder="балл"
+            className="w-14 rounded-md border border-line bg-surface px-1.5 py-0.5 text-sm font-semibold tabular-nums outline-none"
+          />
+        ) : null}
         <button
           type="button"
           onClick={onToggle}
@@ -112,14 +130,14 @@ function ScaleBlock({
             open ? "bg-teal-soft text-teal" : "border border-line text-ink-soft"
           }`}
         >
-          {open ? "скрыть" : filled ? `вопросы ${filled}/${scale.items.length}` : "вопросы"}
+          {open ? "скрыть" : filled ? `вопросы ${filled}/${askable}` : "вопросы"}
         </button>
       </div>
       {open && (
         <div className="mt-1.5 space-y-1.5 border-t border-line pt-1.5">
           {scale.items.map((it, i) => (
             <div key={it.key}>
-              {it.group && it.group !== scale.items[i - 1]?.group ? (
+              {itemKind(it) !== "heading" && it.group && it.group !== scale.items[i - 1]?.group ? (
                 <div className="mb-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{it.group}</div>
               ) : null}
               <ItemRow item={it} value={fields[it.key] || ""} onPick={(n) => onChange(applyItem(fields, scale, it.key, n))} />
@@ -147,23 +165,42 @@ function ItemRow({
   value: string;
   onPick: (n: string) => void;
 }) {
-  const choices = item.binary
-    ? [
-        { n: 0, text: "нет" },
-        { n: 1, text: "да" },
-      ]
-    : scaleRange(item).map((n) => ({ n, text: String(n) }));
+  const kind = itemKind(item);
+  if (kind === "heading") {
+    return <div className="pt-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{item.label}</div>;
+  }
+  if (kind === "text") {
+    return (
+      <label className="block">
+        <span className="text-[11px] text-ink-soft">{item.label}</span>
+        <input
+          value={value}
+          onChange={(e) => onPick(e.target.value)}
+          className="mt-0.5 w-full rounded-md border border-line bg-surface px-1.5 py-0.5 text-sm outline-none"
+        />
+      </label>
+    );
+  }
+  const choices =
+    kind === "yesno"
+      ? [
+          { n: "0", text: "нет" },
+          { n: "1", text: "да" },
+        ]
+      : kind === "choice" && item.options?.length
+        ? item.options.map((o) => ({ n: String(o.score ?? o.value), text: o.label }))
+        : scaleRange(item).map((n) => ({ n: String(n), text: String(n) }));
   return (
     <div>
       <div className="text-[11px] text-ink-soft">{item.label}</div>
       <div className="mt-0.5 flex flex-wrap gap-0.5">
         {choices.map((c) => {
-          const on = value === String(c.n);
+          const on = value === c.n;
           return (
             <button
-              key={c.n}
+              key={c.n + c.text}
               type="button"
-              onClick={() => onPick(on ? "" : String(c.n))}
+              onClick={() => onPick(on ? "" : c.n)}
               className={`min-w-7 rounded px-1.5 py-0.5 text-xs tabular-nums ${
                 on ? "bg-teal font-semibold text-paper" : "border border-line bg-surface"
               }`}

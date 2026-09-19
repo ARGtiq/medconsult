@@ -1,5 +1,5 @@
 import type { StudyDef, StudyInstance } from "../types";
-import { domainLine, QUESTION_SCALES, scaleFromStudyKey, studyKeyForScale, type ScaleDef } from "./questionnaires";
+import { domainLine, QUESTION_SCALES, scaleFromStudyKey, studyKeyForScale, verdictFor, type ScaleDef } from "./questionnaires";
 import { getQuestionScales } from "./templates";
 
 export const STUDIES: StudyDef[] = [
@@ -405,11 +405,13 @@ function parseScore(raw: string) {
   return Number.isFinite(n) ? n : null;
 }
 
-export function interpretScore(key: string, raw: string) {
+export function interpretScore(key: string, raw: string, scale?: ScaleDef) {
   const v = (raw || "").trim();
   if (!v) return "";
   const n = parseScore(v);
   if (n === null) return v;
+  const hit = verdictFor(scale || liveScales().find((s) => s.totalKey === key), n);
+  if (hit) return `${n} (${hit.text})`;
   if (key === "ipss") {
     const band = n <= 7 ? "лёгкие" : n <= 19 ? "умеренные" : "тяжёлые";
     return `${n} (${band})`;
@@ -436,6 +438,117 @@ export function interpretScore(key: string, raw: string) {
   return v;
 }
 
+function parseNumLoose(s: string) {
+  const n = parseFloat(String(s).replace(",", ".").replace(/[^\d.+-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Compare a filled value to the field's `normal` hint. */
+export function fieldAbnormal(value: string, normal?: string): boolean {
+  const v = (value || "").trim();
+  const nrm = (normal || "").trim();
+  if (!v || !nrm) return false;
+  const num = parseNumLoose(v);
+
+  const range = nrm.match(/(\d+(?:[.,]\d+)?)\s*[–\-]\s*(\d+(?:[.,]\d+)?)/);
+  if (num != null && range) {
+    const lo = parseNumLoose(range[1]);
+    const hi = parseNumLoose(range[2]);
+    if (lo != null && hi != null) return num < lo || num > hi;
+  }
+  const until = nrm.match(/(?:^|[^\d])до\s*(\d+(?:[.,]\d+)?)/i);
+  if (num != null && until && !range) {
+    const hi = parseNumLoose(until[1]);
+    return hi != null && num > hi;
+  }
+  const ge = nrm.match(/(≥|>=|>)\s*(\d+(?:[.,]\d+)?)/);
+  const le = nrm.match(/(≤|<=|<)\s*(\d+(?:[.,]\d+)?)/);
+  if (num != null && ge) {
+    const t = parseNumLoose(ge[2]);
+    if (t != null) {
+      const lowBad = ge[1] === ">" ? num <= t : num < t;
+      if (le) {
+        const t2 = parseNumLoose(le[2]);
+        const highBad = t2 != null && (le[1] === "<" ? num >= t2 : num > t2);
+        return lowBad || !!highBad;
+      }
+      return lowBad;
+    }
+  }
+  if (num != null && le && !ge) {
+    const t = parseNumLoose(le[2]);
+    if (t != null) return le[1] === "<" ? num >= t : num > t;
+  }
+
+  if (/не обнар|отриц|стерильно|роста нет|однородн|прозрачн|соломенно/i.test(nrm)) {
+    if (/не обнар|отриц|стерильно|роста нет|однородн|прозрачн|соломенно|норма|^[-—–.]+$|нет$/i.test(v)) return false;
+    return true;
+  }
+  return false;
+}
+
+export type Deviation = {
+  study: string;
+  studyKey: string;
+  label: string;
+  value: string;
+  normal: string;
+};
+
+export function collectDeviations(
+  studies: { key: string; instances: { fields: Record<string, string> }[] }[],
+  lookup: (key: string) => StudyDef | null | undefined,
+): Deviation[] {
+  const out: Deviation[] = [];
+  for (const entry of studies || []) {
+    const def = lookup(entry.key);
+    if (!def) continue;
+    const inst = entry.instances?.[0];
+    if (!inst) continue;
+    const fields = applyComputed(def, inst.fields || {});
+    if (def.category === "questionnaire") {
+      const scale = scaleFromStudyKey(def.key, liveScales());
+      const raw = (fields[scale?.totalKey || ""] || "").trim();
+      const n = parseScore(raw);
+      if (scale && n != null) {
+        const hit = verdictFor(scale, n);
+        if (hit?.flag) {
+          out.push({
+            study: scale.title,
+            studyKey: entry.key,
+            label: "балл",
+            value: interpretScore(scale.totalKey, raw, scale),
+            normal: scale.verdicts?.find((v) => !v.flag)?.text || scale.hint || "",
+          });
+        }
+      }
+      continue;
+    }
+    for (const f of def.fields) {
+      if (f.computed && f.formula) {
+        /* still check computed numeric vs normal */
+      }
+      const val = (fields[f.key] || "").trim();
+      if (!val) continue;
+      if (fieldAbnormal(val, f.normal)) {
+        out.push({
+          study: def.label,
+          studyKey: entry.key,
+          label: f.label,
+          value: f.unit ? `${val} ${f.unit}` : val,
+          normal: f.normal || "",
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export function formatDeviations(list: Deviation[]) {
+  if (!list.length) return "";
+  return list.map((d) => `${d.study}: ${d.label} ${d.value}${d.normal ? ` (норма ${d.normal})` : ""}`).join("; ");
+}
+
 export function fillStudyTemplate(
   def: StudyDef,
   instance: { date: string; fields: Record<string, string> },
@@ -459,9 +572,9 @@ export function fillStudyTemplate(
       const v = (fields[scale.totalKey] || "").trim();
       if (!v) continue;
       const p = prevFields ? (prevFields[scale.totalKey] || "").trim() : "";
-      const shown = interpretScore(scale.totalKey, v);
+      const shown = interpretScore(scale.totalKey, v, scale);
       const domains = domainLine(fields, scale);
-      let line = p && p !== v ? `${scale.title} ${shown} (ранее ${interpretScore(scale.totalKey, p)})` : `${scale.title} ${shown}`;
+      let line = p && p !== v ? `${scale.title} ${shown} (ранее ${interpretScore(scale.totalKey, p, scale)})` : `${scale.title} ${shown}`;
       if (domains) line = `${line}; ${domains}`;
       bits.push(line);
     }
