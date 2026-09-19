@@ -49,11 +49,15 @@ export function composeBlocks(session: SessionState, patient?: Patient): Preview
     out.push({ id, n: 0, title, text: trimmed });
   };
 
-  if (patient) {
+  const allergies = session.allergies?.length ? session.allergies : patient?.allergies || [];
+  const meds = session.currentMedications?.length
+    ? session.currentMedications
+    : patient?.currentMedications || [];
+  if (allergies.length || meds.length) {
     const bits: string[] = [];
-    if (patient.allergies?.length) bits.push(`Аллергия: ${patient.allergies.join(", ")}`);
-    if (patient.currentMedications?.length) bits.push(`Постоянно принимает: ${patient.currentMedications.join(", ")}`);
-    if (bits.length) push("card", "Карточка пациента", `${bits.join(". ")}.`);
+    if (allergies.length) bits.push(`Аллергия: ${allergies.join(", ")}`);
+    if (meds.length) bits.push(`Постоянно принимает: ${meds.join(", ")}`);
+    push("card", "Карточка пациента", `${bits.join(". ")}.`);
   }
 
   if (includeStd(session, "complaints")) {

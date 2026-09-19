@@ -95,7 +95,7 @@ export function AppShell({
   }, []);
 
   const collapsed = settings.railCollapsed;
-  const patient = useAppStore((s) => s.patients.find((p) => p.id === s.session.patientId));
+  const sessionAllergies = useAppStore((s) => s.session.allergies);
 
   return (
     <div className="flex min-h-dvh bg-paper text-ink">
@@ -149,7 +149,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="relative z-20 flex h-12 items-center gap-2 border-b border-line bg-surface px-3">
           <PatientPicker />
-          {patient?.allergies?.length ? (
+          {sessionAllergies?.length ? (
             <span className="hidden rounded bg-warn px-1.5 text-[10px] font-semibold text-ink sm:inline">аллергия</span>
           ) : null}
           <div className="flex-1" />

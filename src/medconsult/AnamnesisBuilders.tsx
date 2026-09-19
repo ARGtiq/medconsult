@@ -424,9 +424,8 @@ export function AnamnesisVitae({
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
-  const { session, patients } = useAppStore();
-  const patient = patients.find((p) => p.id === session.patientId);
-  const ctx = { medications: patient?.currentMedications, allergies: patient?.allergies };
+  const { session } = useAppStore();
+  const ctx = { medications: session.currentMedications, allergies: session.allergies };
   const openDev = d.development === "features" || d.developmentItems.length > 0;
   const openOcc = d.occupation === "has" || d.occupationItems.length > 0;
   const openPast = d.pastIllness === "other" || d.pastItems.length > 0;
@@ -612,10 +611,10 @@ export function AnamnesisVitae({
       )}
       </VitaeSection>
       <VitaeSection id="allergy" omitted={omitted("allergy")} onOmit={setOmit}>
-      <FromCard label="аллергия" items={patient?.allergies} />
+      <FromCard label="аллергия" items={session.allergies} />
       </VitaeSection>
       <VitaeSection id="meds" omitted={omitted("meds")} onOmit={setOmit}>
-      <FromCard label="принимает постоянно" items={patient?.currentMedications} />
+      <FromCard label="принимает постоянно" items={session.currentMedications} />
       </VitaeSection>
       <VitaeSection id="surgery" omitted={omitted("surgery")} onOmit={setOmit}>
       <ChipRow

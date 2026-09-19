@@ -142,7 +142,7 @@ export function ProtocolPage() {
   async function runInteractions() {
     const names = [
       ...session.recommendations,
-      ...(patient?.currentMedications || []),
+      ...(session.currentMedications || []),
     ]
       .map((s) => s.split(/\s+/)[0])
       .filter(Boolean);
@@ -210,6 +210,23 @@ export function ProtocolPage() {
     setLocalAdd(false);
   };
 
+  const cardCtx = {
+    medications: session.currentMedications || [],
+    allergies: session.allergies || [],
+  };
+
+  const setCard = (patch: { allergies?: string[]; currentMedications?: string[] }) => {
+    const allergies = patch.allergies ?? session.allergies ?? [];
+    const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
+    if (patient) store.updatePatient(patient.id, { allergies, currentMedications });
+    const d = session.vitaeDraft || emptyVitae();
+    store.setSession({
+      allergies,
+      currentMedications,
+      anamnesisVitae: composeVitae(d, { medications: currentMedications, allergies }),
+    });
+  };
+
   const kindBtn = (id: "primary" | "followup" | "study" | "document", label: string) => (
     <button
       key={id}
@@ -238,42 +255,24 @@ export function ProtocolPage() {
         </button>
       </div>
 
-      {patient ? (
-        <div className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2 text-xs leading-relaxed">
-          <div className="mb-1 text-[10px] font-semibold tracking-wide uppercase">карточка · во все документы</div>
-          <GlobalField
-            label="Аллергии"
-            items={patient.allergies || []}
-            onChange={(allergies) => {
-              store.updatePatient(patient.id, { allergies });
-              const d = session.vitaeDraft || emptyVitae();
-              store.setSession({
-                anamnesisVitae: composeVitae(d, { medications: patient.currentMedications, allergies }),
-              });
-            }}
-            placeholder="аллерген или препарат + Enter"
-            drugs
-            allergy
-          />
-          <GlobalField
-            label="Принимает постоянно"
-            items={patient.currentMedications || []}
-            onChange={(currentMedications) => {
-              store.updatePatient(patient.id, { currentMedications });
-              const d = session.vitaeDraft || emptyVitae();
-              store.setSession({
-                anamnesisVitae: composeVitae(d, { medications: currentMedications, allergies: patient.allergies }),
-              });
-            }}
-            placeholder="препарат + Enter"
-            drugs
-          />
-        </div>
-      ) : (
-        <div className="rounded-[10px] border border-dashed border-line px-2.5 py-1.5 text-[11px] text-mute">
-          Протокол без карточки. Аллергии и постоянные препараты не подтянутся.
-        </div>
-      )}
+      <div className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2 text-xs leading-relaxed">
+        <div className="mb-1 text-[10px] font-semibold tracking-wide uppercase">карточка · во все документы</div>
+        <GlobalField
+          label="Аллергии"
+          items={session.allergies || []}
+          onChange={(allergies) => setCard({ allergies })}
+          placeholder="аллерген или препарат + Enter"
+          drugs
+          allergy
+        />
+        <GlobalField
+          label="Принимает постоянно"
+          items={session.currentMedications || []}
+          onChange={(currentMedications) => setCard({ currentMedications })}
+          placeholder="препарат + Enter"
+          drugs
+        />
+      </div>
 
       {documentMode && !(session.docStd || []).length && !(session.extraBlocks || []).length && !session.notes.trim() && (
         <p className="rounded-[10px] border border-dashed border-line px-3 py-3 text-sm text-ink-soft">
@@ -538,10 +537,7 @@ export function ProtocolPage() {
             open={session.openSection === "anamnesisVitae"}
             onOpen={() => {
               if (session.openSection === "anamnesisVitae") {
-                const t = composeVitae(session.vitaeDraft || emptyVitae(), {
-                  medications: patient?.currentMedications,
-                  allergies: patient?.allergies,
-                });
+                const t = composeVitae(session.vitaeDraft || emptyVitae(), cardCtx);
                 setSession({
                   openSection: null,
                   vitaeChipMode: t ? false : session.vitaeChipMode,
@@ -562,20 +558,14 @@ export function ProtocolPage() {
                 setSession({
                   vitaeDraft: d,
                   vitaeChipMode: true,
-                  anamnesisVitae: composeVitae(d, {
-                    medications: patient?.currentMedications,
-                    allergies: patient?.allergies,
-                  }),
+                  anamnesisVitae: composeVitae(d, cardCtx),
                 })
               }
               onText={(t) => setSession({ anamnesisVitae: t })}
               onMode={(chipsMode) =>
                 setSession({
                   vitaeChipMode: chipsMode,
-                  anamnesisVitae: composeVitae(session.vitaeDraft || emptyVitae(), {
-                    medications: patient?.currentMedications,
-                    allergies: patient?.allergies,
-                  }),
+                  anamnesisVitae: composeVitae(session.vitaeDraft || emptyVitae(), cardCtx),
                 })
               }
             />

@@ -107,6 +107,8 @@ export type SessionState = {
   docStd: string[];
   extraBlocks: ExtraBlock[];
   templateId?: string;
+  allergies: string[];
+  currentMedications: string[];
 };
 
 export type SettingsState = {

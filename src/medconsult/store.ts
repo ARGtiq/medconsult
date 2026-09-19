@@ -65,6 +65,8 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     headerOverride: "",
     docStd: [],
     extraBlocks: [],
+    allergies: [],
+    currentMedications: [],
     ...partial,
   };
 }
@@ -179,8 +181,12 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
     const inst = pickFilledInstance(s.instances);
     if (inst) studyLast[s.key] = { ...inst, fields: { ...inst.fields } };
   });
+  const allergies = session.allergies || [];
+  const currentMedications = session.currentMedications || [];
   const next: Patient = {
     ...prev,
+    allergies,
+    currentMedications,
     anamnesisVitae: session.anamnesisVitae || prev.anamnesisVitae,
     globals: {
       ...(prev.globals || {}),
@@ -188,8 +194,8 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
       anamnesisVitae: session.anamnesisVitae || prev.globals?.anamnesisVitae,
       extraLast,
       studyLast,
-      allergies: prev.allergies || [],
-      currentMedications: prev.currentMedications || [],
+      allergies,
+      currentMedications,
     },
   };
   const list = patients.map((p, i) => (i === idx ? next : p));
@@ -202,12 +208,16 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   if (!patient) return session;
   const draft = patient.globals?.vitaeDraft;
   const vitaeText = patient.anamnesisVitae || patient.globals?.anamnesisVitae || "";
+  const allergies = patient.allergies || [];
+  const currentMedications = patient.currentMedications || [];
   const composed = composeVitae(draft || emptyVitae(), {
-    medications: patient.currentMedications,
-    allergies: patient.allergies,
+    medications: currentMedications,
+    allergies,
   });
   return {
     ...session,
+    allergies,
+    currentMedications,
     anamnesisVitae: composed || vitaeText,
     vitaeDraft: draft,
     vitaeChipMode: vitaeText ? false : true,
@@ -310,8 +320,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const raw = readJson(SESSION_KEY, blankSession({ patientId: patients[0]?.id || "" }));
     let session = blankSession(raw);
     const p = patients.find((x) => x.id === session.patientId);
-    if (p && !session.anamnesisVitae && !session.vitaeDraft) {
-      session = applyGlobals(session, p);
+    if (p) {
+      if (!session.allergies?.length && p.allergies?.length) {
+        session = { ...session, allergies: p.allergies };
+      }
+      if (!session.currentMedications?.length && p.currentMedications?.length) {
+        session = { ...session, currentMedications: p.currentMedications };
+      }
+      if (!session.anamnesisVitae && !session.vitaeDraft) {
+        session = applyGlobals(session, p);
+      }
     }
     set({
       hydrated: true,
@@ -356,7 +374,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       session = { ...prev, ...patch };
     }
     const vitaeTouched =
-      "vitaeDraft" in patch || "anamnesisVitae" in patch || "extraBlocks" in patch || "studies" in patch;
+      "vitaeDraft" in patch ||
+      "anamnesisVitae" in patch ||
+      "extraBlocks" in patch ||
+      "studies" in patch ||
+      "allergies" in patch ||
+      "currentMedications" in patch;
     if (vitaeTouched && !switching) patients = persistGlobals(session, patients);
     persistSession(session);
     set({ session, patients });
@@ -513,8 +536,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   addRecommendation(text) {
     const session = get().session;
     if (session.recommendations.includes(text)) return;
-    const patient = get().patients.find((p) => p.id === session.patientId);
-    const allergies = patient?.allergies || [];
+    const allergies = session.allergies || [];
     if (allergies.length) {
       try {
         const raw = checkAllergyLocal(
@@ -552,6 +574,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const first = [input.firstName, input.patronymic].filter(Boolean).join(" ").trim();
     const year = (input.year || "").trim();
     const dob = /^\d{4}$/.test(year) ? `${year}-01-01` : undefined;
+    const session = get().session;
     const p: Patient = {
       id: uid("p"),
       lastName: input.lastName.trim(),
@@ -559,8 +582,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       age: calcAge(dob),
       name: `${input.lastName.trim()} ${first}`.trim(),
       dob,
-      allergies: [],
-      currentMedications: [],
+      allergies: session.allergies || [],
+      currentMedications: session.currentMedications || [],
     };
     const patients = [...get().patients, p];
     const unique = Object.values(Object.fromEntries(patients.map((x) => [x.id, x]))) as Patient[];
@@ -783,6 +806,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       patientId: prev.patientId,
       visitKind: prev.visitKind,
       mode: "consult",
+      allergies: prev.allergies || [],
+      currentMedications: prev.currentMedications || [],
     });
     if (prev.patientId) {
       session = applyGlobals(session, patients.find((p) => p.id === prev.patientId));
