@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
+import DrugGroupsInput from './DrugGroupsInput'
 import useEscapeToClose from '../lib/useEscapeToClose'
 
 const EVIDENCE_OPTIONS = [
@@ -81,10 +82,10 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
-            <input
-              placeholder="Группа"
+            <DrugGroupsInput
+              placeholder="Группа из базы"
               value={form.group}
-              onChange={(e) => setForm({ ...form, group: e.target.value })}
+              onChange={(v) => setForm({ ...form, group: v })}
             />
           </div>
           <div className="drug-form-row">

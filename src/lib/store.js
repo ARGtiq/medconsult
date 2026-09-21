@@ -1,8 +1,32 @@
-// Простое персистентное хранилище поверх localStorage.
-// Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
-
 import { readClinicalSync, writeClinicalSync } from './clinicalLock'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
+
+function _ls() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemLS || (globalThis.__medconsultMemLS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.localStorage;
+}
+function _ss() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemSS || (globalThis.__medconsultMemSS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.sessionStorage;
+}
+
+// Простое персистентное хранилище поверх _ls().
+// Структура специально плоская — легко переложить 1-в-1 на таблицы Supabase позже.
+
 
 // Хранилище разложено по неймспейсам — отдельным ключам localStorage —
 // вместо одного большого блоба. Это не меняет внешний API store.js: все методы
@@ -30,6 +54,7 @@ const NAMESPACES = {
     'complaintDrugLinks',
     'diagnosisDrugLinks',
     'customStudies',
+    'hiddenStudies',
     'treatmentSchemes',
   ],
   // рабочие заготовки, не жалко потерять
@@ -45,7 +70,7 @@ function nsStorageKey(ns) {
 function readNamespaceRaw(ns) {
   if (ns === 'clinical') return readClinicalSync()
   try {
-    const raw = localStorage.getItem(nsStorageKey(ns))
+    const raw = _ls().getItem(nsStorageKey(ns))
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -57,13 +82,13 @@ function writeNamespaceRaw(ns, data) {
     writeClinicalSync(data)
     return
   }
-  localStorage.setItem(nsStorageKey(ns), JSON.stringify(data))
+  _ls().setItem(nsStorageKey(ns), JSON.stringify(data))
 }
 
 // Разовая миграция: если жив старый единый блоб — разложить его по неймспейсам
 // и удалить. Идемпотентно (после первого прогона OLD_KEY уже не будет).
 function migrateOldBlobIfNeeded() {
-  const raw = localStorage.getItem(OLD_KEY)
+  const raw = _ls().getItem(OLD_KEY)
   if (!raw) return
   try {
     const old = JSON.parse(raw)
@@ -77,7 +102,7 @@ function migrateOldBlobIfNeeded() {
   } catch {
     // старый блоб был битый — просто ничего не переносим, дальше пойдёт дефолт
   } finally {
-    localStorage.removeItem(OLD_KEY)
+    _ls().removeItem(OLD_KEY)
   }
 }
 
@@ -125,6 +150,9 @@ function defaultState() {
     // свои исследования (объединяются со встроенными из data/studyProtocols.js):
     // key -> { key, label, category, template, fields[], referenceNotes }
     customStudies: {},
+    // ключи предустановленных исследований, которые врач убрал из списка
+    // (сам seed не трогаем — можно вернуть одной кнопкой)
+    hiddenStudies: [],
     // схемы лечения — самостоятельные, не привязаны к коду МКБ насильно:
     // id -> { name, category, tags[], phases: [{name, drugs:[{name,dose,duration}]}],
     //   nonDrugTherapy, redFlags, source, sourceYear, updatedAt }
@@ -137,9 +165,9 @@ function defaultState() {
     templates: seedTemplates(),
     // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, brandNames, interactions, contraindications, mkb10Codes, evidenceLevel, group, source }
     drugDatabase: {},
-    // ключ статичной группы (из data/drugSafety.js) -> { crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    // ключ статичной группы (из data/drugSafety.js) -> { description, crossAllergyNote, sideEffects, contraindications, mkb10Codes }
     drugGroupMeta: {},
-    // пользовательские группы лекарств: key -> { label, drugs: [], crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    // пользовательские группы лекарств: key -> { label, drugs: [], description, crossAllergyNote, sideEffects, contraindications, mkb10Codes }
     customDrugGroups: {},
     // перекрёстная реактивность между ЛЮБЫМИ группами (встроенными и своими),
     // заданная пользователем: [{ id, groupA, groupB, note }]
@@ -470,7 +498,7 @@ export const store = {
     return Object.values(state.complaintSuggestions)
       .filter((s) => !q || s.text.toLowerCase().includes(q))
       .sort((a, b) => b.count - a.count || b.lastUsedAt - a.lastUsedAt)
-      .slice(0, 8)
+      .slice(0, 80)
   },
 
   // --- связка жалоба -> препарат с весом ---
@@ -748,7 +776,9 @@ export const store = {
 
   // --- исследования (встроенные + свои) ---
   getAllStudies() {
-    const custom = readAll().customStudies || {}
+    const state = readAll()
+    const custom = state.customStudies || {}
+    const hidden = new Set(state.hiddenStudies || [])
     // своё исследование с тем же key, что встроенное, переопределяет его —
     // так можно поправить шаблон/нормы built-in исследования, не трогая код
     const byKey = {}
@@ -758,7 +788,27 @@ export const store = {
     Object.values(custom).forEach((s) => {
       byKey[s.key] = s
     })
-    return Object.values(byKey)
+    return Object.values(byKey).filter((s) => !hidden.has(s.key))
+  },
+
+  getHiddenStudies() {
+    return [...(readAll().hiddenStudies || [])]
+  },
+
+  hideStudy(key) {
+    const state = readAll()
+    const hidden = new Set(state.hiddenStudies || [])
+    hidden.add(key)
+    state.hiddenStudies = [...hidden]
+    writeAll(state)
+    return state.hiddenStudies
+  },
+
+  restoreStudy(key) {
+    const state = readAll()
+    state.hiddenStudies = (state.hiddenStudies || []).filter((k) => k !== key)
+    writeAll(state)
+    return state.hiddenStudies
   },
 
   saveCustomStudy(study) {
@@ -1055,19 +1105,19 @@ export const store = {
 
   // --- автосохранение черновика визита ---
   saveDraft(templateId, draft) {
-    localStorage.setItem(`medconsult_draft_${templateId}`, JSON.stringify({ ...draft, savedAt: Date.now() }))
+    _ls().setItem(`medconsult_draft_${templateId}`, JSON.stringify({ ...draft, savedAt: Date.now() }))
   },
 
   getDraft(templateId) {
     try {
-      return JSON.parse(localStorage.getItem(`medconsult_draft_${templateId}`) || 'null')
+      return JSON.parse(_ls().getItem(`medconsult_draft_${templateId}`) || 'null')
     } catch {
       return null
     }
   },
 
   clearDraft(templateId) {
-    localStorage.removeItem(`medconsult_draft_${templateId}`)
+    _ls().removeItem(`medconsult_draft_${templateId}`)
   },
 
   // черновики по всем шаблонам сразу — для домашнего экрана

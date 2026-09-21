@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
+import { describeDrugGroup } from '../lib/openrouter'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
+import AutoResizeTextarea from './AutoResizeTextarea'
 import { showToast } from '../lib/toast'
 
-const GROUP_FILL_FIELDS = ['crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
+const GROUP_FILL_FIELDS = ['description', 'crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
 
 function blankGroupForm() {
-  return { key: null, label: '', drugsText: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '', basedOn: '' }
+  return { key: null, label: '', drugsText: '', description: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '', basedOn: '' }
 }
 
 export default function DrugGroupsTab() {
@@ -19,6 +21,8 @@ export default function DrugGroupsTab() {
   const [crossList, setCrossList] = useState(store.getCrossReactivity())
   const [crossForm, setCrossForm] = useState({ groupA: '', groupB: '', note: '' })
   const [labelError, setLabelError] = useState(false)
+  const [describing, setDescribing] = useState(false)
+  const [describeError, setDescribeError] = useState('')
   useEscapeToClose(() => setFormOpen(false), formOpen)
 
   const allGroupOptions = [
@@ -68,6 +72,7 @@ export default function DrugGroupsTab() {
       key,
       label: DRUG_GROUPS[key].label,
       drugsText: DRUG_GROUPS[key].drugs.join(', '),
+      description: override.description ?? builtin.description ?? '',
       crossAllergyNote: override.crossAllergyNote ?? builtin.crossAllergyNote ?? '',
       sideEffects: override.sideEffects ?? builtin.sideEffects ?? '',
       contraindications: override.contraindications ?? builtin.contraindications ?? '',
@@ -82,6 +87,7 @@ export default function DrugGroupsTab() {
       key,
       label: group.label,
       drugsText: (group.drugs || []).join(', '),
+      description: group.description || '',
       crossAllergyNote: group.crossAllergyNote || '',
       sideEffects: group.sideEffects || '',
       contraindications: group.contraindications || '',
@@ -94,7 +100,31 @@ export default function DrugGroupsTab() {
   function startNew() {
     setEditingStaticKey(null)
     setForm(blankGroupForm())
+    setDescribeError('')
     setFormOpen(true)
+  }
+
+  async function runDescribe() {
+    if (!form.label.trim()) {
+      setDescribeError('Сначала укажи название группы')
+      return
+    }
+    setDescribing(true)
+    setDescribeError('')
+    try {
+      const description = await describeDrugGroup({
+        label: form.label,
+        drugs: form.drugsText,
+        sideEffects: form.sideEffects,
+        contraindications: form.contraindications,
+        mkb10Codes: form.mkb10Codes,
+      })
+      setForm((prev) => ({ ...prev, description }))
+    } catch (e) {
+      setDescribeError(e.message)
+    } finally {
+      setDescribing(false)
+    }
   }
 
   function applyBasedOn(key) {
@@ -117,6 +147,7 @@ export default function DrugGroupsTab() {
     setLabelError(false)
 
     const meta = {
+      description: form.description,
       crossAllergyNote: form.crossAllergyNote,
       sideEffects: form.sideEffects,
       contraindications: form.contraindications,
@@ -208,6 +239,18 @@ export default function DrugGroupsTab() {
           rows={2}
           disabled={!!editingStaticKey}
         />
+        <div className="drug-form-field-with-ai">
+          <AutoResizeTextarea
+            placeholder="Полное текстовое описание группы"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            minRows={3}
+          />
+          <button type="button" className="btn-secondary btn-small" onClick={runDescribe} disabled={describing}>
+            {describing ? 'Пишу…' : '🤖 Описание (AI)'}
+          </button>
+          {describeError && <div className="ai-error">{describeError}</div>}
+        </div>
         <textarea
           placeholder="Заметка о перекрёстной аллергии внутри группы"
           value={form.crossAllergyNote}
@@ -248,6 +291,7 @@ export default function DrugGroupsTab() {
           const override = store.getGroupMeta(key) || {}
           const builtin = getBuiltinGroupMeta(key) || {}
           const meta = {
+            description: override.description ?? builtin.description,
             crossAllergyNote: override.crossAllergyNote ?? builtin.crossAllergyNote,
             sideEffects: override.sideEffects ?? builtin.sideEffects,
             contraindications: override.contraindications ?? builtin.contraindications,
@@ -263,6 +307,7 @@ export default function DrugGroupsTab() {
               </div>
               <FillProgressBar item={meta} fields={GROUP_FILL_FIELDS} />
               <div className="drug-db-line">Препараты: {g.drugs.join(', ')}</div>
+              {meta.description && <div className="drug-db-line">{meta.description}</div>}
               {meta.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {meta.crossAllergyNote}</div>}
               {meta.sideEffects && <div className="drug-db-line">Побочные: {meta.sideEffects}</div>}
               {meta.contraindications && <div className="drug-db-line">Противопоказания: {meta.contraindications}</div>}
@@ -281,6 +326,7 @@ export default function DrugGroupsTab() {
             </div>
             <FillProgressBar item={g} fields={GROUP_FILL_FIELDS} />
             <div className="drug-db-line">Препараты: {(g.drugs || []).join(', ')}</div>
+            {g.description && <div className="drug-db-line">{g.description}</div>}
             {g.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {g.crossAllergyNote}</div>}
             {g.sideEffects && <div className="drug-db-line">Побочные: {g.sideEffects}</div>}
             {g.contraindications && <div className="drug-db-line">Противопоказания: {g.contraindications}</div>}

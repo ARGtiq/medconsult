@@ -1540,6 +1540,24 @@
   border-radius: 6px;
   font-size: 12.5px;
 }
+.legacy-surface .study-template-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+}
+.legacy-surface .study-template-chip {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--teal, #3d6b5e);
+  background: var(--teal-soft, #e8f2ee);
+  color: var(--teal, #2c5649);
+  cursor: grab;
+  line-height: 1.3;
+}
+.legacy-surface .study-template-chip:active { cursor: grabbing; }
+.legacy-surface .study-template-chips-hint { margin: 0 0 4px; }
 .legacy-surface .study-protocol-text {
   width: 100%;
   margin-left: 24px;

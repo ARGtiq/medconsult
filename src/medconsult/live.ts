@@ -236,6 +236,12 @@ export function complaintsForSession(code: string) {
 export function allStudiesLive(): StudyDef[] {
   const qStudies = studiesFromScales();
   const qKeys = new Set(qStudies.map((s) => s.key));
+  let hidden = new Set<string>();
+  try {
+    hidden = new Set((store.getHiddenStudies?.() as string[]) || []);
+  } catch {
+    hidden = new Set();
+  }
   let base: StudyDef[] = [];
   try {
     const live = store.getAllStudies() as StudyDef[];
@@ -248,7 +254,7 @@ export function allStudiesLive(): StudyDef[] {
   }
   if (!base.length) base = STUDIES;
   const rest = base.filter((s) => s.category !== "questionnaire" && s.key !== "questionnaires" && !qKeys.has(s.key));
-  return [...rest, ...qStudies];
+  return [...rest, ...qStudies].filter((s) => !hidden.has(s.key));
 }
 
 export function getStudyLive(key: string): StudyDef | null {

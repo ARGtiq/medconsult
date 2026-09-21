@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
 import AutoResizeTextarea from './AutoResizeTextarea'
@@ -24,16 +24,39 @@ function slugifyKey(label) {
   return (label || '').trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_') || `study_${Date.now()}`
 }
 
+function slugifyFieldKey(label) {
+  return (label || '')
+    .trim()
+    .replace(/ё/g, 'е')
+    .replace(/Ё/g, 'е')
+    .toLowerCase()
+    .replace(/[^a-zа-я0-9]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+const PRESET_STUDIES = BUILTIN_STUDIES
+
+function presetByKey(key) {
+  return PRESET_STUDIES.find((s) => s.key === key) || null
+}
+
+function listedStudies() {
+  return store.getAllStudies()
+}
+
 export default function StudiesTab() {
-  const [studies, setStudies] = useState(store.getAllStudies())
+  const [studies, setStudies] = useState(listedStudies)
+  const [hidden, setHidden] = useState(() => store.getHiddenStudies())
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
   const [validationError, setValidationError] = useState('')
+  const templateRef = useRef(null)
   useEscapeToClose(() => setFormOpen(false), formOpen)
-  const builtinKeys = new Set(BUILTIN_STUDIES.map((s) => s.key))
+  const builtinKeys = new Set(PRESET_STUDIES.map((s) => s.key))
 
   function refresh() {
-    setStudies(store.getAllStudies())
+    setStudies(listedStudies())
+    setHidden(store.getHiddenStudies())
   }
 
   function openNew() {
@@ -54,7 +77,19 @@ export default function StudiesTab() {
   }
 
   function updateField(idx, patch) {
-    setForm({ ...form, fields: form.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)) })
+    setForm((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => {
+        if (i !== idx) return f
+        const merged = { ...f, ...patch }
+        if (patch.label !== undefined) {
+          const auto = slugifyFieldKey(patch.label)
+          const wasAuto = !f.key || f.key === slugifyFieldKey(f.label)
+          if (wasAuto) merged.key = auto
+        }
+        return merged
+      }),
+    }))
   }
 
   function addField() {
@@ -65,6 +100,26 @@ export default function StudiesTab() {
     setForm({ ...form, fields: form.fields.filter((_, i) => i !== idx) })
   }
 
+  function insertToken(token) {
+    const text = form.template || ''
+    const el = templateRef.current
+    const start = el?.selectionStart ?? text.length
+    const end = el?.selectionEnd ?? text.length
+    const next = text.slice(0, start) + token + text.slice(end)
+    setForm((prev) => ({ ...prev, template: next }))
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
+  function onChipDragStart(e, token) {
+    e.dataTransfer.setData('text/plain', token)
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
   function save(e) {
     e.preventDefault()
     if (!form.label.trim() || !form.template.trim()) {
@@ -73,34 +128,56 @@ export default function StudiesTab() {
     }
     setValidationError('')
     const key = form.key || slugifyKey(form.label)
-    const fields = form.fields.filter((f) => f.key.trim() && f.label.trim())
+    const fields = form.fields
+      .map((f) => ({ ...f, key: f.key.trim() || slugifyFieldKey(f.label) }))
+      .filter((f) => f.key && f.label.trim())
     store.saveCustomStudy({ ...form, key, fields })
     refresh()
     setFormOpen(false)
     setForm(blankForm())
   }
 
-  function remove(key) {
-    const removed = studies.find((s) => s.key === key)
-    store.deleteCustomStudy(key)
+  function remove(study) {
+    const isPreset = builtinKeys.has(study.key)
+    if (isPreset) {
+      store.hideStudy(study.key)
+      refresh()
+      showToast(`«${study.label}» скрыто`, {
+        type: 'success',
+        actionLabel: 'Отменить',
+        onAction: () => {
+          store.restoreStudy(study.key)
+          refresh()
+        },
+      })
+      return
+    }
+    store.deleteCustomStudy(study.key)
     refresh()
-    showToast(`«${removed?.label}» удалено`, {
+    showToast(`«${study.label}» удалено`, {
       type: 'success',
       actionLabel: 'Отменить',
       onAction: () => {
-        store.saveCustomStudy(removed)
+        store.saveCustomStudy(study)
         refresh()
       },
     })
   }
 
+  function restore(key) {
+    store.restoreStudy(key)
+    refresh()
+  }
+
+  const fieldTags = form.fields.filter((f) => (f.key || slugifyFieldKey(f.label)).trim() && f.label.trim())
+
   return (
     <div className="settings-tab">
       <p className="settings-note-inline">
         Список исследований и их шаблоны текста — общие для всех визитов с типом "Протокол исследований".
-        Своё исследование с тем же ключом, что встроенное, переопределяет его (можно поправить шаблон
-        /нормы built-in исследования, не трогая код). В шаблоне используй <code>{'{date}'}</code> для даты
-        и <code>{'{fieldKey}'}</code> для подстановки значения поля (fieldKey — как в списке полей ниже).
+        Своё исследование с тем же ключом, что встроенное, переопределяет его. Предустановленные можно скрыть
+        крестиком и вернуть из блока внизу. В шаблон перетащи или нажми тег поля — подставится{' '}
+        <code>{'{fieldKey}'}</code>; <code>{'{date}'}</code> — дата исследования.
       </p>
 
       <button type="button" className="btn-primary" onClick={openNew}>
@@ -130,29 +207,64 @@ export default function StudiesTab() {
               </div>
               {validationError && <div className="ai-error">{validationError}</div>}
 
+              <div className="scenarios-block">
+                <div className="scenarios-block-label">Пункты (название → тег создаётся сам)</div>
+                {form.fields.map((f, idx) => (
+                  <div key={idx} className="study-field-editor-row">
+                    <input placeholder="название" value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
+                    <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
+                    <input placeholder="норма" value={f.normal} onChange={(e) => updateField(idx, { normal: e.target.value })} />
+                    <input
+                      placeholder="тег"
+                      value={f.key}
+                      onChange={(e) => updateField(idx, { key: e.target.value.replace(/[{}\s]/g, '') })}
+                      title="Ключ в шаблоне, заполняется из названия"
+                    />
+                    <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
+                  </div>
+                ))}
+                <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>
+              </div>
+
+              <div className="study-template-chips">
+                <button
+                  type="button"
+                  className="study-template-chip"
+                  draggable
+                  onDragStart={(e) => onChipDragStart(e, '{date}')}
+                  onClick={() => insertToken('{date}')}
+                  title="Перетащи в шаблон или нажми"
+                >
+                  {'{date}'}
+                </button>
+                {fieldTags.map((f, idx) => {
+                  const key = f.key || slugifyFieldKey(f.label)
+                  const token = `{${key}}`
+                  return (
+                    <button
+                      type="button"
+                      key={`${key}-${idx}`}
+                      className="study-template-chip"
+                      draggable
+                      onDragStart={(e) => onChipDragStart(e, token)}
+                      onClick={() => insertToken(token)}
+                      title="Перетащи в шаблон или нажми"
+                    >
+                      {f.label} {token}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="settings-note-inline study-template-chips-hint">
+                Нажми тег или перетащи его в текст шаблона.
+              </p>
+
               <AutoResizeTextarea
+                textareaRef={templateRef}
                 placeholder="Шаблон текста, напр. «УЗИ почек от {date}: правая почка — {rightSize} мм...»"
                 value={form.template}
                 onChange={(e) => setForm({ ...form, template: e.target.value })}
               />
-
-              <div className="scenarios-block">
-                <div className="scenarios-block-label">Поля (для режима "Поля" на приёме)</div>
-                {form.fields.map((f, idx) => (
-                  <div key={idx} className="study-field-editor-row">
-                    <input
-                      placeholder="ключ (латиницей, как в {fieldKey})"
-                      value={f.key}
-                      onChange={(e) => updateField(idx, { key: e.target.value })}
-                    />
-                    <input placeholder="название" value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
-                    <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
-                    <input placeholder="норма" value={f.normal} onChange={(e) => updateField(idx, { normal: e.target.value })} />
-                    <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
-                  </div>
-                ))}
-                <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Поле</button>
-              </div>
 
               <AutoResizeTextarea
                 placeholder="Шпаргалка с нормами (текстом, показывается по кнопке «ℹ️ Нормы» на приёме)"
@@ -182,15 +294,29 @@ export default function StudiesTab() {
                   {s.label}
                 </strong>
                 <span className="drug-db-group">{s.category === 'lab' ? 'лабораторное' : 'инструментальное'}</span>
-                {!builtinKeys.has(s.key) && (
-                  <button type="button" className="remove-btn" onClick={() => remove(s.key)}>×</button>
-                )}
+                <button type="button" className="remove-btn" onClick={() => remove(s)} title={builtinKeys.has(s.key) ? 'Скрыть предустановленное' : 'Удалить'}>×</button>
               </div>
               <div className="drug-db-line">{s.template}</div>
               {s.fields?.length > 0 && <div className="drug-db-line">Полей: {s.fields.length}</div>}
             </div>
           ))}
       </div>
+
+      {hidden.length > 0 && (
+        <div className="drug-db-list">
+          <h4>Скрытые предустановленные ({hidden.length})</h4>
+          {hidden.map((key) => (
+            <div key={key} className="drug-db-card">
+              <div className="drug-db-card-top">
+                <strong>{presetByKey(key)?.label || key}</strong>
+                <button type="button" className="btn-secondary btn-small" onClick={() => restore(key)}>
+                  Вернуть
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -245,3 +245,18 @@ export async function suggestAnalogsAI(drugName) {
     return raw.split(',').map((s) => s.trim()).filter(Boolean)
   }
 }
+
+export async function describeDrugGroup({ label, drugs, sideEffects, contraindications, mkb10Codes }) {
+  return callAI(
+    'Ты — ассистент врача-уролога. Напиши полное клиническое описание фармакологической группы на русском: класс и механизм, типичные показания в урологии и андрологии, место в практике, ключевые ограничения и мониторинг. 2–4 коротких абзаца связным текстом, без markdown, без заголовков, без преамбулы. Не перечисляй дозы, которых нет во входных данных. Не выдумывай регистрационные статусы.',
+    [
+      `Группа: ${label || 'не указана'}`,
+      drugs ? `Препараты (МНН): ${drugs}` : '',
+      sideEffects ? `Побочные эффекты: ${sideEffects}` : '',
+      contraindications ? `Противопоказания: ${contraindications}` : '',
+      mkb10Codes ? `Коды МКБ-10: ${mkb10Codes}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  )
+}

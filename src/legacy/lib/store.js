@@ -54,6 +54,7 @@ const NAMESPACES = {
     'complaintDrugLinks',
     'diagnosisDrugLinks',
     'customStudies',
+    'hiddenStudies',
     'treatmentSchemes',
   ],
   // рабочие заготовки, не жалко потерять
@@ -149,6 +150,9 @@ function defaultState() {
     // свои исследования (объединяются со встроенными из data/studyProtocols.js):
     // key -> { key, label, category, template, fields[], referenceNotes }
     customStudies: {},
+    // ключи предустановленных исследований, которые врач убрал из списка
+    // (сам seed не трогаем — можно вернуть одной кнопкой)
+    hiddenStudies: [],
     // схемы лечения — самостоятельные, не привязаны к коду МКБ насильно:
     // id -> { name, category, tags[], phases: [{name, drugs:[{name,dose,duration}]}],
     //   nonDrugTherapy, redFlags, source, sourceYear, updatedAt }
@@ -161,9 +165,9 @@ function defaultState() {
     templates: seedTemplates(),
     // название препарата (нижний регистр) -> { name, dosage, frequency, sideEffects, brandNames, interactions, contraindications, mkb10Codes, evidenceLevel, group, source }
     drugDatabase: {},
-    // ключ статичной группы (из data/drugSafety.js) -> { crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    // ключ статичной группы (из data/drugSafety.js) -> { description, crossAllergyNote, sideEffects, contraindications, mkb10Codes }
     drugGroupMeta: {},
-    // пользовательские группы лекарств: key -> { label, drugs: [], crossAllergyNote, sideEffects, contraindications, mkb10Codes }
+    // пользовательские группы лекарств: key -> { label, drugs: [], description, crossAllergyNote, sideEffects, contraindications, mkb10Codes }
     customDrugGroups: {},
     // перекрёстная реактивность между ЛЮБЫМИ группами (встроенными и своими),
     // заданная пользователем: [{ id, groupA, groupB, note }]
@@ -772,7 +776,9 @@ export const store = {
 
   // --- исследования (встроенные + свои) ---
   getAllStudies() {
-    const custom = readAll().customStudies || {}
+    const state = readAll()
+    const custom = state.customStudies || {}
+    const hidden = new Set(state.hiddenStudies || [])
     // своё исследование с тем же key, что встроенное, переопределяет его —
     // так можно поправить шаблон/нормы built-in исследования, не трогая код
     const byKey = {}
@@ -782,7 +788,27 @@ export const store = {
     Object.values(custom).forEach((s) => {
       byKey[s.key] = s
     })
-    return Object.values(byKey)
+    return Object.values(byKey).filter((s) => !hidden.has(s.key))
+  },
+
+  getHiddenStudies() {
+    return [...(readAll().hiddenStudies || [])]
+  },
+
+  hideStudy(key) {
+    const state = readAll()
+    const hidden = new Set(state.hiddenStudies || [])
+    hidden.add(key)
+    state.hiddenStudies = [...hidden]
+    writeAll(state)
+    return state.hiddenStudies
+  },
+
+  restoreStudy(key) {
+    const state = readAll()
+    state.hiddenStudies = (state.hiddenStudies || []).filter((k) => k !== key)
+    writeAll(state)
+    return state.hiddenStudies
   },
 
   saveCustomStudy(study) {

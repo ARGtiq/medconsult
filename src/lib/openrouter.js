@@ -1,3 +1,27 @@
+
+function _ls() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemLS || (globalThis.__medconsultMemLS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.localStorage;
+}
+function _ss() {
+  if (typeof window === "undefined") {
+    const mem = globalThis.__medconsultMemSS || (globalThis.__medconsultMemSS = {});
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+      removeItem: (k) => { delete mem[k]; },
+    };
+  }
+  return window.sessionStorage;
+}
+
 // Клиент для AI-вызовов. Поддерживает два провайдера на выбор:
 // - OpenRouter (унифицированный доступ к разным моделям, платный по токенам)
 // - Google AI Studio напрямую (свой ключ с ai.google.dev, у Gemini есть бесплатный лимит)
@@ -11,21 +35,21 @@ const OPENROUTER_MODEL = 'google/gemini-2.5-flash'
 const GOOGLE_MODEL = 'gemini-2.5-flash'
 
 export function getProvider() {
-  return localStorage.getItem(PROVIDER_KEY) || 'openrouter'
+  return _ls().getItem(PROVIDER_KEY) || 'openrouter'
 }
 
 export function setProvider(provider) {
-  localStorage.setItem(PROVIDER_KEY, provider)
+  _ls().setItem(PROVIDER_KEY, provider)
 }
 
 export function getApiKey(provider = getProvider()) {
   const key = provider === 'google' ? GOOGLE_KEY : OPENROUTER_KEY
-  return localStorage.getItem(key) || ''
+  return _ls().getItem(key) || ''
 }
 
 export function setApiKey(provider, value) {
   const key = provider === 'google' ? GOOGLE_KEY : OPENROUTER_KEY
-  localStorage.setItem(key, value.trim())
+  _ls().setItem(key, value.trim())
 }
 
 export function hasApiKey() {
@@ -220,4 +244,19 @@ export async function suggestAnalogsAI(drugName) {
   } catch {
     return raw.split(',').map((s) => s.trim()).filter(Boolean)
   }
+}
+
+export async function describeDrugGroup({ label, drugs, sideEffects, contraindications, mkb10Codes }) {
+  return callAI(
+    'Ты — ассистент врача-уролога. Напиши полное клиническое описание фармакологической группы на русском: класс и механизм, типичные показания в урологии и андрологии, место в практике, ключевые ограничения и мониторинг. 2–4 коротких абзаца связным текстом, без markdown, без заголовков, без преамбулы. Не перечисляй дозы, которых нет во входных данных. Не выдумывай регистрационные статусы.',
+    [
+      `Группа: ${label || 'не указана'}`,
+      drugs ? `Препараты (МНН): ${drugs}` : '',
+      sideEffects ? `Побочные эффекты: ${sideEffects}` : '',
+      contraindications ? `Противопоказания: ${contraindications}` : '',
+      mkb10Codes ? `Коды МКБ-10: ${mkb10Codes}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  )
 }

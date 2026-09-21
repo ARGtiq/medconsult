@@ -7,6 +7,7 @@ import FillProgressBar from './FillProgressBar'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { parseDrugGroups } from '../data/drugSafety'
 import Mkb10CodesInput from './Mkb10CodesInput'
+import DrugGroupsInput from './DrugGroupsInput'
 import { showToast } from '../lib/toast'
 
 const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
@@ -196,10 +197,10 @@ export default function DrugsTab({ initialItemId }) {
             }}
           />
           <div className="drug-form-groups-field">
-            <input
+            <DrugGroupsInput
               placeholder="Группы через запятую, официальную — в [квадратных скобках]"
               value={form.group}
-              onChange={(e) => setForm({ ...form, group: e.target.value })}
+              onChange={(v) => setForm({ ...form, group: v })}
             />
             {form.group && (
               <div className="drug-groups-preview">
