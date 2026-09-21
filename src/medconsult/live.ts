@@ -2,7 +2,7 @@ import { store } from "@/legacy/lib/store";
 import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
-import { getComplaintPresets } from "./data/templates";
+import { getComplaintPresets, getComplaintTemplates, type ComplaintTemplate } from "./data/templates";
 import { STUDIES, getStudy as seedStudy, studiesFromScales } from "./data/studies";
 import type { StudyDef } from "./types";
 
@@ -153,6 +153,49 @@ export function liveComplaints(): string[] {
   return Array.from(new Set([...fromTemplates, ...learned, ...COMPLAINTS.map((c) => c.text)]));
 }
 
+export function liveComplaintTemplates(): ComplaintTemplate[] {
+  try {
+    return getComplaintTemplates();
+  } catch {
+    return [];
+  }
+}
+
+export function composeComplaint(base: string, option?: string) {
+  const b = base.trim();
+  const o = (option || "").trim();
+  return o ? `${b} ${o}` : b;
+}
+
+/** Longest dictionary item that `text` equals or extends with a space + qualifier. */
+export function complaintBaseOf(text: string, templates?: ComplaintTemplate[]): string {
+  const t = text.trim();
+  const list = (templates || liveComplaintTemplates())
+    .slice()
+    .sort((a, b) => b.text.length - a.text.length);
+  const hit = list.find((c) => t === c.text || t.startsWith(c.text + " "));
+  return hit?.text || t;
+}
+
+export function optionsForComplaint(text: string, templates?: ComplaintTemplate[]): string[] {
+  const list = templates || liveComplaintTemplates();
+  const key = text.trim().toLowerCase();
+  const hit = list.find((c) => c.text.toLowerCase() === key);
+  return hit?.options?.filter(Boolean) || [];
+}
+
+export function findComplaintVariant(selected: string[], base: string, templates?: ComplaintTemplate[]): string | undefined {
+  const list = templates || liveComplaintTemplates();
+  const b = base.trim();
+  const longer = list.filter((c) => c.text !== b && c.text.startsWith(b + " "));
+  return selected.find((s) => {
+    if (s === b) return true;
+    if (!s.startsWith(b + " ")) return false;
+    if (longer.some((c) => s === c.text || s.startsWith(c.text + " "))) return false;
+    return true;
+  });
+}
+
 const WORD_SPLIT = /[^a-zа-яё0-9+]+/i;
 
 export function tokensOf(text: string): string[] {
@@ -194,7 +237,11 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
       for (const w of tokensOf(t)) {
         if (!w.startsWith(last) || seen.has(w)) continue;
         seen.add(w);
-        words.push({ id: "w-" + w, label: w, hint: "слово" });
+        words.push({
+          id: "w-" + w,
+          label: w,
+          hint: optionsForComplaint(w).length ? "опции" : "слово",
+        });
       }
     }
   }
@@ -205,7 +252,12 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
     if (!matchPhraseOrWord(t, query)) continue;
     seen.add(low);
     const multi = tokensOf(t).length > 1;
-    combo.push({ id: "p-" + t, label: t, hint: multi ? "фраза" : undefined });
+    const hasOpts = optionsForComplaint(t).length > 0;
+    combo.push({
+      id: "p-" + t,
+      label: t,
+      hint: hasOpts ? "опции" : multi ? "фраза" : undefined,
+    });
   }
 
   words.sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label, "ru"));

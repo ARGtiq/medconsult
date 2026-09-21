@@ -29,12 +29,18 @@ export type VisitPack = {
   localPackIds: string[];
 };
 
+/** Dictionary item: main complaint + optional qualifiers (side, type…). */
+export type ComplaintTemplate = {
+  text: string;
+  options?: string[];
+};
+
 export type TemplatesState = {
   localPacks: LocalPack[];
   chronic: VitaePreset[];
   surgeries: VitaePreset[];
   docKinds: DocKind[];
-  complaints: string[];
+  complaints: ComplaintTemplate[];
   visitPacks: VisitPack[];
   questionnaires: ScaleDef[];
 };
@@ -77,7 +83,18 @@ export const SEED_DOC_KINDS: DocKind[] = [
   { id: "certificate", title: "Справка" },
 ];
 
-export const SEED_COMPLAINTS: string[] = COMPLAINTS.map((c) => c.text);
+const SIDE = ["справа", "слева", "с обеих сторон"];
+
+const SEED_COMPLAINT_OPTIONS: Record<string, string[]> = {
+  "боль в пояснице": SIDE,
+  "боль внизу живота": ["справа", "слева", "по центру", "с обеих сторон"],
+  "боль в мошонке": SIDE,
+};
+
+export const SEED_COMPLAINTS: ComplaintTemplate[] = COMPLAINTS.map((c) => {
+  const options = SEED_COMPLAINT_OPTIONS[c.text];
+  return options ? { text: c.text, options: [...options] } : { text: c.text };
+});
 
 export const STD_DOC_BLOCKS = [
   { id: "complaints", title: "Жалобы" },
@@ -134,10 +151,40 @@ export const seedTemplates = (): TemplatesState => ({
   chronic: SEED_CHRONIC.map((x) => ({ ...x })),
   surgeries: SEED_SURGERIES.map((x) => ({ ...x })),
   docKinds: SEED_DOC_KINDS.map((x) => ({ ...x })),
-  complaints: [...SEED_COMPLAINTS],
-  visitPacks: SEED_VISIT_PACKS.map((x) => ({ ...x, codes: [...x.codes], stdBlocks: [...x.stdBlocks], extraKinds: [...x.extraKinds], localPackIds: [...x.localPackIds] })),
+  complaints: SEED_COMPLAINTS.map((c) => ({ text: c.text, options: c.options ? [...c.options] : undefined })),
+  visitPacks: SEED_VISIT_PACKS.map((p) => ({ ...p, codes: [...p.codes], stdBlocks: [...p.stdBlocks], extraKinds: [...p.extraKinds], localPackIds: [...p.localPackIds] })),
   questionnaires: cloneScales(QUESTION_SCALES),
 });
+
+export function normalizeComplaint(raw: unknown): ComplaintTemplate | null {
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    return text ? { text } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { text?: unknown; options?: unknown };
+  const text = typeof o.text === "string" ? o.text.trim() : "";
+  if (!text) return null;
+  if (Array.isArray(o.options)) {
+    const options = o.options.map((x) => String(x).trim()).filter(Boolean);
+    return { text, options };
+  }
+  return { text };
+}
+
+function mergeComplaints(saved: unknown, seed: ComplaintTemplate[]): ComplaintTemplate[] {
+  const list = Array.isArray(saved)
+    ? (saved.map(normalizeComplaint).filter(Boolean) as ComplaintTemplate[])
+    : [];
+  if (!list.length) return seed.map((c) => ({ text: c.text, options: c.options ? [...c.options] : undefined }));
+  const seedBy = Object.fromEntries(seed.map((s) => [s.text.toLowerCase(), s]));
+  return list.map((s) => {
+    const base = seedBy[s.text.toLowerCase()];
+    if (!base) return s;
+    if (Array.isArray(s.options)) return s;
+    return { text: s.text, options: base.options ? [...base.options] : undefined };
+  });
+}
 
 function mergeQuestionnaires(saved: ScaleDef[], seed: ScaleDef[]): ScaleDef[] {
   const seedBy = Object.fromEntries(seed.map((s) => [s.totalKey, s]));
@@ -165,7 +212,7 @@ function read(): TemplatesState {
       chronic: Array.isArray(parsed.chronic) && parsed.chronic.length ? parsed.chronic : seed.chronic,
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
-      complaints: Array.isArray(parsed.complaints) ? parsed.complaints : seed.complaints,
+      complaints: mergeComplaints(parsed.complaints, seed.complaints),
       visitPacks: Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks,
       questionnaires:
         Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
@@ -208,6 +255,10 @@ export function getDocKinds(): DocKind[] {
 }
 
 export function getComplaintPresets(): string[] {
+  return read().complaints.map((c) => c.text);
+}
+
+export function getComplaintTemplates(): ComplaintTemplate[] {
   return read().complaints;
 }
 
@@ -231,8 +282,9 @@ export function addComplaintTemplate(text: string) {
   if (!t) return;
   const state = read();
   const key = t.toLowerCase();
-  if (state.complaints.some((c) => c.toLowerCase() === key)) return;
-  write({ ...state, complaints: [...state.complaints, t] });
+  if (state.complaints.some((c) => c.text.toLowerCase() === key)) return;
+  if (state.complaints.some((c) => key.startsWith(c.text.toLowerCase() + " "))) return;
+  write({ ...state, complaints: [...state.complaints, { text: t }] });
 }
 
 export function packsForCodeLive(code: string) {

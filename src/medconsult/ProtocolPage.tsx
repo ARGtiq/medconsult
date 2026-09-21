@@ -7,7 +7,7 @@ import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusPackButton } from "./DocBlocks";
-import { EditableChips, ToggleChips } from "./EditableChip";
+import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
 import { packsForCodeLive, useTemplates } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
@@ -18,6 +18,8 @@ import {
   drugLine,
   learnedDrugs,
   matchPhraseOrWord,
+  optionsForComplaint,
+  findComplaintVariant,
   suggestComplaints,
   liveIcdMerged,
   searchAllergy,
@@ -39,7 +41,7 @@ function clampSplit(n: number) {
 
 export function ProtocolPage() {
   const store = useAppStore();
-  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation } =
+  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation, applyComplaintOption } =
     store;
   const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
@@ -50,6 +52,8 @@ export function ProtocolPage() {
   const [hubOpen, setHubOpen] = useState(false);
   const [complaintQ, setComplaintQ] = useState("");
   const [dictOpen, setDictOpen] = useState(false);
+  const [optMenu, setOptMenu] = useState<OptionMenuState | null>(null);
+  const complaintTa = useRef<HTMLDivElement>(null);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
   const [liveSplit, setLiveSplit] = useState<number | null>(null);
@@ -450,31 +454,53 @@ export function ProtocolPage() {
             ai={showAi("complaints") ? () => polish("complaints") : undefined}
             voice={(t) => toggleComplaint(t)}
           >
+            <div ref={complaintTa}>
             <Typeahead
               value={complaintQ}
               onChange={setComplaintQ}
               items={complaintQ.trim().length >= 2 ? suggestComplaints(complaintQ, 12) : []}
               onPick={(it) => {
-                if (!session.complaints.includes(it.label)) toggleComplaint(it.label);
+                const has = !!findComplaintVariant(session.complaints, it.label) || session.complaints.includes(it.label);
+                if (!has) toggleComplaint(it.label);
+                if (optionsForComplaint(it.label).length) {
+                  const r = complaintTa.current?.getBoundingClientRect();
+                  if (r) setOptMenu({ base: it.label, rect: { top: r.top, left: r.left, bottom: r.bottom, width: r.width } });
+                } else {
+                  setOptMenu(null);
+                }
               }}
               onSubmitCustom={(raw) => toggleComplaint(raw)}
               placeholder="Начать вводить жалобу…  ↑↓ Enter"
               emptyHint={complaintQ.trim().length >= 2 ? "Enter — добавить свою формулировку" : undefined}
             />
+            </div>
+            {optMenu ? (
+              <ComplaintOptionMenu
+                state={optMenu}
+                selected={session.complaints}
+                onPick={(opt) => {
+                  applyComplaintOption(optMenu.base, opt);
+                  setOptMenu(null);
+                }}
+                onClose={() => setOptMenu(null)}
+              />
+            ) : null}
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
-            <ToggleChips
+            <ComplaintChips
               texts={store.recentChips}
               onToggle={toggleComplaint}
               selected={session.complaints}
-              onRename={renameInserted("complaints")}
+              onApplyOption={applyComplaintOption}
+              setOptionMenu={setOptMenu}
             />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
-            <ToggleChips
+            <ComplaintChips
               texts={chips.fromCode}
               onToggle={toggleComplaint}
               selected={session.complaints}
               dashed
-              onRename={renameInserted("complaints")}
+              onApplyOption={applyComplaintOption}
+              setOptionMenu={setOptMenu}
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <button
@@ -493,7 +519,7 @@ export function ProtocolPage() {
             {dictOpen || complaintQ.trim().length >= 2 ? (
               <>
                 <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
-                <ToggleChips
+                <ComplaintChips
                   texts={
                     complaintQ.trim().length >= 2
                       ? chips.rest.filter((t) => matchPhraseOrWord(t, complaintQ)).slice(0, 24)
@@ -501,7 +527,8 @@ export function ProtocolPage() {
                   }
                   onToggle={toggleComplaint}
                   selected={session.complaints}
-                  onRename={renameInserted("complaints")}
+                  onApplyOption={applyComplaintOption}
+                  setOptionMenu={setOptMenu}
                 />
               </>
             ) : null}

@@ -1,5 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
+import {
+  findComplaintVariant,
+  liveComplaintTemplates,
+  optionsForComplaint,
+} from "./live";
 
 function chipClass(on: boolean, dashed?: boolean, marked?: boolean) {
   if (on) {
@@ -149,6 +155,211 @@ export function ToggleChips({
             </button>
             {marked ? <InfoDot query={t} /> : null}
           </span>
+        );
+      })}
+    </div>
+  );
+}
+
+export type OptionMenuState = { base: string; rect: { top: number; left: number; bottom: number; width: number } };
+
+export function ComplaintOptionMenu({
+  state,
+  selected,
+  onPick,
+  onClose,
+}: {
+  state: OptionMenuState;
+  selected: string[];
+  onPick: (option: string) => void;
+  onClose: () => void;
+}) {
+  const options = optionsForComplaint(state.base);
+  const items = ["", ...options];
+  const variant = findComplaintVariant(selected, state.base);
+  const current = variant && variant.startsWith(state.base + " ") ? variant.slice(state.base.length + 1) : "";
+  const startIdx = Math.max(0, items.indexOf(current));
+  const [idx, setIdx] = useState(startIdx);
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 220, maxH: 220 });
+
+  useLayoutEffect(() => {
+    const r = state.rect;
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const spaceAbove = r.top - 8;
+    const openUp = spaceBelow < 120 && spaceAbove > spaceBelow;
+    const maxH = Math.max(96, Math.min(240, openUp ? spaceAbove : spaceBelow));
+    setPos({
+      top: openUp ? Math.max(8, r.top - maxH - 4) : r.bottom + 4,
+      left: Math.max(8, Math.min(r.left, window.innerWidth - 228)),
+      width: Math.max(r.width, 200),
+      maxH,
+    });
+  }, [state]);
+
+  useEffect(() => {
+    box.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const el = box.current?.querySelector<HTMLElement>(`[data-idx="${idx}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [idx]);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (box.current && !box.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose]);
+
+  function onKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIdx((i) => Math.min(i + 1, items.length - 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIdx((i) => Math.max(i - 1, 0));
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onPick(items[idx] ?? "");
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  }
+
+  if (!options.length) return null;
+
+  return createPortal(
+    <div
+      ref={box}
+      tabIndex={0}
+      role="listbox"
+      aria-label="Уточнение жалобы"
+      onKeyDown={onKey}
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
+      className="fixed z-[85] overflow-auto rounded-md border border-line bg-surface shadow-lg outline-none"
+    >
+      <div className="border-b border-line px-2 py-1 text-[10px] tracking-wide text-mute uppercase">
+        {state.base}
+      </div>
+      <ul>
+        {items.map((opt, i) => (
+          <li key={opt || "empty"} role="presentation">
+            <button
+              type="button"
+              data-idx={i}
+              role="option"
+              aria-selected={i === idx}
+              onMouseEnter={() => setIdx(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onPick(opt)}
+              className={`flex w-full px-2 py-1.5 text-left text-sm ${
+                i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
+              } ${!opt ? "text-mute" : ""}`}
+            >
+              {opt || "без уточнения"}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>,
+    document.body,
+  );
+}
+
+export function ComplaintChips({
+  texts,
+  selected,
+  onToggle,
+  onApplyOption,
+  setOptionMenu,
+  dashed,
+}: {
+  texts: string[];
+  selected: string[];
+  onToggle: (t: string) => void;
+  onApplyOption: (base: string, option: string) => void;
+  setOptionMenu: (s: OptionMenuState | null) => void;
+  dashed?: boolean;
+}) {
+  const templates = liveComplaintTemplates();
+
+  return (
+    <div className="mt-1 flex flex-wrap items-start gap-1">
+      {texts.map((t) => {
+        const opts = optionsForComplaint(t, templates);
+        const variant = findComplaintVariant(selected, t, templates);
+        const on = !!variant;
+        const currentOpt = variant && variant.startsWith(t + " ") ? variant.slice(t.length + 1) : "";
+        return (
+          <div key={t} className="flex max-w-full flex-col items-start gap-0.5">
+            <span className={`inline-flex items-center gap-0.5 ${chipClass(on, dashed)}`}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (on) {
+                    onToggle(t);
+                    setOptionMenu(null);
+                    return;
+                  }
+                  onToggle(t);
+                  if (opts.length) {
+                    const host = (e.currentTarget.parentElement as HTMLElement) || e.currentTarget;
+                    const r = host.getBoundingClientRect();
+                    setOptionMenu({
+                      base: t,
+                      rect: { top: r.top, left: r.left, bottom: r.bottom, width: r.width },
+                    });
+                  } else {
+                    setOptionMenu(null);
+                  }
+                }}
+              >
+                {t}
+              </button>
+              {opts.length ? (
+                <button
+                  type="button"
+                  title="уточнение · стрелки"
+                  className="text-[9px] leading-none text-mute"
+                  onClick={(e) => {
+                    if (!on) onToggle(t);
+                    const host = (e.currentTarget.parentElement as HTMLElement) || e.currentTarget;
+                    const r = host.getBoundingClientRect();
+                    setOptionMenu({
+                      base: t,
+                      rect: { top: r.top, left: r.left, bottom: r.bottom, width: r.width },
+                    });
+                  }}
+                >
+                  ▾
+                </button>
+              ) : null}
+            </span>
+            {on && opts.length ? (
+              <div className="ml-3 flex flex-wrap gap-0.5">
+                {opts.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={chipClass(currentOpt === o, true)}
+                    onClick={() => onApplyOption(t, currentOpt === o ? "" : o)}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>

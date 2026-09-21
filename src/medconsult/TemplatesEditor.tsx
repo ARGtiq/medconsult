@@ -5,6 +5,7 @@ import {
   saveTemplates,
   seedTemplates,
   STD_DOC_BLOCKS,
+  type ComplaintTemplate,
   type DocKind,
   type TemplatesState,
   type VitaePreset,
@@ -170,11 +171,9 @@ export function TemplatesEditor() {
           </div>
           {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
           {tab === "complaints" && (
-            <StringListEditor
+            <ComplaintDictEditor
               items={data.complaints}
               onChange={(complaints) => persist({ complaints })}
-              hint="Словарь жалоб. Свои формулировки из протокола попадают сюда сами."
-              addLabel="+ жалоба"
             />
           )}
           {tab === "chronic" && (
@@ -716,6 +715,136 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
       >
         + пакет статуса
       </button>
+    </div>
+  );
+}
+
+function ComplaintDictEditor({
+  items,
+  onChange,
+}: {
+  items: ComplaintTemplate[];
+  onChange: (p: ComplaintTemplate[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [optDraft, setOptDraft] = useState<Record<number, string>>({});
+  const [openOpt, setOpenOpt] = useState<number | null>(null);
+  const shown = items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => a.it.text.localeCompare(b.it.text, "ru", { sensitivity: "base" }));
+
+  function patch(i: number, next: ComplaintTemplate) {
+    onChange(items.map((x, idx) => (idx === i ? next : x)));
+  }
+
+  function addOption(i: number, raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    const cur = items[i];
+    if (!cur) return;
+    const options = cur.options || [];
+    if (options.some((o) => o.toLowerCase() === t.toLowerCase())) return;
+    patch(i, { ...cur, options: [...options, t] });
+    setOptDraft((d) => ({ ...d, [i]: "" }));
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs text-ink-soft">
+        Словарь жалоб. «+опция» — уточнения чипами под пунктом (справа / слева…). В протоколе после выбора жалобы
+        выпадает список, стрелки, пустой пункт = без уточнения.
+      </p>
+      <div className="space-y-1.5">
+        {shown.map(({ it, i }) => (
+          <div key={`${it.text}-${i}`} className="rounded-md border border-line/70 bg-paper px-2 py-1.5">
+            <div className="flex items-center gap-1">
+              <input
+                value={it.text}
+                onChange={(e) => patch(i, { ...it, text: e.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                className="shrink-0 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
+                onClick={() => setOpenOpt((v) => (v === i ? null : i))}
+              >
+                +опция
+              </button>
+              <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </div>
+            {(it.options && it.options.length > 0) || openOpt === i ? (
+              <div className="mt-1 ml-4 flex flex-wrap items-center gap-1 border-l border-line pl-2">
+                {(it.options || []).map((o) => (
+                  <span
+                    key={o}
+                    className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal"
+                  >
+                    {o}
+                    <button
+                      type="button"
+                      className="text-mute"
+                      onClick={() =>
+                        patch(i, { ...it, options: (it.options || []).filter((x) => x !== o) })
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {openOpt === i ? (
+                  <input
+                    autoFocus
+                    value={optDraft[i] || ""}
+                    onChange={(e) => setOptDraft((d) => ({ ...d, [i]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addOption(i, optDraft[i] || "");
+                      }
+                      if (e.key === "Escape") setOpenOpt(null);
+                    }}
+                    onBlur={() => {
+                      if ((optDraft[i] || "").trim()) addOption(i, optDraft[i] || "");
+                    }}
+                    placeholder="опция + Enter"
+                    className="w-32 rounded-full border border-line bg-surface px-2 py-0.5 text-[11px]"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && draft.trim()) {
+              e.preventDefault();
+              const t = draft.trim();
+              if (!items.some((x) => x.text.toLowerCase() === t.toLowerCase())) onChange([...items, { text: t }]);
+              setDraft("");
+            }
+          }}
+          placeholder="новая жалоба + Enter"
+          className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+        <button
+          type="button"
+          className="text-xs font-medium text-teal"
+          onClick={() => {
+            const t = draft.trim();
+            if (!t) return;
+            if (!items.some((x) => x.text.toLowerCase() === t.toLowerCase())) onChange([...items, { text: t }]);
+            setDraft("");
+          }}
+        >
+          + жалоба
+        </button>
+      </div>
     </div>
   );
 }

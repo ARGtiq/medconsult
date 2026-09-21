@@ -15,7 +15,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       out.push({
         id: "c-" + hit.id,
         label: hit.label,
-        hint: hit.hint === "слово" ? "слово" : "жалоба",
+        hint: hit.hint === "слово" ? "слово" : hit.hint === "опции" ? "опции" : "жалоба",
         run: () => {
           toggleComplaint(hit.label);
           setToast(`Жалоба: ${hit.label}`);

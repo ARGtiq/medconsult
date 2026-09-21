@@ -3,9 +3,9 @@ import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { applyComputed } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
-import { getStudyLive } from "./live";
+import { complaintBaseOf, composeComplaint, findComplaintVariant, getStudyLive } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
 const SESSION_KEY = "medconsult_v2_session";
@@ -275,6 +275,7 @@ type AppStore = {
   removeInstance: (key: string, instanceId: string) => void;
   toggleBlock: (id: string) => void;
   toggleComplaint: (text: string) => void;
+  applyComplaintOption: (base: string, option: string) => void;
   toggleLocal: (text: string) => void;
   addLocalPhrase: (text: string) => void;
   addRecommendation: (text: string) => void;
@@ -489,20 +490,48 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   toggleComplaint(text) {
     const session = get().session;
-    const has = session.complaints.includes(text);
-    const complaints = has ? session.complaints.filter((c) => c !== text) : [...session.complaints, text];
-    const recent = Array.from(new Set([text.replace(/ ×\d+$/, ""), ...get().recentChips])).slice(0, 8);
+    const templates = (() => {
+      try {
+        return getComplaintTemplates();
+      } catch {
+        return [];
+      }
+    })();
+    const base = complaintBaseOf(text, templates);
+    const existing = findComplaintVariant(session.complaints, base, templates) || (session.complaints.includes(text) ? text : undefined);
+    const complaints = existing
+      ? session.complaints.filter((c) => c !== existing && c !== text)
+      : [...session.complaints, text];
+    const recent = Array.from(new Set([base.replace(/ ×\d+$/, ""), ...get().recentChips])).slice(0, 8);
     writeJson(CHIPS_KEY, recent);
     persistSession({ ...session, complaints });
     set({ session: { ...session, complaints }, recentChips: recent });
     try {
-      if (!has) {
-        legacy.recordComplaint(text);
-        addComplaintTemplate(text);
+      if (!existing) {
+        legacy.recordComplaint(base);
+        addComplaintTemplate(base);
       }
     } catch {
       /* */
     }
+  },
+
+  applyComplaintOption(base, option) {
+    const session = get().session;
+    const templates = (() => {
+      try {
+        return getComplaintTemplates();
+      } catch {
+        return [];
+      }
+    })();
+    const b = base.trim();
+    const composed = composeComplaint(b, option);
+    const existing = findComplaintVariant(session.complaints, b, templates);
+    const complaints = session.complaints.filter((c) => c !== existing && c !== b);
+    if (!complaints.includes(composed)) complaints.push(composed);
+    persistSession({ ...session, complaints });
+    set({ session: { ...session, complaints } });
   },
 
   toggleLocal(text) {
