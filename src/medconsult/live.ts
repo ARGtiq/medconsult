@@ -348,7 +348,21 @@ function overlayComputed(def: StudyDef): StudyDef {
   for (const s of seed.fields) {
     const cur = byKey.get(s.key);
     if (!cur) byKey.set(s.key, s);
-    else if (s.computed) byKey.set(s.key, { ...cur, computed: true, formula: s.formula });
+    else {
+      byKey.set(s.key, {
+        ...s,
+        ...cur,
+        computed: cur.computed ?? s.computed,
+        formula: cur.formula || s.formula,
+        kind: cur.kind || s.kind,
+        options: cur.options?.length ? cur.options : s.options,
+        refOp: cur.refOp || s.refOp,
+        refMin: cur.refMin ?? s.refMin,
+        refMax: cur.refMax ?? s.refMax,
+        refOf: cur.refOf || s.refOf,
+        refOfMode: cur.refOfMode || s.refOfMode,
+      });
+    }
   }
   return { ...def, fields: [...byKey.values()] };
 }

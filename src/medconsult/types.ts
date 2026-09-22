@@ -12,8 +12,15 @@ export type StudyField = {
   label: string;
   unit?: string;
   normal?: string;
+  kind?: "text" | "number" | "select" | "multi";
+  options?: string[];
   computed?: boolean;
-  formula?: "prostate_volume" | "sperm_total";
+  formula?: string;
+  refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
+  refMin?: number;
+  refMax?: number;
+  refOf?: string;
+  refOfMode?: "percent" | "value";
 };
 
 export type StudyDef = {

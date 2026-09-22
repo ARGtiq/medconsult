@@ -5,16 +5,82 @@ import {
   applyComputed,
   collectDeviations,
   fieldAbnormal,
+  formatRefHint,
+  relativeShare,
   STUDY_GROUP_LABEL,
   STUDY_GROUP_ORDER,
   liveScales,
   studyMatchesQuery,
 } from "./data/studies";
+import type { StudyField } from "./types";
 import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive, icdMatches } from "./live";
 import { scaleFromStudyKey } from "./data/questionnaires";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
+
+function splitMulti(value: string) {
+  return (value || "")
+    .split(/[,;/]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function FieldControl({
+  f,
+  value,
+  onChange,
+}: {
+  f: StudyField;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (f.computed) {
+    return (
+      <span className="block text-sm font-semibold tabular-nums">
+        {value || "—"} {f.unit}
+      </span>
+    );
+  }
+  if ((f.kind === "select" || f.kind === "multi") && f.options?.length) {
+    const picked = f.kind === "multi" ? splitMulti(value) : value ? [value] : [];
+    return (
+      <div className="mt-0.5 flex flex-wrap gap-1">
+        {f.options.map((opt) => {
+          const on = picked.some((p) => p.toLowerCase() === opt.toLowerCase());
+          return (
+            <button
+              key={opt}
+              type="button"
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                on ? "bg-teal text-paper" : "border border-line bg-surface text-ink"
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (f.kind === "multi") {
+                  const next = on ? picked.filter((p) => p.toLowerCase() !== opt.toLowerCase()) : [...picked, opt];
+                  onChange(next.join(", "));
+                } else {
+                  onChange(on ? "" : opt);
+                }
+              }}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      inputMode={f.kind === "number" || f.unit ? "decimal" : "text"}
+      className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
+    />
+  );
+}
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
@@ -84,13 +150,19 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
-                  const bad = !f.computed && fieldAbnormal(inst.fields[f.key] || value, f.normal);
+                  const bad = fieldAbnormal(value, f.normal, f, fields);
                   const omitted = (inst.omit || []).includes(f.key);
-                  const pickable = def.category === "lab" && !f.computed;
+                  const pickable = (def.category === "lab" || def.sparse) && !f.computed;
+                  const wide = f.kind === "select" || f.kind === "multi";
+                  const share =
+                    f.refOf && f.refOfMode !== "value" && !f.computed
+                      ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")
+                      : null;
+                  const hint = formatRefHint(f);
                   return (
                     <label
                       key={f.key}
-                      className={`rounded-md px-1.5 py-1 ${
+                      className={`rounded-md px-1.5 py-1 ${wide ? "col-span-2 sm:col-span-3" : ""} ${
                         f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"
                       }`}
                     >
@@ -106,25 +178,18 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                           }}
                         >
                           {f.label}
-                          {pickable ? (omitted ? " · нет" : " · в текст") : ""}
+                          {pickable ? (omitted ? " · нет" : " · в текст") : f.computed ? " · формула" : ""}
                         </button>
                       </span>
-                      {f.computed ? (
-                        <span className="block text-sm font-semibold tabular-nums">
-                          {value || "—"} {f.unit}
-                        </span>
-                      ) : (
-                        <input
-                          value={inst.fields[f.key] || ""}
-                          onChange={(e) =>
-                            updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: e.target.value })
-                          }
-                          className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
-                        />
-                      )}
-                      {f.normal && (
-                        <span className={`block text-[10px] ${bad ? "text-danger" : "text-teal"}`}>{f.normal}</span>
-                      )}
+                      <FieldControl
+                        f={f}
+                        value={f.computed ? value : inst.fields[f.key] || ""}
+                        onChange={(v) => updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: v }, inst.date)}
+                      />
+                      <span className={`block text-[10px] ${bad ? "text-danger" : "text-teal"}`}>
+                        {hint}
+                        {share != null ? ` · ${Math.round(share * 10) / 10}% объёма` : ""}
+                      </span>
                       {was && (
                         <span className="mt-0.5 block text-[10px] text-mute">
                           было: {was}

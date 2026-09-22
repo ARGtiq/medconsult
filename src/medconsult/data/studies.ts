@@ -1,4 +1,4 @@
-import type { StudyDef, StudyInstance } from "../types";
+import type { StudyDef, StudyField, StudyInstance } from "../types";
 import { domainLine, QUESTION_SCALES, scaleFromStudyKey, studyKeyForScale, verdictFor, type ScaleDef } from "./questionnaires";
 import { getQuestionScales } from "./templates";
 
@@ -10,9 +10,9 @@ export const STUDIES: StudyDef[] = [
     template:
       "УЗИ предстательной железы от {date}: размеры {length}×{width}×{height} мм, объём {volume} см³, контуры ровные, эхоструктура {echo}. Остаточная моча {residual} мл. Узлы: {nodes}.",
     fields: [
-      { key: "length", label: "Длина", unit: "мм", normal: "норма до 40" },
-      { key: "width", label: "Ширина", unit: "мм", normal: "норма до 45" },
-      { key: "height", label: "Высота", unit: "мм", normal: "норма до 35" },
+      { key: "length", label: "Длина", unit: "мм", kind: "number", normal: "норма до 40" },
+      { key: "width", label: "Ширина", unit: "мм", kind: "number", normal: "норма до 45" },
+      { key: "height", label: "Высота", unit: "мм", kind: "number", normal: "норма до 35" },
       {
         key: "volume",
         label: "Объём",
@@ -21,9 +21,9 @@ export const STUDIES: StudyDef[] = [
         computed: true,
         formula: "prostate_volume",
       },
-      { key: "residual", label: "Остаточная моча", unit: "мл", normal: "норма < 50" },
-      { key: "echo", label: "Эхоструктура", normal: "однородная" },
-      { key: "nodes", label: "Узлы", normal: "в норме нет" },
+      { key: "residual", label: "Остаточная моча", unit: "мл", kind: "number", normal: "<50 мл", refOp: "lt", refMax: 50 },
+      { key: "echo", label: "Эхоструктура", kind: "select", options: ["однородная", "неоднородная", "диффузно изменена"], normal: "однородная" },
+      { key: "nodes", label: "Узлы", kind: "select", options: ["нет", "есть"], normal: "нет" },
     ],
     referenceNotes: "Объём = длина × ширина × высота × 0,52 (размеры в мм → см³ / 1000). Норма до 25–30 см³.",
   },
@@ -34,9 +34,9 @@ export const STUDIES: StudyDef[] = [
     template:
       "ТРУЗИ предстательной железы от {date}: размеры {length}×{width}×{height} мм, объём {volume} см³, контуры ровные, очаговых изменений не выявлено. Семенные пузырьки не изменены.",
     fields: [
-      { key: "length", label: "Длина", unit: "мм", normal: "до 40" },
-      { key: "width", label: "Ширина", unit: "мм", normal: "до 45" },
-      { key: "height", label: "Высота", unit: "мм", normal: "до 35" },
+      { key: "length", label: "Длина", unit: "мм", kind: "number", normal: "до 40" },
+      { key: "width", label: "Ширина", unit: "мм", kind: "number", normal: "до 45" },
+      { key: "height", label: "Высота", unit: "мм", kind: "number", normal: "до 35" },
       {
         key: "volume",
         label: "Объём",
@@ -53,15 +53,35 @@ export const STUDIES: StudyDef[] = [
     label: "УЗИ почек / МП",
     category: "instrumental",
     template:
-      "УЗИ почек и мочевого пузыря от {date}: почки расположены типично. Правая — {rightSize} мм, левая — {leftSize} мм. Паренхима {parenchyma} мм. ЧЛС не расширена. Пузырь: объём {bladder} мл, остаточная моча {residual} мл.",
+      "УЗИ почек и мочевого пузыря от {date}: почки расположены типично. Правая — {rightSize} мм, левая — {leftSize} мм. Паренхима {parenchyma} мм. ЧЛС не расширена. Пузырь: объём {bladder} мл, остаточная моча {residual} мл ({residualPct}%).",
     fields: [
       { key: "rightSize", label: "Правая почка", unit: "мм", normal: "~100×50 мм" },
       { key: "leftSize", label: "Левая почка", unit: "мм", normal: "~100×50 мм" },
-      { key: "parenchyma", label: "Паренхима", unit: "мм", normal: "15–25 мм" },
-      { key: "bladder", label: "Объём МП", unit: "мл", normal: "300–500 мл" },
-      { key: "residual", label: "Остаточная моча", unit: "мл", normal: "<50 мл" },
+      { key: "parenchyma", label: "Паренхима", unit: "мм", kind: "number", normal: "15–25 мм", refOp: "range", refMin: 15, refMax: 25 },
+      { key: "bladder", label: "Объём МП", unit: "мл", kind: "number", normal: "300–500 мл" },
+      {
+        key: "residual",
+        label: "Остаточная моча",
+        unit: "мл",
+        kind: "number",
+        normal: "≤15% объёма МП",
+        refOp: "lte",
+        refMax: 15,
+        refOf: "bladder",
+        refOfMode: "percent",
+      },
+      {
+        key: "residualPct",
+        label: "Остаточная, %",
+        unit: "%",
+        computed: true,
+        formula: "{residual}/{bladder}*100",
+        normal: "≤15%",
+        refOp: "lte",
+        refMax: 15,
+      },
     ],
-    referenceNotes: "Норма почки взрослого ~100×50×40 мм. Паренхима 15–25 мм. Остаточная моча <50 мл.",
+    referenceNotes: "Норма почки взрослого ~100×50×40 мм. Паренхима 15–25 мм. Остаточная моча ≤10–15% объёма наполненного пузыря (обычно <50 мл).",
   },
   {
     key: "uroflowmetry",
@@ -70,12 +90,12 @@ export const STUDIES: StudyDef[] = [
     template:
       "Урофлоуметрия от {date}: Qmax {qmax} мл/с, Qavg {qavg} мл/с, время {voidTime} с, объём {voidVolume} мл, остаточная моча {residual} мл. Кривая: {curve}.",
     fields: [
-      { key: "qmax", label: "Qmax", unit: "мл/с", normal: ">15 норма, 10–15 погранично, <10 обструкция" },
-      { key: "qavg", label: "Qavg", unit: "мл/с", normal: "обычно ~½ Qmax" },
-      { key: "voidTime", label: "Время", unit: "с" },
-      { key: "voidVolume", label: "Объём", unit: "мл", normal: "150–400 мл информативно" },
-      { key: "residual", label: "Остаточная моча", unit: "мл", normal: "<50 мл" },
-      { key: "curve", label: "Кривая", normal: "колокол / плато / прерывистая" },
+      { key: "qmax", label: "Qmax", unit: "мл/с", kind: "number", normal: ">15", refOp: "gt", refMin: 15 },
+      { key: "qavg", label: "Qavg", unit: "мл/с", kind: "number", normal: "обычно ~½ Qmax" },
+      { key: "voidTime", label: "Время", unit: "с", kind: "number" },
+      { key: "voidVolume", label: "Объём", unit: "мл", kind: "number", normal: "150–400 мл информативно" },
+      { key: "residual", label: "Остаточная моча", unit: "мл", kind: "number", normal: "<50 мл", refOp: "lt", refMax: 50 },
+      { key: "curve", label: "Кривая", kind: "select", options: ["колокол", "плато", "прерывистая", "пилообразная"], normal: "колокол" },
     ],
     referenceNotes: "Qmax >15 мл/с — норма. <10 мл/с — признак инфравезикальной обструкции.",
   },
@@ -112,14 +132,14 @@ export const STUDIES: StudyDef[] = [
     template:
       "ОАМ от {date}: цвет {color}, прозрачность {clarity}, уд. вес {density}, белок {protein}, лейк. {leukocytes} в п/зр, эр. {erythrocytes} в п/зр, бактерии {bacteria}, нитриты {nitrites}.",
     fields: [
-      { key: "color", label: "Цвет", normal: "соломенно-жёлтый" },
-      { key: "clarity", label: "Прозрачность", normal: "прозрачная" },
-      { key: "density", label: "Уд. вес", normal: "1.010–1.025" },
-      { key: "protein", label: "Белок", unit: "г/л", normal: "отриц. / <0.033" },
-      { key: "leukocytes", label: "Лейкоциты", unit: "в п/зр", normal: "0–3 (муж)" },
-      { key: "erythrocytes", label: "Эритроциты", unit: "в п/зр", normal: "0–2" },
-      { key: "bacteria", label: "Бактерии", normal: "не обнаружены" },
-      { key: "nitrites", label: "Нитриты", normal: "отрицательно" },
+      { key: "color", label: "Цвет", kind: "select", options: ["соломенно-жёлтый", "жёлтый", "тёмно-жёлтый", "красный", "коричневый"], normal: "соломенно-жёлтый" },
+      { key: "clarity", label: "Прозрачность", kind: "select", options: ["прозрачная", "слегка мутная", "мутная"], normal: "прозрачная" },
+      { key: "density", label: "Уд. вес", kind: "number", normal: "1.010–1.025", refOp: "range", refMin: 1.01, refMax: 1.025 },
+      { key: "protein", label: "Белок", unit: "г/л", kind: "number", normal: "отриц. / <0.033", refOp: "lt", refMax: 0.033 },
+      { key: "leukocytes", label: "Лейкоциты", unit: "в п/зр", kind: "number", normal: "0–3 (муж)", refOp: "range", refMin: 0, refMax: 3 },
+      { key: "erythrocytes", label: "Эритроциты", unit: "в п/зр", kind: "number", normal: "0–2", refOp: "range", refMin: 0, refMax: 2 },
+      { key: "bacteria", label: "Бактерии", kind: "select", options: ["не обнаружены", "скудно", "умеренно", "обильно"], normal: "не обнаружены" },
+      { key: "nitrites", label: "Нитриты", kind: "select", options: ["отрицательно", "положительно"], normal: "отрицательно" },
     ],
     referenceNotes: "Лейкоцитурия >5–10 + нитриты + бактерии — признаки ИМП.",
   },
@@ -130,11 +150,11 @@ export const STUDIES: StudyDef[] = [
     template:
       "ОАК от {date}: Hb {hb} г/л, эр. {rbc} ×10¹²/л, лейк. {wbc} ×10⁹/л, тр. {plt} ×10⁹/л, СОЭ {esr} мм/ч.",
     fields: [
-      { key: "hb", label: "Гемоглобин", unit: "г/л", normal: "130–160 (муж)" },
-      { key: "rbc", label: "Эритроциты", unit: "×10¹²/л", normal: "4.0–5.5" },
-      { key: "wbc", label: "Лейкоциты", unit: "×10⁹/л", normal: "4.0–9.0" },
-      { key: "plt", label: "Тромбоциты", unit: "×10⁹/л", normal: "150–400" },
-      { key: "esr", label: "СОЭ", unit: "мм/ч", normal: "2–15 (муж)" },
+      { key: "hb", label: "Гемоглобин", unit: "г/л", kind: "number", normal: "130–160 (муж)", refOp: "range", refMin: 130, refMax: 160 },
+      { key: "rbc", label: "Эритроциты", unit: "×10¹²/л", kind: "number", normal: "4.0–5.5", refOp: "range", refMin: 4, refMax: 5.5 },
+      { key: "wbc", label: "Лейкоциты", unit: "×10⁹/л", kind: "number", normal: "4.0–9.0", refOp: "range", refMin: 4, refMax: 9 },
+      { key: "plt", label: "Тромбоциты", unit: "×10⁹/л", kind: "number", normal: "150–400", refOp: "range", refMin: 150, refMax: 400 },
+      { key: "esr", label: "СОЭ", unit: "мм/ч", kind: "number", normal: "2–15 (муж)", refOp: "range", refMin: 2, refMax: 15 },
     ],
     referenceNotes: "Лейкоцитоз + сдвиг влево + СОЭ — воспаление. Hb <130 у мужчин — анемия.",
   },
@@ -144,9 +164,9 @@ export const STUDIES: StudyDef[] = [
     category: "lab",
     template: "ПСА общий от {date}: {total} нг/мл, свободный {free} нг/мл, доля свободного {ratio} %.",
     fields: [
-      { key: "total", label: "Общий ПСА", unit: "нг/мл", normal: "<4 (зависит от возраста и объёма)" },
-      { key: "free", label: "Свободный", unit: "нг/мл" },
-      { key: "ratio", label: "Доля св.", unit: "%", normal: ">15% благоприятнее" },
+      { key: "total", label: "Общий ПСА", unit: "нг/мл", kind: "number", normal: "<4", refOp: "lt", refMax: 4 },
+      { key: "free", label: "Свободный", unit: "нг/мл", kind: "number" },
+      { key: "ratio", label: "Доля св.", unit: "%", computed: true, formula: "{free}/{total}*100", normal: ">15%", refOp: "gt", refMin: 15 },
     ],
     referenceNotes: "ПСА интерпретировать вместе с объёмом простаты (плотность ПСА).",
   },
@@ -189,14 +209,14 @@ export const STUDIES: StudyDef[] = [
     hint: "хламидии, гонорея, M.genitalium…",
     template: "ПЦР ИППП от {date}: {summary}.",
     fields: [
-      { key: "ct", label: "C. trachomatis", normal: "не обнар." },
-      { key: "ng", label: "N. gonorrhoeae", normal: "не обнар." },
-      { key: "mg", label: "M. genitalium", normal: "не обнар." },
-      { key: "uu", label: "U. urealyticum", normal: "не обнар." },
-      { key: "up", label: "U. parvum", normal: "не обнар." },
-      { key: "mh", label: "M. hominis", normal: "не обнар." },
-      { key: "tv", label: "T. vaginalis", normal: "не обнар." },
-      { key: "hpv", label: "ВПЧ", normal: "не обнар." },
+      { key: "ct", label: "C. trachomatis", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "ng", label: "N. gonorrhoeae", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "mg", label: "M. genitalium", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "uu", label: "U. urealyticum", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "up", label: "U. parvum", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "mh", label: "M. hominis", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "tv", label: "T. vaginalis", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
+      { key: "hpv", label: "ВПЧ", kind: "select", options: ["не обнар.", "обнар."], normal: "не обнар." },
     ],
     referenceNotes: "В Медлок попадут только заполненные позиции. «не обнар.» / «обнар.» достаточно.",
   },
@@ -208,8 +228,8 @@ export const STUDIES: StudyDef[] = [
     hint: "ВОЗ 2021, объём × концентрация",
     template: "Спермограмма от {date}: объём {volume} мл, концентрация {concentration} млн/мл.",
     fields: [
-      { key: "volume", label: "Объём", unit: "мл", normal: "≥1,4 (ВОЗ 2021)" },
-      { key: "concentration", label: "Концентрация", unit: "млн/мл", normal: "≥16" },
+      { key: "volume", label: "Объём", unit: "мл", kind: "number", normal: "≥1,4 (ВОЗ 2021)", refOp: "gte", refMin: 1.4 },
+      { key: "concentration", label: "Концентрация", unit: "млн/мл", kind: "number", normal: "≥16", refOp: "gte", refMin: 16 },
       {
         key: "totalCount",
         label: "Всего",
@@ -274,9 +294,9 @@ export const STUDIES: StudyDef[] = [
     hint: "почечная функция",
     template: "Креатинин от {date}: {crea} мкмоль/л, СКФ {egfr}.",
     fields: [
-      { key: "crea", label: "Креатинин", unit: "мкмоль/л", normal: "62–115 (муж)" },
-      { key: "egfr", label: "СКФ", unit: "мл/мин/1,73", normal: "≥90" },
-      { key: "urea", label: "Мочевина", unit: "ммоль/л", normal: "2,8–7,2" },
+      { key: "crea", label: "Креатинин", unit: "мкмоль/л", kind: "number", normal: "62–115 (муж)", refOp: "range", refMin: 62, refMax: 115 },
+      { key: "egfr", label: "СКФ", unit: "мл/мин/1,73", kind: "number", normal: "≥90", refOp: "gte", refMin: 90 },
+      { key: "urea", label: "Мочевина", unit: "ммоль/л", kind: "number", normal: "2,8–7,2", refOp: "range", refMin: 2.8, refMax: 7.2 },
     ],
     referenceNotes: "СКФ <60 — снижение функции. Перед КТ с контрастом и НПВС смотреть креатинин.",
   },
@@ -383,11 +403,14 @@ export function studyMatchesQuery(s: StudyDef, needle: string) {
 export function applyComputed(def: StudyDef, fields: Record<string, string>) {
   const next = { ...fields };
   for (const f of def.fields) {
-    if (f.formula === "prostate_volume") {
+    if (!f.formula && !f.computed) continue;
+    const expr = f.formula || "";
+    if (expr === "prostate_volume") {
       next[f.key] = prostateVolume(next.length || "", next.width || "", next.height || "");
-    }
-    if (f.formula === "sperm_total") {
+    } else if (expr === "sperm_total") {
       next[f.key] = spermTotal(next.volume || "", next.concentration || "");
+    } else if (expr) {
+      next[f.key] = evalFormula(expr, next);
     }
   }
   return next;
@@ -443,12 +466,101 @@ function parseNumLoose(s: string) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Compare a filled value to the field's `normal` hint. */
-export function fieldAbnormal(value: string, normal?: string): boolean {
+export function evalFormula(expr: string, fields: Record<string, string>): string {
+  const raw = (expr || "").trim();
+  if (!raw) return "";
+  if (raw === "prostate_volume") return prostateVolume(fields.length || "", fields.width || "", fields.height || "");
+  if (raw === "sperm_total") return spermTotal(fields.volume || "", fields.concentration || "");
+  const refs = [...raw.matchAll(/\{([a-zA-Z0-9_]+)\}/g)].map((m) => m[1]);
+  if (refs.some((k) => parseNumLoose(fields[k] || "") == null)) return "";
+  let s = raw;
+  for (const k of refs.sort((a, b) => b.length - a.length)) {
+    const n = parseNumLoose(fields[k] || "");
+    s = s.replaceAll(`{${k}}`, n == null ? "NaN" : String(n));
+  }
+  s = s.replace(/\{[a-zA-Z0-9_]+\}/g, "NaN");
+  if (s.includes("NaN") || !/^[\d.eE\s+\-*/()]+$/.test(s)) return "";
+  try {
+    const v = Function(`"use strict"; return (${s})`)();
+    if (typeof v !== "number" || !Number.isFinite(v)) return "";
+    const abs = Math.abs(v);
+    if (abs >= 100) return String(Math.round(v));
+    if (abs >= 10) return String(Math.round(v * 10) / 10);
+    return String(Math.round(v * 100) / 100);
+  } catch {
+    return "";
+  }
+}
+
+export function formatRefHint(f: { refOp?: string; refMin?: number; refMax?: number; refOf?: string; refOfMode?: string; normal?: string }): string {
+  if (f.normal && String(f.normal).trim()) return String(f.normal).trim();
+  if (!f.refOp) return "";
+  const pct = f.refOf && f.refOfMode !== "value";
+  if (f.refOp === "range" && f.refMin != null && f.refMax != null) {
+    return pct ? `${f.refMin}–${f.refMax}%` : `${f.refMin}–${f.refMax}`;
+  }
+  const op: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥", eq: "=" };
+  const n = f.refOp === "gt" || f.refOp === "gte" || f.refOp === "eq" ? (f.refMin ?? f.refMax) : (f.refMax ?? f.refMin);
+  if (n == null) return "";
+  return `${op[f.refOp] || ""}${n}${pct ? "%" : ""}`;
+}
+
+export function relativeShare(value: string, ofValue: string): number | null {
+  const v = parseNumLoose(value);
+  const o = parseNumLoose(ofValue);
+  if (v == null || o == null || o === 0) return null;
+  return (v / o) * 100;
+}
+
+function isAbnormalVsRef(num: number, op: string, min?: number, max?: number): boolean {
+  switch (op) {
+    case "lt":
+      return (max ?? min) != null && num >= (max ?? min)!;
+    case "lte":
+      return (max ?? min) != null && num > (max ?? min)!;
+    case "gt":
+      return (min ?? max) != null && num <= (min ?? max)!;
+    case "gte":
+      return (min ?? max) != null && num < (min ?? max)!;
+    case "eq":
+      return (min ?? max) != null && num !== (min ?? max)!;
+    case "range":
+      return (min != null && num < min) || (max != null && num > max);
+    default:
+      return false;
+  }
+}
+
+/** Compare a filled value to structured ref and/or the `normal` hint. */
+export function fieldAbnormal(
+  value: string,
+  normal?: string,
+  field?: StudyField,
+  all?: Record<string, string>,
+): boolean {
   const v = (value || "").trim();
-  const nrm = (normal || "").trim();
-  if (!v || !nrm) return false;
+  if (!v) return false;
   const num = parseNumLoose(v);
+
+  if (field?.refOp && num != null) {
+    let compared = num;
+    if (field.refOf && all) {
+      const of = parseNumLoose(all[field.refOf] || "");
+      if (of != null && of !== 0 && field.refOfMode !== "value") {
+        compared = (num / of) * 100;
+      } else if (of == null && field.refOfMode !== "value") {
+        /* fall through to string normal */
+      } else if (of != null && field.refOfMode === "value") {
+        compared = num;
+      }
+    }
+    const ofMissing = !!(field.refOf && field.refOfMode !== "value" && parseNumLoose(all?.[field.refOf] || "") == null);
+    if (ofMissing) return false;
+    return isAbnormalVsRef(compared, field.refOp, field.refMin, field.refMax);
+  }
+
+  const nrm = (normal || field?.normal || "").trim();
+  if (!nrm) return false;
 
   const range = nrm.match(/(\d+(?:[.,]\d+)?)\s*[–\-]\s*(\d+(?:[.,]\d+)?)/);
   if (num != null && range) {
@@ -530,7 +642,7 @@ export function collectDeviations(
       }
       const val = (fields[f.key] || "").trim();
       if (!val) continue;
-      if (fieldAbnormal(val, f.normal)) {
+      if (fieldAbnormal(val, f.normal, f, fields)) {
         out.push({
           study: def.label,
           studyKey: entry.key,
@@ -612,7 +724,15 @@ export function fillStudyTemplate(
   for (const f of def.fields) {
     const v = omit.has(f.key) ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    text = text.replaceAll(`{${f.key}}`, omit.has(f.key) ? "" : withPrev(v, p));
+    const replacement = omit.has(f.key) || (!v && f.computed) ? "" : withPrev(v, p);
+    text = text.replaceAll(`{${f.key}}`, replacement);
   }
-  return text.replace(/,\s*,/g, ",").replace(/:\s*,/g, ": ").replace(/\s{2,}/g, " ").trim();
+  return text
+    .replace(/,\s*,/g, ",")
+    .replace(/:\s*,/g, ": ")
+    .replace(/\s*\(\s*%?\s*\)/g, "")
+    .replace(/\s*\(—%?\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
 }

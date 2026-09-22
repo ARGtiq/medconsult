@@ -3079,3 +3079,103 @@
 .legacy-surface .guideline-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 
 .legacy-surface .chip-annotator-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+.legacy-surface .modal-box.study-editor-modal {
+  max-width: min(820px, calc(100vw - 24px));
+}
+.legacy-surface .study-field-hint { margin: 0 0 8px; }
+.legacy-surface .study-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 8px 10px;
+  margin: 0 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper, var(--panel));
+}
+.legacy-surface .study-field-block .study-field-editor-row {
+  padding-left: 0;
+}
+.legacy-surface .study-field-kind {
+  min-width: 108px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.legacy-surface .study-field-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.legacy-surface .study-field-opt {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--teal, #3d6b5e);
+  background: var(--teal-soft, #e8f2ee);
+  color: var(--teal, #2c5649);
+  cursor: pointer;
+  line-height: 1.3;
+}
+.legacy-surface .study-field-opt-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+.legacy-surface .study-field-formula {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.legacy-surface .study-field-formula-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.legacy-surface .study-field-formula-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.legacy-surface .study-field-ref-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.legacy-surface .study-field-ref-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.legacy-surface .study-field-ref-row select,
+.legacy-surface .study-field-ref-row input {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--panel);
+  color: var(--ink);
+  min-width: 0;
+}
+.legacy-surface .study-field-ref-row input {
+  width: 88px;
+}
+.legacy-surface .study-field-normal {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
