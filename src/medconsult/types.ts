@@ -31,6 +31,7 @@ export type StudyInstance = {
   id: string;
   date: string;
   fields: Record<string, string>;
+  omit?: string[];
 };
 
 export type StudyEntry = {

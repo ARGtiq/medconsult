@@ -3,6 +3,7 @@ import { store } from '../lib/store'
 import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import DrugGroupsInput from './DrugGroupsInput'
+import Mkb10CodesInput from './Mkb10CodesInput'
 import useEscapeToClose from '../lib/useEscapeToClose'
 
 const EVIDENCE_OPTIONS = [
@@ -140,10 +141,11 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
             rows={2}
           />
           <div className="drug-form-row">
-            <input
+            <Mkb10CodesInput
+              label="Коды МКБ-10"
               placeholder="Коды МКБ-10 через запятую"
               value={form.mkb10Codes}
-              onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
+              onChange={(v) => setForm({ ...form, mkb10Codes: v })}
             />
             <select value={form.evidenceLevel} onChange={(e) => setForm({ ...form, evidenceLevel: e.target.value })}>
               {EVIDENCE_OPTIONS.map((o) => (

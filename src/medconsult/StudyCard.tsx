@@ -18,7 +18,7 @@ import { useAppStore } from "./store";
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
-  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession } = useAppStore();
+  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit } = useAppStore();
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
   const selected = session.openSection === studyKey;
@@ -85,14 +85,30 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = !f.computed && fieldAbnormal(inst.fields[f.key] || value, f.normal);
+                  const omitted = (inst.omit || []).includes(f.key);
+                  const pickable = def.category === "lab" && !f.computed;
                   return (
                     <label
                       key={f.key}
                       className={`rounded-md px-1.5 py-1 ${
-                        f.computed ? "bg-teal-soft" : bad ? "bg-danger-soft" : "bg-paper"
+                        f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"
                       }`}
                     >
-                      <span className="block text-[10px] text-mute">{f.label}</span>
+                      <span className="flex items-center justify-between gap-1">
+                        <button
+                          type="button"
+                          className={`block text-[10px] ${pickable ? "text-teal" : "text-mute"}`}
+                          title={pickable ? (omitted ? "не пойдёт в протокол — нажми, чтобы вставить" : "в протоколе · нажми, чтобы убрать") : undefined}
+                          onClick={(e) => {
+                            if (!pickable) return;
+                            e.preventDefault();
+                            toggleStudyOmit(studyKey, inst.id, f.key);
+                          }}
+                        >
+                          {f.label}
+                          {pickable ? (omitted ? " · нет" : " · в текст") : ""}
+                        </button>
+                      </span>
                       {f.computed ? (
                         <span className="block text-sm font-semibold tabular-nums">
                           {value || "—"} {f.unit}
@@ -119,6 +135,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   );
                 })}
               </div>
+              )}
+              {def.category === "lab" && (
+                <p className="mt-1 text-[10px] text-mute">В протокол — только заполненные. Клик по названию пункта — не вставлять.</p>
               )}
               {def.referenceNotes && (
                 <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>

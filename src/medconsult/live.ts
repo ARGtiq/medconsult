@@ -107,6 +107,17 @@ export type CompactGuideline = {
   complaints: string[];
 };
 
+function chipTexts(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((c) => {
+      if (typeof c === "string") return c.trim();
+      if (c && typeof c === "object" && "text" in c) return String((c as { text?: string }).text || "").trim();
+      return "";
+    })
+    .filter(Boolean);
+}
+
 export function compactGuideline(code: string): CompactGuideline | null {
   const live = liveGuidelinesForCode(code);
   if (live[0]) {
@@ -115,7 +126,7 @@ export function compactGuideline(code: string): CompactGuideline | null {
     const recs = scenarios.flatMap((s) =>
       (s.drugs || []).map((d) => [d.name, d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(" ")),
     );
-    const picture = Array.isArray(g.clinicalPicture) ? (g.clinicalPicture as string[]) : [];
+    const picture = chipTexts(g.clinicalPictureChips || g.clinicalPicture);
     return {
       id: String(g.id || "live"),
       title: String(g.title || "клинрек"),
@@ -312,6 +323,22 @@ export function allStudiesLive(): StudyDef[] {
 export function getStudyLive(key: string): StudyDef | null {
   const fromLive = allStudiesLive().find((s) => s.key === key);
   return fromLive || seedStudy(key);
+}
+
+export function findStudyByChip(text: string): StudyDef | null {
+  const q = (text || "").trim().toLowerCase();
+  if (!q) return null;
+  const studies = allStudiesLive();
+  const exact = studies.find((s) => s.label.toLowerCase() === q || s.key.toLowerCase() === q);
+  if (exact) return exact;
+  const starts = studies.filter((s) => {
+    const lab = s.label.toLowerCase();
+    return lab.startsWith(q) || (q.length >= 3 && q.startsWith(lab));
+  });
+  if (starts.length === 1) return starts[0];
+  if (q.length < 3) return null;
+  const includes = studies.filter((s) => s.label.toLowerCase().includes(q));
+  return includes.length === 1 ? includes[0] : null;
 }
 
 function overlayComputed(def: StudyDef): StudyDef {

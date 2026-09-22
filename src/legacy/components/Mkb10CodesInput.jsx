@@ -1,14 +1,11 @@
 import { useState, useRef } from 'react'
 import { searchMkb10 } from '../data/mkb10'
+import FloatingField from './FloatingField'
 
-// Поле "коды МКБ-10 через запятую" со своей подсказкой — обычный <datalist>
-// фильтрует по ЦЕЛОМУ значению поля, поэтому после первого кода (когда там уже
-// "N34.2, ") подсказки переставали появляться. Здесь ищем по последнему,
-// ещё не законченному сегменту после последней запятой, остальное не трогаем.
-// Ищет и по коду, и по названию (searchMkb10 уже так умеет).
-export default function Mkb10CodesInput({ value, onChange, placeholder, className }) {
+export default function Mkb10CodesInput({ value, onChange, placeholder, className, label }) {
   const [suggestions, setSuggestions] = useState([])
   const inputRef = useRef(null)
+  const fieldLabel = label || placeholder || 'Коды МКБ-10'
 
   function handleChange(e) {
     const v = e.target.value
@@ -27,24 +24,26 @@ export default function Mkb10CodesInput({ value, onChange, placeholder, classNam
   }
 
   return (
-    <div className="mkb10-input-wrap">
-      <input
-        ref={inputRef}
-        className={className}
-        placeholder={placeholder || 'Коды МКБ-10 через запятую'}
-        value={value}
-        onChange={handleChange}
-        onBlur={() => setTimeout(() => setSuggestions([]), 150)}
-      />
-      {suggestions.length > 0 && (
-        <div className="mkb10-input-suggestions">
-          {suggestions.map((s) => (
-            <button type="button" key={s.code} onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(s.code)}>
-              <strong>{s.code}</strong> {s.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <FloatingField label={fieldLabel} value={value}>
+      <div className="mkb10-input-wrap">
+        <input
+          ref={inputRef}
+          className={className}
+          placeholder={placeholder || 'Коды МКБ-10 через запятую'}
+          value={value}
+          onChange={handleChange}
+          onBlur={() => setTimeout(() => setSuggestions([]), 150)}
+        />
+        {suggestions.length > 0 && (
+          <div className="mkb10-input-suggestions">
+            {suggestions.map((s) => (
+              <button type="button" key={s.code} onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(s.code)}>
+                <strong>{s.code}</strong> {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </FloatingField>
   )
 }

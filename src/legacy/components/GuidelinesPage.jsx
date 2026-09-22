@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { extractGuidelineInfo } from '../lib/openrouter'
-import AutoResizeTextarea from './AutoResizeTextarea'
 import ScenarioEditor, { blankScenario, blankDrugRow } from './ScenarioEditor'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import { showToast } from '../lib/toast'
+import ChipAnnotator from './ChipAnnotator'
+import FloatingField from './FloatingField'
+import MdField from './MdField'
+import QuestionnairePickModal from './QuestionnairePickModal'
+import { asChips, chipTexts } from '../lib/guidelineChips'
+import { getQuestionScales } from '../../medconsult/data/templates'
 
 function blankForm() {
   return {
@@ -18,13 +23,17 @@ function blankForm() {
     diagnosisFormulation: '',
     diagnosisCriteria: '',
     investigationsText: '',
+    investigationsChips: [],
     clinicalPictureText: '',
-    scenarios: [],
+    clinicalPictureChips: [],
     nonDrugTherapy: '',
+    nonDrugTherapyChips: [],
+    scenarios: [],
     redFlags: '',
     additionalInfo: '',
     source: '',
     sourceYear: '',
+    questionnaireKeys: [],
   }
 }
 
@@ -34,12 +43,6 @@ function isStale(sourceYear) {
   return currentYear - Number(sourceYear) >= 2
 }
 
-// Каждый препарат из сценариев терапии клинрека автоматически попадает в базу
-// лекарств (если его там ещё нет) — тогда он появится в автоподсказках при
-// ручном добавлении препарата на приёме, даже вне контекста этого клинрека.
-// Заодно код(ы) МКБ клинрека подмешиваются в поле "МКБ-10" препарата (если их
-// там ещё нет) — тогда на странице МКБ-10 этот препарат найдётся по коду,
-// даже если его туда никто не вписывал руками.
 function registerScenarioDrugsInDb(scenarios, mkb10Codes = []) {
   scenarios.forEach((s) => {
     s.drugs.forEach((d) => {
@@ -64,6 +67,9 @@ function registerScenarioDrugsInDb(scenarios, mkb10Codes = []) {
 }
 
 function presetForm(g) {
+  const pictureChips = asChips(g.clinicalPictureChips || g.clinicalPicture)
+  const invChips = asChips(g.investigationsChips || g.investigations)
+  const therapyChips = asChips(g.nonDrugTherapyChips)
   return {
     id: g.id,
     mkb10CodesText: (g.mkb10Codes || []).join(', '),
@@ -73,14 +79,18 @@ function presetForm(g) {
     classification: g.classification || '',
     diagnosisFormulation: g.diagnosisFormulation || '',
     diagnosisCriteria: g.diagnosisCriteria || '',
-    investigationsText: (g.investigations || []).join(', '),
-    clinicalPictureText: (g.clinicalPicture || []).join(', '),
+    investigationsText: g.investigationsNotes || (typeof g.investigations === 'string' ? g.investigations : (g.investigations || []).join(', ')),
+    investigationsChips: invChips,
+    clinicalPictureText: g.clinicalPictureNotes || (typeof g.clinicalPicture === 'string' ? g.clinicalPicture : (g.clinicalPicture || []).join(', ')),
+    clinicalPictureChips: pictureChips,
     scenarios: g.scenarios?.length ? g.scenarios : [],
     nonDrugTherapy: g.nonDrugTherapy || '',
+    nonDrugTherapyChips: therapyChips,
     redFlags: g.redFlags || '',
     additionalInfo: g.additionalInfo || '',
     source: g.source || '',
     sourceYear: g.sourceYear || '',
+    questionnaireKeys: Array.isArray(g.questionnaireKeys) ? [...g.questionnaireKeys] : [],
   }
 }
 
@@ -96,6 +106,7 @@ export default function GuidelinesPage({ initialItemId }) {
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
+  const [qPick, setQPick] = useState(false)
 
   function refresh() {
     setGuidelines({ ...store.getGuidelines() })
@@ -141,12 +152,27 @@ export default function GuidelinesPage({ initialItemId }) {
     }
     setValidationError('')
     const mkb10Codes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
-    const investigations = form.investigationsText.split(',').map((s) => s.trim()).filter(Boolean)
-    const clinicalPicture = form.clinicalPictureText.split(',').map((s) => s.trim()).filter(Boolean)
+    const pictureChips = asChips(form.clinicalPictureChips)
+    const invChips = asChips(form.investigationsChips)
+    const therapyChips = asChips(form.nonDrugTherapyChips)
+    const clinicalPicture = pictureChips
+    const investigations = invChips
     const scenarios = form.scenarios
       .map((s) => ({ ...s, drugs: s.drugs.filter((d) => d.name.trim()) }))
       .filter((s) => s.name.trim() && s.drugs.length)
-    store.saveGuideline({ ...form, mkb10Codes, investigations, clinicalPicture, scenarios })
+    store.saveGuideline({
+      ...form,
+      mkb10Codes,
+      investigations,
+      investigationsNotes: form.investigationsText,
+      investigationsChips: investigations,
+      clinicalPicture,
+      clinicalPictureNotes: form.clinicalPictureText,
+      clinicalPictureChips: clinicalPicture,
+      nonDrugTherapyChips: therapyChips,
+      questionnaireKeys: form.questionnaireKeys || [],
+      scenarios,
+    })
     registerScenarioDrugsInDb(scenarios, mkb10Codes)
     setForm(blankForm())
     setFormOpen(false)
@@ -164,7 +190,13 @@ export default function GuidelinesPage({ initialItemId }) {
         ...info,
         mkb10CodesText: info.mkb10Codes || prev.mkb10CodesText,
         investigationsText: info.investigations || prev.investigationsText,
+        investigationsChips: info.investigations
+          ? chipTexts(String(info.investigations).split(',')).map((t) => ({ text: t }))
+          : prev.investigationsChips,
         clinicalPictureText: info.clinicalPicture || prev.clinicalPictureText,
+        clinicalPictureChips: info.clinicalPicture
+          ? chipTexts(String(info.clinicalPicture).split(',')).map((t) => ({ text: t }))
+          : prev.clinicalPictureChips,
         scenarios: info.scenarios?.length
           ? info.scenarios.map((s) => ({ name: s.name || '', drugs: s.drugs?.length ? s.drugs : [blankDrugRow()] }))
           : prev.scenarios,
@@ -175,6 +207,11 @@ export default function GuidelinesPage({ initialItemId }) {
       setExtracting(false)
     }
   }
+
+  const mkbCodes = form.mkb10CodesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+  const qNames = (form.questionnaireKeys || [])
+    .map((k) => getQuestionScales().find((s) => s.totalKey === k)?.title || k)
+    .filter(Boolean)
 
   return (
     <div className="guidelines-page">
@@ -197,15 +234,18 @@ export default function GuidelinesPage({ initialItemId }) {
             </div>
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
-          <input
-            autoFocus
-            className={validationError && !form.title.trim() ? 'input-error' : ''}
-            placeholder="Название состояния"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
+          <FloatingField label="Название состояния" value={form.title}>
+            <input
+              autoFocus
+              className={validationError && !form.title.trim() ? 'input-error' : ''}
+              placeholder="Название состояния"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+          </FloatingField>
           <Mkb10CodesInput
             className={validationError && !form.mkb10CodesText.trim() ? 'input-error' : ''}
+            label="Коды МКБ-10"
             placeholder="Коды МКБ-10 через запятую (напр. N10, N39.0)"
             value={form.mkb10CodesText}
             onChange={(v) => setForm({ ...form, mkb10CodesText: v })}
@@ -220,35 +260,45 @@ export default function GuidelinesPage({ initialItemId }) {
           Показывать только когда есть ВСЕ эти коды сразу (для сочетаний — напр. цистит + вторичный пиелонефрит)
         </label>
         {validationError && <div className="ai-error">{validationError}</div>}
-        <AutoResizeTextarea
-          placeholder="Определение (1-2 предложения)"
+        <MdField
+          label="Определение"
+          placeholder="Определение (1-2 предложения). Markdown: **жирный**, *курсив*, списки."
           value={form.definition}
-          onChange={(e) => setForm({ ...form, definition: e.target.value })}
+          onChange={(v) => setForm({ ...form, definition: v })}
         />
-        <AutoResizeTextarea
-          placeholder="Классификация / стадии — каждая стадия на отдельной строке (напр. I стадия — компенсация)"
+        <MdField
+          label="Классификация / стадии"
+          placeholder="Классификация / стадии — каждая стадия на отдельной строке"
           value={form.classification}
-          onChange={(e) => setForm({ ...form, classification: e.target.value })}
+          onChange={(v) => setForm({ ...form, classification: v })}
         />
-        <AutoResizeTextarea
+        <MdField
+          label="Формулировка диагноза"
           placeholder="Формулировка диагноза для протокола (шаблон фразы)"
           value={form.diagnosisFormulation}
-          onChange={(e) => setForm({ ...form, diagnosisFormulation: e.target.value })}
+          onChange={(v) => setForm({ ...form, diagnosisFormulation: v })}
         />
-        <AutoResizeTextarea
+        <MdField
+          label="Критерии диагноза"
           placeholder="Критерии постановки диагноза (что подтверждает диагноз, не список обследований)"
           value={form.diagnosisCriteria}
-          onChange={(e) => setForm({ ...form, diagnosisCriteria: e.target.value })}
+          onChange={(v) => setForm({ ...form, diagnosisCriteria: v })}
         />
-        <AutoResizeTextarea
-          placeholder="Клиническая картина — типичные жалобы через запятую (подскажутся в разделе «Жалобы»)"
+        <ChipAnnotator
+          label="Клиническая картина / жалобы"
+          placeholder="Клиническая картина — текст для себя. Выдели жалобу → кликабельный чип на приём."
           value={form.clinicalPictureText}
-          onChange={(e) => setForm({ ...form, clinicalPictureText: e.target.value })}
+          onChange={(v) => setForm({ ...form, clinicalPictureText: v })}
+          chips={form.clinicalPictureChips}
+          onChipsChange={(clinicalPictureChips) => setForm({ ...form, clinicalPictureChips })}
         />
-        <AutoResizeTextarea
-          placeholder="Обследования для диагностики через запятую (ОАК, УЗИ почек, КТ и т.п.)"
+        <ChipAnnotator
+          label="Обследования / диагностика"
+          placeholder="Обследования — шпаргалка. Выдели «ОАМ», «УЗИ почек» → чип на приём."
           value={form.investigationsText}
-          onChange={(e) => setForm({ ...form, investigationsText: e.target.value })}
+          onChange={(v) => setForm({ ...form, investigationsText: v })}
+          chips={form.investigationsChips}
+          onChipsChange={(investigationsChips) => setForm({ ...form, investigationsChips })}
         />
 
         <div className="scenarios-block">
@@ -259,32 +309,56 @@ export default function GuidelinesPage({ initialItemId }) {
           <button type="button" className="btn-secondary btn-small" onClick={addScenario}>+ Сценарий терапии</button>
         </div>
 
-        <AutoResizeTextarea
-          placeholder="Немедикаментозная терапия / общие рекомендации (режим, диета, физиотерапия и т.п.)"
+        <ChipAnnotator
+          label="Немедикаментозная терапия"
+          placeholder="Немедикаментозная терапия / общие рекомендации. Выдели фразу → чип в назначения."
           value={form.nonDrugTherapy}
-          onChange={(e) => setForm({ ...form, nonDrugTherapy: e.target.value })}
+          onChange={(v) => setForm({ ...form, nonDrugTherapy: v })}
+          chips={form.nonDrugTherapyChips}
+          onChipsChange={(nonDrugTherapyChips) => setForm({ ...form, nonDrugTherapyChips })}
         />
-        <AutoResizeTextarea
+        <MdField
+          label="Красные флаги"
           placeholder="Красные флаги — когда точно направлять, не лечить самому"
           value={form.redFlags}
-          onChange={(e) => setForm({ ...form, redFlags: e.target.value })}
+          onChange={(v) => setForm({ ...form, redFlags: v })}
+          minRows={2}
         />
-        <AutoResizeTextarea
+        <MdField
+          label="Дополнительно"
           placeholder="Дополнительная информация (прогноз, диспансерное наблюдение и т.п.)"
           value={form.additionalInfo}
-          onChange={(e) => setForm({ ...form, additionalInfo: e.target.value })}
+          onChange={(v) => setForm({ ...form, additionalInfo: v })}
         />
+
+        <div className="q-attach-row">
+          <button type="button" className="btn-secondary btn-small" onClick={() => setQPick(true)}>
+            + добавить анкету
+          </button>
+          {qNames.length > 0 && (
+            <span className="q-attach-list">
+              {qNames.map((n) => (
+                <span key={n} className="chip-annotator-chip">{n}</span>
+              ))}
+            </span>
+          )}
+        </div>
+
         <div className="drug-form-row">
-          <input
-            placeholder="Источник (напр. reclin.ru / Клинические рекомендации МЗ РФ)"
-            value={form.source}
-            onChange={(e) => setForm({ ...form, source: e.target.value })}
-          />
-          <input
-            placeholder="Год утверждения"
-            value={form.sourceYear}
-            onChange={(e) => setForm({ ...form, sourceYear: e.target.value })}
-          />
+          <FloatingField label="Источник" value={form.source}>
+            <input
+              placeholder="Источник (напр. reclin.ru / Клинические рекомендации МЗ РФ)"
+              value={form.source}
+              onChange={(e) => setForm({ ...form, source: e.target.value })}
+            />
+          </FloatingField>
+          <FloatingField label="Год утверждения" value={form.sourceYear}>
+            <input
+              placeholder="Год утверждения"
+              value={form.sourceYear}
+              onChange={(e) => setForm({ ...form, sourceYear: e.target.value })}
+            />
+          </FloatingField>
         </div>
 
         <div className="extract-block">
@@ -309,6 +383,15 @@ export default function GuidelinesPage({ initialItemId }) {
       </form>
           </div>
         </div>
+      )}
+
+      {qPick && (
+        <QuestionnairePickModal
+          codes={mkbCodes}
+          selected={form.questionnaireKeys || []}
+          onChange={(questionnaireKeys) => setForm({ ...form, questionnaireKeys })}
+          onClose={() => setQPick(false)}
+        />
       )}
 
       <div className="drug-db-list">
@@ -341,6 +424,11 @@ export default function GuidelinesPage({ initialItemId }) {
               {g.source && (
                 <div className="drug-db-line">
                   Источник: {g.source}{g.sourceYear ? `, ${g.sourceYear}` : ''}
+                </div>
+              )}
+              {(g.questionnaireKeys || []).length > 0 && (
+                <div className="drug-db-line">
+                  Анкеты: {(g.questionnaireKeys || []).map((k) => getQuestionScales().find((s) => s.totalKey === k)?.title || k).join(', ')}
                 </div>
               )}
             </div>

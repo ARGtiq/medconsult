@@ -24,6 +24,7 @@ import {
   liveIcdMerged,
   searchAllergy,
   searchDrugs,
+  findStudyByChip,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
@@ -41,7 +42,7 @@ function clampSplit(n: number) {
 
 export function ProtocolPage() {
   const store = useAppStore();
-  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation, applyComplaintOption } =
+  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation, applyComplaintOption, addStudy } =
     store;
   const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
@@ -201,6 +202,12 @@ export function ProtocolPage() {
     addRecommendation(drugLine({ name: d.name || "", dosage: d.dosage || d.dose, frequency: d.frequency, duration: d.duration }));
   };
 
+  const insertInvestigation = (item: string) => {
+    const hit = findStudyByChip(item);
+    if (hit) addStudy(hit.key);
+    else addRecommendation(item);
+  };
+
   function setWork(kind: "primary" | "followup" | "study" | "document") {
     if (kind === "primary") {
       setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
@@ -326,6 +333,9 @@ export function ProtocolPage() {
         onOpen={() => setSession({ openSection: session.openSection === "diagnosis" ? null : "diagnosis" })}
         onRemove={() => toggleBlock("diagnosis")}
       >
+        {session.diagnosisCode ? (
+          <div className="mb-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
+        ) : null}
         <input
           list="icd-list"
           value={session.diagnosisCode}
@@ -343,11 +353,15 @@ export function ProtocolPage() {
             </option>
           ))}
         </datalist>
+        {session.diagnosisTitle ? (
+          <div className="mb-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">Формулировка</div>
+        ) : null}
         <textarea
           value={session.diagnosisTitle}
           onChange={(e) => setSession({ diagnosisTitle: e.target.value })}
           className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm"
           rows={2}
+          placeholder="Формулировка диагноза"
         />
         {session.diagnosisCode && hubMode === "block" && (
           <div className="legacy-surface mt-2">
@@ -359,8 +373,9 @@ export function ProtocolPage() {
                 setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
               }
               onInsertComplaint={toggleComplaint}
-              onInsertInvestigation={(item: string) => addRecommendation(item)}
+              onInsertInvestigation={insertInvestigation}
               onInsertDrug={insertDrug}
+              onInsertQuestionnaire={(key: string) => addStudy(key)}
             />
           </div>
         )}
@@ -432,8 +447,9 @@ export function ProtocolPage() {
                     setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
                   }
                   onInsertComplaint={toggleComplaint}
-                  onInsertInvestigation={(item: string) => addRecommendation(item)}
+                  onInsertInvestigation={insertInvestigation}
                   onInsertDrug={insertDrug}
+                  onInsertQuestionnaire={(key: string) => addStudy(key)}
                 />
                 <button type="button" className="mt-4 text-sm text-mute" onClick={() => setHubOpen(false)}>
                   Закрыть
@@ -544,8 +560,9 @@ export function ProtocolPage() {
                   onInsertClassificationLine={(line: string) =>
                     setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
                   }
-                  onInsertInvestigation={(item: string) => addRecommendation(item)}
+                  onInsertInvestigation={insertInvestigation}
                   onInsertDrug={insertDrug}
+                  onInsertQuestionnaire={(key: string) => addStudy(key)}
                 />
               </div>
             )}
@@ -779,8 +796,9 @@ export function ProtocolPage() {
                 onInsertClassificationLine={(line: string) =>
                   setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
                 }
-                onInsertInvestigation={(item: string) => addRecommendation(item)}
+                onInsertInvestigation={insertInvestigation}
                 onInsertDrug={insertDrug}
+                onInsertQuestionnaire={(key: string) => addStudy(key)}
               />
               <TreatmentSchemeSearch
                 diagnosisText={diagnosisText}

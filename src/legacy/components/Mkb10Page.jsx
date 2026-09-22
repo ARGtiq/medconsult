@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { getAllMkb10, addCustomCode, removeCustomCode, getCustomCodes } from '../data/mkb10'
+import { getAllMkb10, addCustomCode, removeCustomCode, getCustomCodes, getMkbNote, setMkbNote } from '../data/mkb10'
 import { showToast } from '../lib/toast'
+import FloatingField from './FloatingField'
+import MdField from './MdField'
 
 export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, onLoadVisit }) {
   const [query, setQuery] = useState('')
@@ -20,6 +22,7 @@ export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, o
   const linkedDrugs = selectedCode ? store.getDrugsForMkbCode(selectedCode) : []
   const linkedSchemes = selectedCode ? store.getTreatmentSchemesForMkbCode(selectedCode) : []
   const linkedVisits = selectedCode ? store.searchVisits(selectedCode).slice(0, 10) : []
+  const note = selectedCode ? getMkbNote(selectedCode) : ''
 
   function addCode(e) {
     e.preventDefault()
@@ -51,7 +54,7 @@ export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, o
       <h2 className="guidelines-title">МКБ-10</h2>
       <p className="settings-note-inline">
         Выбери код, чтобы увидеть всё, что с ним связано: клинические рекомендации, лекарства, схемы лечения,
-        визиты с этим диагнозом.
+        визиты с этим диагнозом. Заметки к коду — с Markdown.
       </p>
 
       <div className="mkb10-layout">
@@ -80,8 +83,12 @@ export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, o
 
           <form className="mkb10-add-form" onSubmit={addCode}>
             <div className="mkb10-add-label">Добавить свой код</div>
-            <input placeholder="Код, напр. N41.2" value={newCode} onChange={(e) => setNewCode(e.target.value)} />
-            <input placeholder="Название" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+            <FloatingField label="Код" value={newCode}>
+              <input placeholder="Код, напр. N41.2" value={newCode} onChange={(e) => setNewCode(e.target.value)} />
+            </FloatingField>
+            <FloatingField label="Название" value={newLabel}>
+              <input placeholder="Название" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+            </FloatingField>
             <button type="submit" className="btn-secondary btn-small">+ Добавить</button>
           </form>
         </div>
@@ -98,6 +105,16 @@ export default function Mkb10Page({ onOpenGuideline, onOpenDrug, onOpenScheme, o
                   </button>
                 )}
               </div>
+
+              <MdField
+                label="Заметки к коду"
+                placeholder="Заметки к коду (Markdown: **жирный**, списки, заголовки)"
+                value={note}
+                onChange={(v) => {
+                  setMkbNote(selected.code, v)
+                  forceTick((t) => t + 1)
+                }}
+              />
 
               <div className="mkb10-cross-links">
                 <div className="mkb10-cross-block">

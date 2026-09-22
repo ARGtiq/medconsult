@@ -379,3 +379,26 @@ export function extractCodesFromText(text) {
   const matches = text.match(/\b[A-Z]\d{2}(\.\d+)?\b/g) || []
   return [...new Set(matches.map((c) => c.toUpperCase()))]
 }
+
+const NOTES_KEY = 'medconsult_mkb10_notes'
+
+export function getMkbNotes() {
+  try {
+    return JSON.parse(_ls().getItem(NOTES_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+export function getMkbNote(code) {
+  if (!code) return ''
+  return getMkbNotes()[code] || ''
+}
+
+export function setMkbNote(code, text) {
+  if (!code) return
+  const all = getMkbNotes()
+  if (text && String(text).trim()) all[code] = String(text)
+  else delete all[code]
+  _ls().setItem(NOTES_KEY, JSON.stringify(all))
+}

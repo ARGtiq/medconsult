@@ -272,6 +272,7 @@ type AppStore = {
   removeStudy: (key: string) => void;
   addStudyInstance: (key: string) => void;
   updateInstance: (key: string, instanceId: string, fields: Record<string, string>, date?: string) => void;
+  toggleStudyOmit: (key: string, instanceId: string, fieldKey: string) => void;
   removeInstance: (key: string, instanceId: string) => void;
   toggleBlock: (id: string) => void;
   toggleComplaint: (text: string) => void;
@@ -468,6 +469,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const patients = persistGlobals(next, get().patients);
     persistSession(next);
     set({ session: next, patients });
+  },
+
+  toggleStudyOmit(key, instanceId, fieldKey) {
+    const session = get().session;
+    const studies = session.studies.map((s) =>
+      s.key !== key
+        ? s
+        : {
+            ...s,
+            instances: s.instances.map((i) => {
+              if (i.id !== instanceId) return i;
+              const omit = new Set(i.omit || []);
+              if (omit.has(fieldKey)) omit.delete(fieldKey);
+              else omit.add(fieldKey);
+              return { ...i, omit: [...omit] };
+            }),
+          },
+    );
+    const next = { ...session, studies };
+    persistSession(next);
+    set({ session: next });
   },
 
   removeInstance(key, instanceId) {

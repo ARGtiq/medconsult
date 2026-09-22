@@ -3017,3 +3017,65 @@
   .legacy-surface .drug-card-controls { flex-direction: column; align-items: stretch; }
   .legacy-surface .evidence-toggle { justify-content: space-between; }
 }
+
+/* klinrek chips, markdown fields, floating labels, questionnaires */
+.legacy-surface .float-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.legacy-surface .float-field-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 600;
+}
+.legacy-surface .md-field { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.legacy-surface .md-toolbar { display: flex; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.legacy-surface .md-toolbar button { border: 0; background: transparent; font-size: 12px; padding: 2px 7px; border-radius: 6px; color: var(--ink); cursor: pointer; }
+.legacy-surface .md-toolbar button:hover, .legacy-surface .md-toolbar button.active { background: var(--teal-soft); color: var(--teal); }
+.legacy-surface .md-field .auto-resize-textarea {
+  border: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+  min-height: 4.8em;
+  width: 100%;
+}
+.legacy-surface .md-preview { padding: 8px 10px; font-size: 13px; line-height: 1.5; }
+.legacy-surface .md-preview p { margin: 0 0 6px; }
+.legacy-surface .md-preview ul { margin: 0 0 6px; padding-left: 1.2em; }
+.legacy-surface .md-preview h2, .legacy-surface .md-preview h3, .legacy-surface .md-preview h4 { margin: 0 0 6px; font-family: var(--font-display); }
+.legacy-surface .chip-annotator-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.legacy-surface .chip-annotator-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--teal-soft); color: var(--teal); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+.legacy-surface .chip-annotator-chip button { border: 0; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.legacy-surface .chip-annotator-i { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; border-radius: 999px; background: var(--teal); color: #fff; font-size: 9px; font-weight: 700; }
+.legacy-surface .chip-annotator-hint { font-size: 11px; color: var(--ink-soft); margin: 4px 0 0; }
+.chip-sel-menu {
+  position: fixed;
+  z-index: 130;
+  background: #fff;
+  border: 1px solid #dde4e2;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(20, 32, 43, 0.14);
+  padding: 8px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chip-sel-quote { font-size: 12px; color: #4a5c6a; }
+.chip-sel-menu button { border: 0; background: #e3f2ee; color: #0f6e5f; border-radius: 8px; padding: 6px 8px; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+.chip-sel-note { display: flex; gap: 4px; }
+.chip-sel-note input { flex: 1; min-width: 0; border: 1px solid #dde4e2; border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+.legacy-surface .q-attach-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.legacy-surface .q-attach-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.legacy-surface .q-pick-list { max-height: 240px; overflow: auto; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.legacy-surface .q-pick-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; }
+.legacy-surface .q-pick-item.on { border-color: var(--teal); background: var(--teal-soft); }
+.legacy-surface .q-pick-hint, .legacy-surface .q-pick-codes { display: block; font-size: 11px; color: var(--ink-soft); }
+.legacy-surface .q-pick-new { display: flex; gap: 6px; margin-top: 8px; }
+.legacy-surface .q-pick-new input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.legacy-surface .guideline-chip-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.legacy-surface .guideline-chip-i { width: 16px; height: 16px; border-radius: 999px; border: 0; background: var(--teal); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; padding: 0; cursor: pointer; }
+.legacy-surface .guideline-note-pop { position: fixed; inset: 0; z-index: 90; background: rgba(20,32,43,0.25); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.legacy-surface .guideline-note-card { background: var(--panel); border-radius: 12px; padding: 12px 14px; max-width: 360px; width: 100%; box-shadow: 0 12px 32px rgba(20,32,43,0.18); }
+.legacy-surface .guideline-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+
+.legacy-surface .chip-annotator-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }

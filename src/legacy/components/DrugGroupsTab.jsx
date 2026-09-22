@@ -5,6 +5,7 @@ import { describeDrugGroup } from '../lib/openrouter'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import FloatingField from './FloatingField'
 import { showToast } from '../lib/toast'
 
 const GROUP_FILL_FIELDS = ['description', 'crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
@@ -269,11 +270,13 @@ export default function DrugGroupsTab() {
           onChange={(e) => setForm({ ...form, contraindications: e.target.value })}
           rows={2}
         />
-        <input
-          placeholder="Коды МКБ-10, при которых обычно применяется группа"
-          value={form.mkb10Codes}
-          onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
-        />
+        <FloatingField label="Коды МКБ-10" value={form.mkb10Codes}>
+          <input
+            placeholder="Коды МКБ-10, при которых обычно применяется группа"
+            value={form.mkb10Codes}
+            onChange={(e) => setForm({ ...form, mkb10Codes: e.target.value })}
+          />
+        </FloatingField>
         <div className="drug-form-actions">
           <button type="submit" className="btn-primary">
             {editingStaticKey ? 'Сохранить заметки к группе' : form.key ? 'Сохранить группу' : 'Создать группу'}

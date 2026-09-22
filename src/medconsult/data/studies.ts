@@ -551,7 +551,7 @@ export function formatDeviations(list: Deviation[]) {
 
 export function fillStudyTemplate(
   def: StudyDef,
-  instance: { date: string; fields: Record<string, string> },
+  instance: { date: string; fields: Record<string, string>; omit?: string[] },
   previous?: StudyInstance,
 ) {
   const fields = applyComputed(def, instance.fields);
@@ -560,6 +560,8 @@ export function fillStudyTemplate(
     previous?.date && previous.date !== instance.date
       ? `${instance.date || "—"} (ранее ${previous.date})`
       : instance.date || "—";
+  const omit = new Set(instance.omit || []);
+  const visible = def.fields.filter((f) => !omit.has(f.key));
 
   if (def.category === "questionnaire") {
     const scales = liveScales();
@@ -592,9 +594,9 @@ export function fillStudyTemplate(
     return `${prefix} от ${date}: ${bits.join("; ")}.`;
   }
 
-  if (def.sparse) {
+  if (def.sparse || def.category === "lab") {
     const bits: string[] = [];
-    for (const f of def.fields) {
+    for (const f of visible) {
       const v = (fields[f.key] || "").trim();
       if (!v) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
@@ -608,9 +610,9 @@ export function fillStudyTemplate(
 
   let text = def.template.replaceAll("{date}", date);
   for (const f of def.fields) {
-    const v = (fields[f.key] || "").trim();
+    const v = omit.has(f.key) ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    text = text.replaceAll(`{${f.key}}`, withPrev(v, p));
+    text = text.replaceAll(`{${f.key}}`, omit.has(f.key) ? "" : withPrev(v, p));
   }
-  return text;
+  return text.replace(/,\s*,/g, ",").replace(/:\s*,/g, ": ").replace(/\s{2,}/g, " ").trim();
 }
