@@ -255,6 +255,122 @@ export function emptyScale(): ScaleDef {
   };
 }
 
+function words(list: string[], from = 0): Record<number, string> {
+  const out: Record<number, string> = {};
+  list.forEach((w, i) => {
+    if (w) out[i + from] = w;
+  });
+  return out;
+}
+
+function ends(zero: string, top: string, max: number): Record<number, string> {
+  return { 0: zero, [max]: top };
+}
+
+const IPSS_FREQ = words([
+  "ни разу",
+  "реже чем 1 из 5",
+  "реже чем в половине",
+  "примерно в половине",
+  "чаще чем в половине",
+  "почти всегда",
+]);
+const IPSS_NOCT = words(["ни разу", "1 раз", "2 раза", "3 раза", "4 раза", "5 и более"]);
+const QOL = words([
+  "прекрасно",
+  "хорошо",
+  "удовлетворительно",
+  "смешанные чувства",
+  "неудовлетворительно",
+  "плохо",
+  "ужасно",
+]);
+const NIH_QOL = words([
+  "в восторге",
+  "доволен",
+  "в основном доволен",
+  "смешанные чувства",
+  "в основном недоволен",
+  "несчастен",
+  "ужасно",
+]);
+const AMS = words(["нет", "слабо", "умеренно", "сильно", "очень сильно"], 1);
+const PEDT_DIFF = words(["совсем не трудно", "слегка", "умеренно", "сильно", "крайне"]);
+const PEDT_FREQ = words(["никогда", "редко", "примерно в половине", "чаще чем в половине", "почти всегда"]);
+const PEDT_FEEL = words(["совсем нет", "немного", "умеренно", "сильно", "крайне"]);
+const IIEF_CONF = words(["очень низкая", "низкая", "средняя", "высокая", "очень высокая"], 1);
+const IIEF_OFTEN = words(["не было активности", "почти никогда", "изредка", "иногда", "часто", "почти всегда"]);
+const IIEF_HARD = words(["не было попыток", "крайне трудно", "очень трудно", "трудно", "немного трудно", "нетрудно"]);
+const IIEF_SAT = words(["не было попыток", "почти никогда", "изредка", "иногда", "часто", "почти всегда"]);
+const ICIQ_FREQ = words([
+  "никогда",
+  "раз в неделю или реже",
+  "2–3 раза в неделю",
+  "примерно раз в день",
+  "несколько раз в день",
+  "постоянно",
+]);
+const ICIQ_AMT = words(["нет"]);
+ICIQ_AMT[2] = "немного";
+ICIQ_AMT[4] = "средне";
+ICIQ_AMT[6] = "много";
+const CPSI_FREQ = words(["никогда", "редко", "иногда", "часто", "обычно", "всегда"]);
+const CPSI_BIT = words(["совсем нет", "немного", "умеренно", "сильно"]);
+
+const SCORE_LEGEND: Record<string, Record<number, string>> = {
+  ipss_1: IPSS_FREQ,
+  ipss_2: IPSS_FREQ,
+  ipss_3: IPSS_FREQ,
+  ipss_4: IPSS_FREQ,
+  ipss_5: IPSS_FREQ,
+  ipss_6: IPSS_FREQ,
+  ipss_7: IPSS_NOCT,
+  ipssQol: QOL,
+  iief_1: IIEF_CONF,
+  iief_2: IIEF_OFTEN,
+  iief_3: IIEF_OFTEN,
+  iief_4: IIEF_HARD,
+  iief_5: IIEF_SAT,
+  pedt_1: PEDT_DIFF,
+  pedt_2: PEDT_FREQ,
+  pedt_3: PEDT_FREQ,
+  pedt_4: PEDT_FEEL,
+  pedt_5: PEDT_FEEL,
+  iciq_1: ICIQ_FREQ,
+  iciq_2: ICIQ_AMT,
+  iciq_3: ends("совсем не мешает", "очень сильно", 10),
+  cpsi_p7: CPSI_FREQ,
+  cpsi_p8: ends("нет боли", "сильнейшая", 10),
+  cpsi_u1: IPSS_FREQ,
+  cpsi_u2: IPSS_FREQ,
+  cpsi_q1: CPSI_BIT,
+  cpsi_q2: CPSI_BIT,
+  cpsi_q3: NIH_QOL,
+  ams_1: AMS,
+  ams_2: AMS,
+  ams_3: AMS,
+  ams_4: AMS,
+  ams_5: AMS,
+  ams_6: AMS,
+  ams_7: AMS,
+  ams_8: AMS,
+  ams_9: AMS,
+  ams_10: AMS,
+  ams_11: AMS,
+  ams_12: AMS,
+  ams_13: AMS,
+  ams_14: AMS,
+  ams_15: AMS,
+  ams_16: AMS,
+  ams_17: AMS,
+};
+
+/** Plain-language meaning of a numeric answer. Empty if this item has no legend. */
+export function scoreCaption(item: ScaleItem, n: number): string {
+  if (!Number.isFinite(n)) return "";
+  return SCORE_LEGEND[item.key]?.[n] || "";
+}
+
 export function scaleRange(item: ScaleItem) {
   if (item.values?.length) return item.values;
   const out: number[] = [];

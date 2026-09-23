@@ -6,6 +6,7 @@ import {
   collectDeviations,
   fieldAbnormal,
   formatRefHint,
+  groupDeviations,
   referenceInsertValue,
   relativeShare,
   STUDY_GROUP_LABEL,
@@ -534,29 +535,48 @@ export function DeviationsSpoiler() {
     () => collectDeviations(session.studies, getStudyLive),
     [session.studies, templates.questionnaires],
   );
-  const [open, setOpen] = useState(true);
-  if (settings.studyDeviations === false || !list.length) return null;
-  return (
-    <section className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2">
-      <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setOpen((v) => !v)}>
+  const groups = useMemo(() => groupDeviations(list), [list]);
+  const [open, setOpen] = useState(false);
+  if (settings.studyDeviations === false || !list.length || typeof document === "undefined") return null;
+  return createPortal(
+    <section
+      className="fixed inset-x-0 bottom-16 z-40 border-t border-warn-line bg-warn shadow-[0_-6px_20px_rgba(0,0,0,0.08)] md:bottom-0"
+      aria-label="Отклонения"
+    >
+      <button type="button" className="mx-auto flex w-full max-w-3xl items-center gap-2 px-3 py-2 text-left" onClick={() => setOpen((v) => !v)}>
         <h4 className="text-sm font-medium">Отклонения</h4>
         <span className="rounded bg-danger-soft px-1.5 text-[10px] font-semibold text-danger">{list.length}</span>
-        <span className="ml-auto text-[10px] text-mute">{open ? "скрыть" : "показать"}</span>
+        {!open && groups[0] ? (
+          <span className="min-w-0 flex-1 truncate text-[11px] text-ink-soft">
+            {groups[0].study}
+            {groups[0].date ? ` · ${groups[0].date}` : ""}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
+        <span className="text-[10px] text-mute">{open ? "свернуть" : "показать"}</span>
       </button>
       {open && (
-        <ul className="mt-1.5 space-y-1 text-xs leading-snug">
-          {list.map((d, i) => (
-            <li key={`${d.studyKey}-${d.label}-${i}`}>
-              <span className="font-medium">
-                {d.study}
-                {d.date ? ` · ${d.date}` : ""}.
-              </span>{" "}
-              {d.label}: {d.value}
-              {d.normal ? <span className="text-ink-soft"> · норма {d.normal}</span> : null}
-            </li>
+        <div className="mx-auto max-h-[min(50vh,22rem)] w-full max-w-3xl space-y-2 overflow-auto border-t border-warn-line px-3 py-2">
+          {groups.map((g) => (
+            <div key={`${g.studyKey}-${g.date || ""}`}>
+              <div className="text-[11px] font-semibold">
+                {g.study}
+                {g.date ? <span className="font-normal text-ink-soft"> · {g.date}</span> : null}
+              </div>
+              <ul className="mt-0.5 space-y-0.5 text-xs leading-snug">
+                {g.items.map((d, i) => (
+                  <li key={`${d.label}-${i}`}>
+                    {d.label}: {d.value}
+                    {d.normal ? <span className="text-ink-soft"> · норма {d.normal}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </section>
+    </section>,
+    document.body,
   );
 }

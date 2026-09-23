@@ -25,9 +25,11 @@ import {
   searchAllergy,
   searchDrugs,
   findStudyByChip,
+  getStudyLive,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
+import { collectDeviations } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
@@ -78,6 +80,10 @@ export function ProtocolPage() {
   const blocks = useMemo(
     () => composeBlocks(session, patient, { deviations: settings.studyDeviations !== false }),
     [session, patient, settings.studyDeviations],
+  );
+  const deviationCount = useMemo(
+    () => (settings.studyDeviations === false ? 0 : collectDeviations(session.studies, getStudyLive).length),
+    [session.studies, settings.studyDeviations, templates.questionnaires],
   );
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
   const diagnosisText = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
@@ -980,9 +986,9 @@ export function ProtocolPage() {
       </div>
       <div
         ref={splitWrap}
-        className={`grid min-h-[calc(100dvh-3rem)] grid-cols-1 pb-16 md:pb-0 md:[grid-template-columns:minmax(240px,var(--split))_8px_minmax(280px,1fr)] ${
-          liveSplit != null ? "select-none" : ""
-        }`}
+        className={`grid min-h-[calc(100dvh-3rem)] grid-cols-1 md:[grid-template-columns:minmax(240px,var(--split))_8px_minmax(280px,1fr)] ${
+          deviationCount ? "pb-28 md:pb-16" : "pb-16 md:pb-0"
+        } ${liveSplit != null ? "select-none" : ""}`}
         style={{ ["--split" as string]: `${splitPct}%` }}
       >
         <div className={`min-h-0 min-w-0 ${mobileTab === "build" ? "block" : "hidden md:block"}`}>{assembly}</div>

@@ -707,11 +707,54 @@ export function collectDeviations(
   return out;
 }
 
+function dateSortKey(pretty?: string) {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(pretty || "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+export type DeviationGroup = {
+  study: string;
+  studyKey: string;
+  date?: string;
+  items: Deviation[];
+};
+
+/** One block per study result (study + date). Newest date first, undated last. */
+export function groupDeviations(list: Deviation[]): DeviationGroup[] {
+  const map = new Map<string, DeviationGroup>();
+  for (const d of list) {
+    const key = `${d.studyKey}|${d.date || ""}`;
+    let g = map.get(key);
+    if (!g) {
+      g = { study: d.study, studyKey: d.studyKey, date: d.date, items: [] };
+      map.set(key, g);
+    }
+    g.items.push(d);
+  }
+  return [...map.values()].sort((a, b) => {
+    const da = dateSortKey(a.date);
+    const db = dateSortKey(b.date);
+    if (da !== db) {
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.localeCompare(da);
+    }
+    return a.study.localeCompare(b.study, "ru");
+  });
+}
+
 export function formatDeviations(list: Deviation[]) {
-  if (!list.length) return "";
-  return list
-    .map((d) => `${d.study}${d.date ? ` ${d.date}` : ""}: ${d.label} ${d.value}${d.normal ? ` (норма ${d.normal})` : ""}`)
-    .join("; ");
+  const groups = groupDeviations(list);
+  if (!groups.length) return "";
+  return groups
+    .map((g) => {
+      const head = `${g.study}${g.date ? ` ${g.date}` : ""}`;
+      const body = g.items
+        .map((d) => `${d.label} ${d.value}${d.normal ? ` (норма ${d.normal})` : ""}`)
+        .join(", ");
+      return `${head}: ${body}`;
+    })
+    .join(". ");
 }
 
 export function fillStudyTemplate(
