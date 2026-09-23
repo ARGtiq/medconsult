@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import FloatingField from './FloatingField'
 import { asChips, mergeChip } from '../lib/guidelineChips'
+import { applyMarkup } from '../lib/md'
 
 export default function ChipAnnotator({
   label,
@@ -12,6 +13,7 @@ export default function ChipAnnotator({
   onChipsChange,
   placeholder,
   minRows = 4,
+  markdown = false,
 }) {
   const ref = useRef(null)
   const menuRef = useRef(null)
@@ -43,6 +45,32 @@ export default function ChipAnnotator({
     })
   }
 
+  function currentSelection() {
+    const el = ref.current
+    if (!el) return ''
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    return (el.value || '').slice(start, end).trim()
+  }
+
+  function applyMd(before, after = before) {
+    const el = ref.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const { next, from, to } = applyMarkup(el.value || '', start, end, before, after)
+    onChange(next)
+    requestAnimationFrame(() => {
+      const node = ref.current
+      if (!node) return
+      node.focus()
+      try {
+        node.setSelectionRange(from, to)
+      } catch {
+        /* */
+      }
+    })
+  }
   function addChip(text, note) {
     onChipsChange(mergeChip(list, text, note))
     setMenu(null)
@@ -68,6 +96,22 @@ export default function ChipAnnotator({
   return (
     <FloatingField label={label} value={value}>
       <div className="chip-annotator">
+        {markdown ? (
+          <div className="md-toolbar">
+            <button type="button" title="жирный" onMouseDown={(e) => e.preventDefault()} onClick={() => applyMd('**', '**')}>
+              <strong>Ж</strong>
+            </button>
+            <button type="button" title="курсив" onMouseDown={(e) => e.preventDefault()} onClick={() => applyMd('*', '*')}>
+              <em>К</em>
+            </button>
+            <button type="button" title="список" onMouseDown={(e) => e.preventDefault()} onClick={() => applyMd('\n- ', '')}>
+              •
+            </button>
+            <button type="button" title="заголовок" onMouseDown={(e) => e.preventDefault()} onClick={() => applyMd('\n## ', '')}>
+              H
+            </button>
+          </div>
+        ) : null}
         <AutoResizeTextarea
           textareaRef={ref}
           placeholder={placeholder || label}
@@ -127,7 +171,7 @@ export default function ChipAnnotator({
             type="button"
             className="btn-secondary btn-small"
             onClick={() => {
-              const text = selection()
+              const text = currentSelection()
               if (text) addChip(text)
             }}
           >
@@ -137,7 +181,7 @@ export default function ChipAnnotator({
             type="button"
             className="btn-secondary btn-small"
             onClick={() => {
-              const text = selection()
+              const text = currentSelection()
               if (!text) return
               const note = window.prompt('Пояснение к «' + text + '»', '')
               if (note === null) return

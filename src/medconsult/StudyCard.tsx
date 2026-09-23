@@ -6,6 +6,7 @@ import {
   collectDeviations,
   fieldAbnormal,
   formatRefHint,
+  referenceInsertValue,
   relativeShare,
   STUDY_GROUP_LABEL,
   STUDY_GROUP_ORDER,
@@ -15,7 +16,7 @@ import {
 import type { StudyField } from "./types";
 import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive, icdMatches } from "./live";
-import { scaleFromStudyKey } from "./data/questionnaires";
+import { scaleFromStudyKey, studyKeyForScale } from "./data/questionnaires";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
 
@@ -84,7 +85,7 @@ function FieldControl({
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
-  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit } = useAppStore();
+  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
   const selected = session.openSection === studyKey;
@@ -142,6 +143,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   fields={inst.fields}
                   previous={idx === 0 ? prevFields : null}
                   prevDate={previous?.date}
+                  takenKeys={session.studies.map((s) => s.key)}
+                  onAddScale={(scale) => addStudy(studyKeyForScale(scale.totalKey))}
                   onChange={(next) => updateInstance(studyKey, inst.id, next, inst.date)}
                 />
               ) : (
@@ -159,8 +162,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")
                       : null;
                   const hint = formatRefHint(f);
+                  const insert = f.computed ? "" : referenceInsertValue(f);
                   return (
-                    <label
+                    <div
                       key={f.key}
                       className={`rounded-md px-1.5 py-1 ${wide ? "col-span-2 sm:col-span-3" : ""} ${
                         f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"
@@ -186,17 +190,31 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                         value={f.computed ? value : inst.fields[f.key] || ""}
                         onChange={(v) => updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: v }, inst.date)}
                       />
-                      <span className={`block text-[10px] ${bad ? "text-danger" : "text-teal"}`}>
-                        {hint}
-                        {share != null ? ` · ${Math.round(share * 10) / 10}% объёма` : ""}
-                      </span>
+                      {hint ? (
+                        <button
+                          type="button"
+                          disabled={!insert}
+                          title={insert ? `подставить «${insert}»` : "значение по умолчанию задаётся в шаблоне исследования"}
+                          className={`block text-left text-[10px] underline decoration-dotted underline-offset-2 ${
+                            bad ? "text-danger" : "text-teal"
+                          } ${insert ? "" : "cursor-default no-underline"}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (!insert) return;
+                            updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: insert }, inst.date);
+                          }}
+                        >
+                          {hint}
+                          {share != null ? ` · ${Math.round(share * 10) / 10}% объёма` : ""}
+                        </button>
+                      ) : null}
                       {was && (
                         <span className="mt-0.5 block text-[10px] text-mute">
                           было: {was}
                           {previous?.date ? ` · ${previous.date}` : ""}
                         </span>
                       )}
-                    </label>
+                    </div>
                   );
                 })}
               </div>

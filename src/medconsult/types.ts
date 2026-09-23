@@ -12,6 +12,7 @@ export type StudyField = {
   label: string;
   unit?: string;
   normal?: string;
+  defaultValue?: string;
   kind?: "text" | "number" | "select" | "multi";
   options?: string[];
   computed?: boolean;

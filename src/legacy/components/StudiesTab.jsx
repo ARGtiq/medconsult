@@ -30,6 +30,7 @@ function blankField() {
     label: '',
     unit: '',
     normal: '',
+    defaultValue: '',
     kind: 'text',
     options: [],
     optionDraft: '',
@@ -88,6 +89,7 @@ function toEditorField(f) {
     label: f.label || '',
     unit: f.unit || '',
     normal: f.normal || '',
+    defaultValue: f.defaultValue || '',
     kind: editorKind(f),
     options: Array.isArray(f.options) ? [...f.options] : [],
     optionDraft: '',
@@ -176,6 +178,8 @@ function serializeField(f) {
   }
   const normal = autoNormal({ ...out, normal: (f.normal || '').trim() })
   if (normal) out.normal = normal
+  const preset = (f.defaultValue || '').trim()
+  if (preset) out.defaultValue = preset
   return out
 }
 
@@ -412,6 +416,21 @@ export default function StudiesTab() {
     })
   }
 
+  function duplicate(study) {
+    const base = overlaySeedFields(study)
+    const label = `${base.label} (копия)`
+    const key = `${slugifyKey(label)}_${Date.now().toString(36)}`
+    const copy = {
+      ...base,
+      key,
+      label,
+      fields: (base.fields || []).map((f) => ({ ...f, options: f.options ? [...f.options] : undefined })),
+    }
+    store.saveCustomStudy(copy)
+    refresh()
+    openEdit(copy)
+  }
+
   function restore(key) {
     store.restoreStudy(key)
     refresh()
@@ -630,6 +649,12 @@ export default function StudiesTab() {
                         value={f.normal}
                         onChange={(e) => updateField(idx, { normal: e.target.value })}
                       />
+                      <input
+                        className="study-field-normal"
+                        placeholder="значение по умолчанию — клик по референсу на приёме"
+                        value={f.defaultValue || ''}
+                        onChange={(e) => updateField(idx, { defaultValue: e.target.value })}
+                      />
                     </div>
                   )
                 })}
@@ -709,7 +734,8 @@ export default function StudiesTab() {
                   <strong className="drug-db-card-name" onClick={() => openEdit(s)} title="Нажми, чтобы редактировать">
                     {s.label}
                   </strong>
-                  <span className="drug-db-group">{s.category === 'lab' ? 'лабораторное' : 'инструментальное'}</span>
+                  <span className="drug-db-group">{s.category === 'lab' ? 'лабораторное' : s.category === 'questionnaire' ? 'анкета' : 'инструментальное'}</span>
+                  <button type="button" className="btn-secondary btn-small" onClick={() => duplicate(s)}>копия</button>
                   <button type="button" className="remove-btn" onClick={() => remove(s)} title={builtinKeys.has(s.key) ? 'Скрыть предустановленное' : 'Удалить'}>×</button>
                 </div>
                 <div className="drug-db-line">{s.template}</div>

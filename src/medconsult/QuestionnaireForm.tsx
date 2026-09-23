@@ -5,6 +5,7 @@ import {
   domainLine,
   itemKind,
   scaleRange,
+  studyKeyForScale,
   verdictFor,
   type ScaleDef,
   type ScaleItem,
@@ -16,50 +17,59 @@ export function QuestionnaireForm({
   previous,
   prevDate,
   onChange,
+  onAddScale,
+  takenKeys,
 }: {
   scale?: ScaleDef | null;
   fields: Record<string, string>;
   previous?: Record<string, string> | null;
   prevDate?: string;
   onChange: (next: Record<string, string>) => void;
+  onAddScale?: (scale: ScaleDef) => void;
+  takenKeys?: string[];
 }) {
-  const list = scale ? [scale] : liveScales();
-  const [open, setOpen] = useState<string | null>(scale ? scale.totalKey : null);
-  const other = fields.other || "";
-  const wasOther = previous ? (previous.other || "").trim() : "";
-  const bundled = !scale;
+  const taken = new Set(takenKeys || []);
+  const [open, setOpen] = useState<string | null>(scale?.totalKey || null);
+  if (!scale) {
+    const list = liveScales();
+    return (
+      <div>
+        <p className="text-xs text-ink-soft">На приём — одна-две анкеты, не весь набор.</p>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {list.map((s) => {
+            const key = studyKeyForScale(s.totalKey);
+            const on = taken.has(key);
+            return (
+              <button
+                key={s.totalKey}
+                type="button"
+                disabled={on || !onAddScale}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  on ? "bg-teal-soft text-teal" : "border border-line bg-surface"
+                }`}
+                onClick={() => onAddScale?.(s)}
+              >
+                {s.title}
+                {on ? " · есть" : ""}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1.5">
-      {list.map((s) => (
-        <ScaleBlock
-          key={s.totalKey}
-          scale={s}
-          fields={fields}
-          previous={previous}
-          prevDate={prevDate}
-          open={open === s.totalKey}
-          onToggle={() => setOpen((v) => (v === s.totalKey ? null : s.totalKey))}
-          onChange={onChange}
-        />
-      ))}
-      {bundled ? (
-        <label className="block rounded-md bg-paper px-1.5 py-1">
-          <span className="block text-[10px] text-mute">Другая</span>
-          <input
-            value={other}
-            onChange={(e) => onChange({ ...fields, other: e.target.value })}
-            placeholder="название и балл"
-            className="w-full bg-transparent text-sm font-semibold outline-none"
-          />
-          {wasOther ? (
-            <span className="mt-0.5 block text-[10px] text-mute">
-              было: {wasOther}
-              {prevDate ? ` · ${prevDate}` : ""}
-            </span>
-          ) : null}
-        </label>
-      ) : null}
+      <ScaleBlock
+        scale={scale}
+        fields={fields}
+        previous={previous}
+        prevDate={prevDate}
+        open={open === scale.totalKey}
+        onToggle={() => setOpen((v) => (v === scale.totalKey ? null : scale.totalKey))}
+        onChange={onChange}
+      />
     </div>
   );
 }

@@ -492,6 +492,27 @@ export function evalFormula(expr: string, fields: Record<string, string>): strin
   }
 }
 
+export function referenceInsertValue(f: StudyField): string {
+  const preset = (f.defaultValue || "").trim();
+  if (preset) return preset;
+  if (f.computed) return "";
+  const normal = (f.normal || "").trim();
+  if ((f.kind === "select" || f.kind === "multi") && f.options?.length) {
+    const hit =
+      f.options.find((o) => o.toLowerCase() === normal.toLowerCase()) ||
+      f.options.find((o) => normal.toLowerCase().startsWith(o.toLowerCase()));
+    if (hit) return f.kind === "multi" ? hit : hit;
+  }
+  if (!normal || f.refOf) return "";
+  if (f.kind === "number" || f.unit) {
+    if (/\d+(?:[.,]\d+)?\s*[–\-]\s*\d/.test(normal)) return "";
+    const num = normal.match(/(\d+(?:[.,]\d+)?)/);
+    return num ? num[1] : "";
+  }
+  if (normal.length > 48) return "";
+  return normal;
+}
+
 export function formatRefHint(f: { refOp?: string; refMin?: number; refMax?: number; refOf?: string; refOfMode?: string; normal?: string }): string {
   if (f.normal && String(f.normal).trim()) return String(f.normal).trim();
   if (!f.refOp) return "";

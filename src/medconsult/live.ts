@@ -1,4 +1,5 @@
 import { store } from "@/legacy/lib/store";
+import { explicitChips } from "@/legacy/lib/guidelineChips";
 import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
@@ -107,17 +108,6 @@ export type CompactGuideline = {
   complaints: string[];
 };
 
-function chipTexts(list: unknown): string[] {
-  if (!Array.isArray(list)) return [];
-  return list
-    .map((c) => {
-      if (typeof c === "string") return c.trim();
-      if (c && typeof c === "object" && "text" in c) return String((c as { text?: string }).text || "").trim();
-      return "";
-    })
-    .filter(Boolean);
-}
-
 export function compactGuideline(code: string): CompactGuideline | null {
   const live = liveGuidelinesForCode(code);
   if (live[0]) {
@@ -126,7 +116,19 @@ export function compactGuideline(code: string): CompactGuideline | null {
     const recs = scenarios.flatMap((s) =>
       (s.drugs || []).map((d) => [d.name, d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(" ")),
     );
-    const picture = chipTexts(g.clinicalPictureChips || g.clinicalPicture);
+    const pictureNote =
+      (typeof g.clinicalPictureNotes === "string" && g.clinicalPictureNotes.trim()) ||
+      (typeof g.clinicalPicture === "string" ? g.clinicalPicture : "");
+    const stored = (g.clinicalPictureChips || g.clinicalPicture) as unknown;
+    const joined = Array.isArray(stored)
+      ? stored
+          .map((x) => (typeof x === "string" ? x : x && typeof x === "object" && "text" in x ? String((x as { text?: string }).text || "") : ""))
+          .filter(Boolean)
+          .join("\n")
+      : "";
+    const picture = (explicitChips(stored, pictureNote || joined) as { text?: string }[])
+      .map((c) => (c?.text || "").trim())
+      .filter(Boolean);
     return {
       id: String(g.id || "live"),
       title: String(g.title || "клинрек"),

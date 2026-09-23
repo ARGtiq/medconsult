@@ -9,7 +9,7 @@ import ChipAnnotator from './ChipAnnotator'
 import FloatingField from './FloatingField'
 import MdField from './MdField'
 import QuestionnairePickModal from './QuestionnairePickModal'
-import { asChips, chipTexts } from '../lib/guidelineChips'
+import { asChips, explicitChips } from '../lib/guidelineChips'
 import { getQuestionScales } from '../../medconsult/data/templates'
 
 function blankForm() {
@@ -20,6 +20,7 @@ function blankForm() {
     title: '',
     definition: '',
     classification: '',
+    classificationChips: [],
     diagnosisFormulation: '',
     diagnosisCriteria: '',
     investigationsText: '',
@@ -67,9 +68,9 @@ function registerScenarioDrugsInDb(scenarios, mkb10Codes = []) {
 }
 
 function presetForm(g) {
-  const pictureChips = asChips(g.clinicalPictureChips || g.clinicalPicture)
-  const invChips = asChips(g.investigationsChips || g.investigations)
-  const therapyChips = asChips(g.nonDrugTherapyChips)
+  const pictureChips = explicitChips(g.clinicalPictureChips, g.clinicalPicture)
+  const invChips = explicitChips(g.investigationsChips, g.investigations)
+  const therapyChips = explicitChips(g.nonDrugTherapyChips, g.nonDrugTherapy)
   return {
     id: g.id,
     mkb10CodesText: (g.mkb10Codes || []).join(', '),
@@ -77,6 +78,7 @@ function presetForm(g) {
     title: g.title || '',
     definition: g.definition || '',
     classification: g.classification || '',
+    classificationChips: explicitChips(g.classificationChips, g.classification),
     diagnosisFormulation: g.diagnosisFormulation || '',
     diagnosisCriteria: g.diagnosisCriteria || '',
     investigationsText: g.investigationsNotes || (typeof g.investigations === 'string' ? g.investigations : (g.investigations || []).join(', ')),
@@ -170,6 +172,7 @@ export default function GuidelinesPage({ initialItemId }) {
       clinicalPictureNotes: form.clinicalPictureText,
       clinicalPictureChips: clinicalPicture,
       nonDrugTherapyChips: therapyChips,
+      classificationChips: asChips(form.classificationChips),
       questionnaireKeys: form.questionnaireKeys || [],
       scenarios,
     })
@@ -190,13 +193,7 @@ export default function GuidelinesPage({ initialItemId }) {
         ...info,
         mkb10CodesText: info.mkb10Codes || prev.mkb10CodesText,
         investigationsText: info.investigations || prev.investigationsText,
-        investigationsChips: info.investigations
-          ? chipTexts(String(info.investigations).split(',')).map((t) => ({ text: t }))
-          : prev.investigationsChips,
         clinicalPictureText: info.clinicalPicture || prev.clinicalPictureText,
-        clinicalPictureChips: info.clinicalPicture
-          ? chipTexts(String(info.clinicalPicture).split(',')).map((t) => ({ text: t }))
-          : prev.clinicalPictureChips,
         scenarios: info.scenarios?.length
           ? info.scenarios.map((s) => ({ name: s.name || '', drugs: s.drugs?.length ? s.drugs : [blankDrugRow()] }))
           : prev.scenarios,
@@ -266,11 +263,14 @@ export default function GuidelinesPage({ initialItemId }) {
           value={form.definition}
           onChange={(v) => setForm({ ...form, definition: v })}
         />
-        <MdField
+        <ChipAnnotator
+          markdown
           label="Классификация / стадии"
-          placeholder="Классификация / стадии — каждая стадия на отдельной строке"
+          placeholder="Классификация. Выдели стадию → чип в диагноз. Остальной текст — шпаргалка, не чип."
           value={form.classification}
           onChange={(v) => setForm({ ...form, classification: v })}
+          chips={form.classificationChips}
+          onChipsChange={(classificationChips) => setForm({ ...form, classificationChips })}
         />
         <MdField
           label="Формулировка диагноза"

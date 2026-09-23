@@ -411,9 +411,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const session = get().session;
     if (session.studies.some((s) => s.key === key)) return;
     const prevInst = findPreviousStudy(get().visits, session.patientId, key, get().patients);
+    const def = getStudyLive(key);
+    const seeded: Record<string, string> = {};
+    if (def) {
+      for (const f of def.fields) {
+        const v = (f.defaultValue || "").trim();
+        if (v && !f.computed) seeded[f.key] = v;
+      }
+    }
+    const fields = def ? applyComputed(def, seeded) : seeded;
     const entry: StudyEntry = {
       key,
-      instances: [{ id: uid("i"), date: todayISO(), fields: {} }],
+      instances: [{ id: uid("i"), date: todayISO(), fields }],
       previous: prevInst ? { ...prevInst, fields: { ...prevInst.fields } } : undefined,
     };
     const studies = [...session.studies, entry];

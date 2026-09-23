@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getTemplates,
   resetTemplates,
@@ -92,8 +92,11 @@ export function TemplatesEditor() {
   const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
+  const echo = useRef(false);
+
   useEffect(() => {
     function reload() {
+      if (echo.current) return;
       setData(getTemplates());
     }
     window.addEventListener("medconsult-templates", reload);
@@ -103,7 +106,9 @@ export function TemplatesEditor() {
   function persist(patch: Partial<TemplatesState>) {
     const next = { ...data, ...patch };
     setData(next);
+    echo.current = true;
     saveTemplates(patch);
+    echo.current = false;
   }
 
   return (
@@ -729,9 +734,7 @@ function ComplaintDictEditor({
   const [draft, setDraft] = useState("");
   const [optDraft, setOptDraft] = useState<Record<number, string>>({});
   const [openOpt, setOpenOpt] = useState<number | null>(null);
-  const shown = items
-    .map((it, i) => ({ it, i }))
-    .sort((a, b) => a.it.text.localeCompare(b.it.text, "ru", { sensitivity: "base" }));
+  const shown = items.map((it, i) => ({ it, i }));
 
   function patch(i: number, next: ComplaintTemplate) {
     onChange(items.map((x, idx) => (idx === i ? next : x)));
@@ -756,13 +759,26 @@ function ComplaintDictEditor({
       </p>
       <div className="space-y-1.5">
         {shown.map(({ it, i }) => (
-          <div key={`${it.text}-${i}`} className="rounded-md border border-line/70 bg-paper px-2 py-1.5">
+          <div key={`c-${i}`} className="rounded-md border border-line/70 bg-paper px-2 py-1.5">
             <div className="flex items-center gap-1">
               <input
                 value={it.text}
                 onChange={(e) => patch(i, { ...it, text: e.target.value })}
                 className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
               />
+              <button
+                type="button"
+                className="shrink-0 text-[11px] font-medium text-teal"
+                onClick={() => {
+                  const base = it.text.trim() || "жалоба";
+                  let text = `${base} (копия)`;
+                  let n = 2;
+                  while (items.some((x) => x.text.toLowerCase() === text.toLowerCase())) text = `${base} (копия ${n++})`;
+                  onChange([...items, { text, options: it.options ? [...it.options] : undefined }]);
+                }}
+              >
+                копия
+              </button>
               <button
                 type="button"
                 className="shrink-0 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
@@ -958,6 +974,15 @@ function PresetEditor({
                 className="w-24 rounded-md border border-line bg-paper px-1 py-1 text-xs"
               />
             )}
+            <button
+              type="button"
+              className="text-xs font-medium text-teal"
+              onClick={() =>
+                onChange([...items, { ...it, id: `p_${Date.now()}`, label: `${it.label} (копия)` }])
+              }
+            >
+              копия
+            </button>
             <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
               ×
             </button>

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import FloatingField from './FloatingField'
-import { mdToHtml } from '../lib/md'
+import { applyMarkup, mdToHtml } from '../lib/md'
 
 export default function MdField({ label, value, onChange, placeholder, minRows = 3, className = '' }) {
   const ref = useRef(null)
@@ -12,17 +12,14 @@ export default function MdField({ label, value, onChange, placeholder, minRows =
     if (!el) return
     const start = el.selectionStart ?? 0
     const end = el.selectionEnd ?? 0
-    const current = el.value || ''
-    const selected = current.slice(start, end) || 'текст'
-    const next = current.slice(0, start) + before + selected + after + current.slice(end)
+    const { next, from, to } = applyMarkup(el.value || '', start, end, before, after)
     onChange(next)
     requestAnimationFrame(() => {
       const node = ref.current
       if (!node) return
       node.focus()
-      const from = start + before.length
       try {
-        node.setSelectionRange(from, from + selected.length)
+        node.setSelectionRange(from, to)
       } catch {
         /* */
       }

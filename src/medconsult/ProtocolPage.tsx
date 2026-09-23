@@ -376,6 +376,7 @@ export function ProtocolPage() {
               onInsertInvestigation={insertInvestigation}
               onInsertDrug={insertDrug}
               onInsertQuestionnaire={(key: string) => addStudy(key)}
+              addedStudyKeys={session.studies.map((s) => s.key)}
             />
           </div>
         )}
@@ -450,6 +451,7 @@ export function ProtocolPage() {
                   onInsertInvestigation={insertInvestigation}
                   onInsertDrug={insertDrug}
                   onInsertQuestionnaire={(key: string) => addStudy(key)}
+              addedStudyKeys={session.studies.map((s) => s.key)}
                 />
                 <button type="button" className="mt-4 text-sm text-mute" onClick={() => setHubOpen(false)}>
                   Закрыть
@@ -563,6 +565,7 @@ export function ProtocolPage() {
                   onInsertInvestigation={insertInvestigation}
                   onInsertDrug={insertDrug}
                   onInsertQuestionnaire={(key: string) => addStudy(key)}
+              addedStudyKeys={session.studies.map((s) => s.key)}
                 />
               </div>
             )}
@@ -799,6 +802,7 @@ export function ProtocolPage() {
                 onInsertInvestigation={insertInvestigation}
                 onInsertDrug={insertDrug}
                 onInsertQuestionnaire={(key: string) => addStudy(key)}
+              addedStudyKeys={session.studies.map((s) => s.key)}
               />
               <TreatmentSchemeSearch
                 diagnosisText={diagnosisText}

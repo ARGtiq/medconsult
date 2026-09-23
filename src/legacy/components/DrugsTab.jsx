@@ -111,6 +111,12 @@ export default function DrugsTab({ initialItemId }) {
     setFormOpen(true)
   }
 
+  function duplicate(d) {
+    const name = `${d.name} (копия)`
+    setForm({ ...blankForm(), ...d, name, regimens: regimensFromDrug(d) })
+    setFormOpen(true)
+  }
+
   function addRegimen() {
     setForm({ ...form, regimens: [...form.regimens, blankRegimen()] })
   }
@@ -390,6 +396,7 @@ export default function DrugsTab({ initialItemId }) {
                   </span>
                 ))}
                 {d.evidenceLevel && <span className="drug-db-evidence">{EVIDENCE_OPTIONS.find((o) => o.value === d.evidenceLevel)?.label}</span>}
+                <button type="button" className="btn-secondary btn-small" onClick={() => duplicate(d)}>копия</button>
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
               <FillProgressBar item={d} fields={DRUG_FILL_FIELDS} />

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import { extractCodesFromText } from '../data/mkb10'
-import { asChips } from '../lib/guidelineChips'
+import { asChips, explicitChips } from '../lib/guidelineChips'
 import { mdToHtml } from '../lib/md'
 import { getQuestionScales } from '../../medconsult/data/templates'
 import { studyKeyForScale } from '../../medconsult/data/questionnaires'
@@ -55,6 +55,18 @@ function ChipRow({ chips, onInsert }) {
   )
 }
 
+function freeText(notes, legacy) {
+  if (typeof notes === 'string' && notes.trim()) return notes
+  if (typeof legacy === 'string' && legacy.trim()) return legacy
+  if (Array.isArray(legacy)) {
+    return legacy
+      .map((x) => (typeof x === 'string' ? x : x?.text))
+      .filter(Boolean)
+      .join('\n')
+  }
+  return ''
+}
+
 export default function GuidelinePanel({
   diagnosisText,
   mode,
@@ -64,6 +76,7 @@ export default function GuidelinePanel({
   onInsertInvestigation,
   onInsertDrug,
   onInsertQuestionnaire,
+  addedStudyKeys,
   formulationTag,
 }) {
   const codes = useMemo(() => extractCodesFromText(diagnosisText), [diagnosisText])
@@ -83,11 +96,14 @@ export default function GuidelinePanel({
       {matches.map((g) => {
         const isFormulationSource = formulationTag?.guidelineId === g.id
         const needsUpdate = isFormulationSource && formulationTag.guidelineUpdatedAt !== g.updatedAt
-        const classificationLines = (g.classification || '').split('\n').map((l) => l.trim()).filter(Boolean)
         const matchedCodes = (g.mkb10Codes || []).filter((c) => codes.includes(c.toUpperCase()))
-        const picture = asChips(g.clinicalPictureChips || g.clinicalPicture)
-        const investigations = asChips(g.investigationsChips || g.investigations)
-        const therapy = asChips(g.nonDrugTherapyChips)
+        const pictureText = freeText(g.clinicalPictureNotes, g.clinicalPicture)
+        const invText = freeText(g.investigationsNotes, g.investigations)
+        const classChips = explicitChips(g.classificationChips, g.classification)
+        const picture = explicitChips(g.clinicalPictureChips, pictureText)
+        const investigations = explicitChips(g.investigationsChips, invText)
+        const therapy = explicitChips(g.nonDrugTherapyChips, g.nonDrugTherapy || '')
+        const present = new Set(addedStudyKeys || [])
         const qKeys = g.questionnaireKeys || []
         const qList = qKeys
           .map((k) => scales.find((s) => s.totalKey === k))
@@ -107,28 +123,27 @@ export default function GuidelinePanel({
               <div className="guideline-panel-text md-preview" dangerouslySetInnerHTML={{ __html: mdToHtml(g.definition) }} />
             )}
 
-            {mode === 'complaints' && picture.length > 0 && (
+            {mode === 'complaints' && (picture.length > 0 || pictureText) && (
               <>
-                <p className="guideline-panel-text-muted">Жалобы (клик — в протокол; i — пояснение):</p>
+                <p className="guideline-panel-text-muted">Жалобы (чип — в протокол; i — пояснение; остальной текст не вставляется):</p>
+                {pictureText ? (
+                  <div className="guideline-panel-text-muted md-preview" dangerouslySetInnerHTML={{ __html: mdToHtml(pictureText) }} />
+                ) : null}
                 <ChipRow chips={picture} onInsert={onInsertComplaint} />
-                {g.clinicalPictureNotes && g.clinicalPictureNotes.trim() !== picture.map((c) => c.text).join(', ') && (
-                  <p className="guideline-panel-text-muted">{g.clinicalPictureNotes}</p>
-                )}
               </>
             )}
 
             {mode === 'diagnosis' && (
               <>
-                {classificationLines.length > 0 && (
+                {(classChips.length > 0 || g.classification) && (
                   <>
-                    <p className="guideline-panel-text-muted">Классификация (клик — добавить в диагноз):</p>
-                    <div className="guideline-complaint-suggestions">
-                      {classificationLines.map((line, i) => (
-                        <button type="button" key={i} className="suggestion-pill suggestion-pill-guideline" onClick={() => onInsertClassificationLine(line)}>
-                          {line.replace(/^#+\s*/, '')}
-                        </button>
-                      ))}
-                    </div>
+                    <p className="guideline-panel-text-muted">Классификация (чип — в диагноз; остальное — шпаргалка):</p>
+                    {g.classification ? (
+                      <div className="guideline-panel-text-muted md-preview" dangerouslySetInnerHTML={{ __html: mdToHtml(g.classification) }} />
+                    ) : null}
+                    {classChips.length > 0 && (
+                      <ChipRow chips={classChips} onInsert={(text) => onInsertClassificationLine(text)} />
+                    )}
                   </>
                 )}
                 {g.diagnosisFormulation && (
@@ -148,18 +163,24 @@ export default function GuidelinePanel({
                 )}
                 {qList.length > 0 && onInsertQuestionnaire && (
                   <>
-                    <p className="guideline-panel-text-muted">Анкеты клинрека:</p>
+                    <p className="guideline-panel-text-muted">Анкеты — по одной на приём:</p>
                     <div className="guideline-complaint-suggestions">
-                      {qList.map((s) => (
-                        <button
-                          type="button"
-                          key={s.totalKey}
-                          className="suggestion-pill suggestion-pill-guideline"
-                          onClick={() => onInsertQuestionnaire(studyKeyForScale(s.totalKey))}
-                        >
-                          {s.title}
-                        </button>
-                      ))}
+                      {qList.map((s) => {
+                        const key = studyKeyForScale(s.totalKey)
+                        const on = present.has(key)
+                        return (
+                          <button
+                            type="button"
+                            key={s.totalKey}
+                            className="suggestion-pill suggestion-pill-guideline"
+                            disabled={on}
+                            onClick={() => onInsertQuestionnaire(key)}
+                          >
+                            {s.title}
+                            {on ? ' · есть' : ''}
+                          </button>
+                        )
+                      })}
                     </div>
                   </>
                 )}
@@ -194,18 +215,24 @@ export default function GuidelinePanel({
                 )}
                 {qList.length > 0 && onInsertQuestionnaire && (
                   <>
-                    <p className="guideline-panel-text-muted">Анкеты:</p>
+                    <p className="guideline-panel-text-muted">Анкеты — по одной на приём:</p>
                     <div className="guideline-complaint-suggestions">
-                      {qList.map((s) => (
-                        <button
-                          type="button"
-                          key={s.totalKey}
-                          className="suggestion-pill suggestion-pill-guideline"
-                          onClick={() => onInsertQuestionnaire(studyKeyForScale(s.totalKey))}
-                        >
-                          {s.title}
-                        </button>
-                      ))}
+                      {qList.map((s) => {
+                        const key = studyKeyForScale(s.totalKey)
+                        const on = present.has(key)
+                        return (
+                          <button
+                            type="button"
+                            key={s.totalKey}
+                            className="suggestion-pill suggestion-pill-guideline"
+                            disabled={on}
+                            onClick={() => onInsertQuestionnaire(key)}
+                          >
+                            {s.title}
+                            {on ? ' · есть' : ''}
+                          </button>
+                        )
+                      })}
                     </div>
                   </>
                 )}
