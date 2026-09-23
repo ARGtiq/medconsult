@@ -19,6 +19,8 @@ export function QuestionnaireForm({
   onChange,
   onAddScale,
   takenKeys,
+  showPrevious = false,
+  onTogglePrevious,
 }: {
   scale?: ScaleDef | null;
   fields: Record<string, string>;
@@ -27,6 +29,8 @@ export function QuestionnaireForm({
   onChange: (next: Record<string, string>) => void;
   onAddScale?: (scale: ScaleDef) => void;
   takenKeys?: string[];
+  showPrevious?: boolean;
+  onTogglePrevious?: () => void;
 }) {
   const taken = new Set(takenKeys || []);
   const [open, setOpen] = useState<string | null>(scale?.totalKey || null);
@@ -34,7 +38,7 @@ export function QuestionnaireForm({
     const list = liveScales();
     return (
       <div>
-        <p className="text-xs text-ink-soft">На приём — одна-две анкеты, не весь набор.</p>
+        <p className="text-xs text-ink-soft">На приём — одна-две анкеты. Уже добавленную можно открыть ещё раз как контроль.</p>
         <div className="mt-1 flex flex-wrap gap-1">
           {list.map((s) => {
             const key = studyKeyForScale(s.totalKey);
@@ -43,14 +47,14 @@ export function QuestionnaireForm({
               <button
                 key={s.totalKey}
                 type="button"
-                disabled={on || !onAddScale}
+                disabled={!onAddScale}
                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   on ? "bg-teal-soft text-teal" : "border border-line bg-surface"
                 }`}
                 onClick={() => onAddScale?.(s)}
               >
                 {s.title}
-                {on ? " · есть" : ""}
+                {on ? " · контроль" : ""}
               </button>
             );
           })}
@@ -66,6 +70,8 @@ export function QuestionnaireForm({
         fields={fields}
         previous={previous}
         prevDate={prevDate}
+        showPrevious={showPrevious}
+        onTogglePrevious={onTogglePrevious}
         open={open === scale.totalKey}
         onToggle={() => setOpen((v) => (v === scale.totalKey ? null : scale.totalKey))}
         onChange={onChange}
@@ -79,6 +85,8 @@ function ScaleBlock({
   fields,
   previous,
   prevDate,
+  showPrevious,
+  onTogglePrevious,
   open,
   onToggle,
   onChange,
@@ -87,6 +95,8 @@ function ScaleBlock({
   fields: Record<string, string>;
   previous?: Record<string, string> | null;
   prevDate?: string;
+  showPrevious?: boolean;
+  onTogglePrevious?: () => void;
   open: boolean;
   onToggle: () => void;
   onChange: (next: Record<string, string>) => void;
@@ -100,6 +110,7 @@ function ScaleBlock({
   const was = previous ? (previous[scale.totalKey] || "").trim() : "";
   const domains = domainLine(fields, scale);
   const showSum = scale.sum !== false;
+  const hasPrev = !!previous && Object.values(previous).some((v) => String(v || "").trim());
 
   return (
     <div className="rounded-md border border-line bg-paper px-2 py-1.5">
@@ -118,7 +129,7 @@ function ScaleBlock({
             )}
           </div>
           {domains ? <div className="text-[10px] text-ink-soft">{domains}</div> : null}
-          {was ? (
+          {showPrevious && was ? (
             <div className="text-[10px] text-mute">
               было: {was}
               {prevDate ? ` · ${prevDate}` : ""}
@@ -132,6 +143,18 @@ function ScaleBlock({
             placeholder="балл"
             className="w-14 rounded-md border border-line bg-surface px-1.5 py-0.5 text-sm font-semibold tabular-nums outline-none"
           />
+        ) : null}
+        {hasPrev && onTogglePrevious ? (
+          <button
+            type="button"
+            onClick={onTogglePrevious}
+            title="Прошлые ответы рядом с вопросами. Выключи, пока анкету заполняет пациент"
+            className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+              showPrevious ? "bg-warn text-ink" : "border border-line text-mute"
+            }`}
+          >
+            {showPrevious ? "прошлые видны" : "прошлые скрыты"}
+          </button>
         ) : null}
         <button
           type="button"
@@ -150,13 +173,19 @@ function ScaleBlock({
               {itemKind(it) !== "heading" && it.group && it.group !== scale.items[i - 1]?.group ? (
                 <div className="mb-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{it.group}</div>
               ) : null}
-              <ItemRow item={it} value={fields[it.key] || ""} onPick={(n) => onChange(applyItem(fields, scale, it.key, n))} />
+              <ItemRow
+                item={it}
+                value={fields[it.key] || ""}
+                prev={showPrevious ? previous?.[it.key] || "" : ""}
+                onPick={(n) => onChange(applyItem(fields, scale, it.key, n))}
+              />
             </div>
           ))}
           {scale.extra && (
             <ItemRow
               item={scale.extra}
               value={fields[scale.extra.key] || ""}
+              prev={showPrevious ? previous?.[scale.extra.key] || "" : ""}
               onPick={(n) => onChange({ ...fields, [scale.extra!.key]: n })}
             />
           )}
@@ -166,23 +195,41 @@ function ScaleBlock({
   );
 }
 
+function prevCaption(item: ScaleItem, raw: string): string {
+  const v = (raw || "").trim();
+  if (!v) return "";
+  const kind = itemKind(item);
+  if (kind === "yesno") return v === "1" ? "да" : v === "0" ? "нет" : v;
+  if (kind === "choice" && item.options?.length) {
+    const hit = item.options.find((o) => String(o.score ?? o.value) === v || o.label === v);
+    return hit?.label || v;
+  }
+  return v;
+}
+
 function ItemRow({
   item,
   value,
+  prev,
   onPick,
 }: {
   item: ScaleItem;
   value: string;
+  prev?: string;
   onPick: (n: string) => void;
 }) {
   const kind = itemKind(item);
+  const was = prevCaption(item, prev || "");
   if (kind === "heading") {
     return <div className="pt-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{item.label}</div>;
   }
   if (kind === "text") {
     return (
       <label className="block">
-        <span className="text-[11px] text-ink-soft">{item.label}</span>
+        <span className="text-[11px] text-ink-soft">
+          {item.label}
+          {was ? <span className="ml-1 text-mute">· было {was}</span> : null}
+        </span>
         <input
           value={value}
           onChange={(e) => onPick(e.target.value)}
@@ -202,7 +249,10 @@ function ItemRow({
         : scaleRange(item).map((n) => ({ n: String(n), text: String(n) }));
   return (
     <div>
-      <div className="text-[11px] text-ink-soft">{item.label}</div>
+      <div className="text-[11px] text-ink-soft">
+        {item.label}
+        {was ? <span className="ml-1 text-mute">· было {was}</span> : null}
+      </div>
       <div className="mt-0.5 flex flex-wrap gap-0.5">
         {choices.map((c) => {
           const on = value === c.n;

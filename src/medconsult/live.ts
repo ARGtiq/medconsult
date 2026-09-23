@@ -180,6 +180,26 @@ export function composeComplaint(base: string, option?: string) {
   return o ? `${b} ${o}` : b;
 }
 
+/** Several qualifiers on one complaint: «боль в пояснице справа, слева». */
+export function composeComplaintOptions(base: string, options: string[]) {
+  const b = base.trim();
+  const opts = options.map((s) => s.trim()).filter(Boolean);
+  return opts.length ? `${b} ${opts.join(", ")}` : b;
+}
+
+export function complaintOptionsSelected(variant: string | undefined, base: string, options: string[]): string[] {
+  if (!variant) return [];
+  const b = base.trim();
+  if (!variant.startsWith(b + " ")) return [];
+  const rest = variant.slice(b.length + 1).trim();
+  if (!rest) return [];
+  return rest
+    .split(/,\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((part) => options.find((o) => o.toLowerCase() === part.toLowerCase()) || part);
+}
+
 /** Longest dictionary item that `text` equals or extends with a space + qualifier. */
 export function complaintBaseOf(text: string, templates?: ComplaintTemplate[]): string {
   const t = text.trim();

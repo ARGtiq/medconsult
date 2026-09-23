@@ -613,6 +613,28 @@ export function fieldAbnormal(
     if (t != null) return le[1] === "<" ? num >= t : num > t;
   }
 
+  if (field && (field.kind === "select" || field.kind === "multi" || field.kind === "text")) {
+    const nrmQ = (normal || field.normal || "").trim();
+    const numericHint = field.kind === "text" && num != null && /\d/.test(nrmQ);
+    if (nrmQ && nrmQ.length <= 80 && !/^[~≈]/.test(nrmQ) && !numericHint) {
+      const accepted = nrmQ
+        .split(/[,;/|]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (accepted.length) {
+        if (field.kind === "multi") {
+          const parts = v
+            .split(/[,;/]+/)
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+          if (parts.length) return parts.some((p) => !accepted.includes(p));
+        } else {
+          return !accepted.includes(v.trim().toLowerCase());
+        }
+      }
+    }
+  }
+
   if (/не обнар|отриц|стерильно|роста нет|однородн|прозрачн|соломенно/i.test(nrm)) {
     if (/не обнар|отриц|стерильно|роста нет|однородн|прозрачн|соломенно|норма|^[-—–.]+$|нет$/i.test(v)) return false;
     return true;
@@ -626,51 +648,59 @@ export type Deviation = {
   label: string;
   value: string;
   normal: string;
+  date?: string;
 };
 
+function prettyDate(iso?: string) {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
 export function collectDeviations(
-  studies: { key: string; instances: { fields: Record<string, string> }[] }[],
+  studies: { key: string; instances: { date?: string; fields: Record<string, string> }[] }[],
   lookup: (key: string) => StudyDef | null | undefined,
 ): Deviation[] {
   const out: Deviation[] = [];
   for (const entry of studies || []) {
     const def = lookup(entry.key);
     if (!def) continue;
-    const inst = entry.instances?.[0];
-    if (!inst) continue;
-    const fields = applyComputed(def, inst.fields || {});
-    if (def.category === "questionnaire") {
-      const scale = scaleFromStudyKey(def.key, liveScales());
-      const raw = (fields[scale?.totalKey || ""] || "").trim();
-      const n = parseScore(raw);
-      if (scale && n != null) {
-        const hit = verdictFor(scale, n);
-        if (hit?.flag) {
+    for (const inst of entry.instances || []) {
+      const fields = applyComputed(def, inst.fields || {});
+      const date = prettyDate(inst.date);
+      if (def.category === "questionnaire") {
+        const scale = scaleFromStudyKey(def.key, liveScales());
+        const raw = (fields[scale?.totalKey || ""] || "").trim();
+        const n = parseScore(raw);
+        if (scale && n != null) {
+          const hit = verdictFor(scale, n);
+          if (hit?.flag) {
+            out.push({
+              study: scale.title,
+              studyKey: entry.key,
+              label: "балл",
+              value: interpretScore(scale.totalKey, raw, scale),
+              normal: scale.verdicts?.find((v) => !v.flag)?.text || scale.hint || "",
+              date,
+            });
+          }
+        }
+        continue;
+      }
+      for (const f of def.fields) {
+        const val = (fields[f.key] || "").trim();
+        if (!val) continue;
+        if (fieldAbnormal(val, f.normal, f, fields)) {
           out.push({
-            study: scale.title,
+            study: def.label,
             studyKey: entry.key,
-            label: "балл",
-            value: interpretScore(scale.totalKey, raw, scale),
-            normal: scale.verdicts?.find((v) => !v.flag)?.text || scale.hint || "",
+            label: f.label,
+            value: f.unit ? `${val} ${f.unit}` : val,
+            normal: f.normal || "",
+            date,
           });
         }
-      }
-      continue;
-    }
-    for (const f of def.fields) {
-      if (f.computed && f.formula) {
-        /* still check computed numeric vs normal */
-      }
-      const val = (fields[f.key] || "").trim();
-      if (!val) continue;
-      if (fieldAbnormal(val, f.normal, f, fields)) {
-        out.push({
-          study: def.label,
-          studyKey: entry.key,
-          label: f.label,
-          value: f.unit ? `${val} ${f.unit}` : val,
-          normal: f.normal || "",
-        });
       }
     }
   }
@@ -679,7 +709,9 @@ export function collectDeviations(
 
 export function formatDeviations(list: Deviation[]) {
   if (!list.length) return "";
-  return list.map((d) => `${d.study}: ${d.label} ${d.value}${d.normal ? ` (норма ${d.normal})` : ""}`).join("; ");
+  return list
+    .map((d) => `${d.study}${d.date ? ` ${d.date}` : ""}: ${d.label} ${d.value}${d.normal ? ` (норма ${d.normal})` : ""}`)
+    .join("; ");
 }
 
 export function fillStudyTemplate(

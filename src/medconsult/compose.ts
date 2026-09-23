@@ -83,7 +83,9 @@ export function composeBlocks(
       const def = getStudyLive(entry.key);
       if (!def) return "";
       return entry.instances
-        .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : undefined))
+        .map((inst, idx) =>
+          fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]),
+        )
         .join(" ");
     })
     .filter(Boolean);

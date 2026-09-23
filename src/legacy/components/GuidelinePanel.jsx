@@ -163,7 +163,7 @@ export default function GuidelinePanel({
                 )}
                 {qList.length > 0 && onInsertQuestionnaire && (
                   <>
-                    <p className="guideline-panel-text-muted">Анкеты — по одной на приём:</p>
+                    <p className="guideline-panel-text-muted">Анкеты — по одной. Повторный клик — контроль, прошлые цифры скрыты.</p>
                     <div className="guideline-complaint-suggestions">
                       {qList.map((s) => {
                         const key = studyKeyForScale(s.totalKey)
@@ -173,11 +173,10 @@ export default function GuidelinePanel({
                             type="button"
                             key={s.totalKey}
                             className="suggestion-pill suggestion-pill-guideline"
-                            disabled={on}
                             onClick={() => onInsertQuestionnaire(key)}
                           >
                             {s.title}
-                            {on ? ' · есть' : ''}
+                            {on ? ' · контроль' : ''}
                           </button>
                         )
                       })}
@@ -215,7 +214,7 @@ export default function GuidelinePanel({
                 )}
                 {qList.length > 0 && onInsertQuestionnaire && (
                   <>
-                    <p className="guideline-panel-text-muted">Анкеты — по одной на приём:</p>
+                    <p className="guideline-panel-text-muted">Анкеты — по одной. Повторный клик — контроль, прошлые цифры скрыты.</p>
                     <div className="guideline-complaint-suggestions">
                       {qList.map((s) => {
                         const key = studyKeyForScale(s.totalKey)
@@ -225,11 +224,10 @@ export default function GuidelinePanel({
                             type="button"
                             key={s.totalKey}
                             className="suggestion-pill suggestion-pill-guideline"
-                            disabled={on}
                             onClick={() => onInsertQuestionnaire(key)}
                           >
                             {s.title}
-                            {on ? ' · есть' : ''}
+                            {on ? ' · контроль' : ''}
                           </button>
                         )
                       })}

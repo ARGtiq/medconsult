@@ -13,7 +13,7 @@ import {
   liveScales,
   studyMatchesQuery,
 } from "./data/studies";
-import type { StudyField } from "./types";
+import type { StudyDef, StudyEntry, StudyField } from "./types";
 import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive, icdMatches } from "./live";
 import { scaleFromStudyKey, studyKeyForScale } from "./data/questionnaires";
@@ -83,6 +83,90 @@ function FieldControl({
   );
 }
 
+function shortDate(iso?: string) {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}.${m[2]}`;
+}
+
+function QuestionnaireControls({
+  studyKey,
+  def,
+  entry,
+}: {
+  studyKey: string;
+  def: StudyDef;
+  entry: StudyEntry;
+}) {
+  const { session, updateInstance, addStudyInstance, removeInstance, addStudy } = useAppStore();
+  const [pick, setPick] = useState<string | null>(null);
+  const [showPrev, setShowPrev] = useState(false);
+  const count = entry.instances.length;
+  const prevCount = useRef(count);
+  useEffect(() => {
+    if (count > prevCount.current) {
+      setPick(entry.instances[count - 1]?.id || null);
+      setShowPrev(false);
+    }
+    prevCount.current = count;
+  }, [count, entry.instances]);
+  const active = entry.instances.find((i) => i.id === pick) || entry.instances[count - 1];
+  if (!active) return null;
+  const idx = entry.instances.findIndex((i) => i.id === active.id);
+  const prior = idx > 0 ? entry.instances[idx - 1] : entry.previous;
+  const prevFields = prior ? applyComputed(def, prior.fields) : null;
+  const hasPrev = !!prevFields && Object.values(prevFields).some((v) => String(v || "").trim());
+
+  return (
+    <div className="rounded-lg border border-dashed border-line p-2">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1 text-[11px]">
+        {entry.instances.map((inst, i) => (
+          <button
+            key={inst.id}
+            type="button"
+            onClick={() => {
+              setPick(inst.id);
+              setShowPrev(false);
+            }}
+            className={`rounded-full px-2 py-0.5 ${
+              inst.id === active.id ? "bg-teal font-medium text-paper" : "border border-line text-ink-soft"
+            }`}
+          >
+            {count === 1 ? "заполнение" : i === count - 1 ? "сейчас" : `контроль ${i + 1}`}
+            {inst.date ? ` · ${shortDate(inst.date)}` : ""}
+          </button>
+        ))}
+        <input
+          type="date"
+          value={active.date}
+          onChange={(e) => updateInstance(studyKey, active.id, active.fields, e.target.value)}
+          className="rounded border border-line bg-paper px-1 py-0.5 text-xs"
+        />
+        {count > 1 && (
+          <button type="button" className="text-danger" onClick={() => removeInstance(studyKey, active.id)}>
+            убрать
+          </button>
+        )}
+      </div>
+      <QuestionnaireForm
+        scale={scaleFromStudyKey(studyKey, liveScales()) || null}
+        fields={active.fields}
+        previous={hasPrev ? prevFields : null}
+        prevDate={prior?.date ? shortDate(prior.date) : undefined}
+        showPrevious={showPrev}
+        onTogglePrevious={hasPrev ? () => setShowPrev((v) => !v) : undefined}
+        takenKeys={session.studies.map((s) => s.key)}
+        onAddScale={(scale) => addStudy(studyKeyForScale(scale.totalKey))}
+        onChange={(next) => updateInstance(studyKey, active.id, next, active.date)}
+      />
+      <button type="button" className="mt-1.5 text-xs font-medium text-teal" onClick={() => addStudyInstance(studyKey)}>
+        + контроль
+      </button>
+    </div>
+  );
+}
+
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
   const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
@@ -119,6 +203,10 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       </button>
       {open && (
         <div className="mt-2 space-y-2">
+          {def.category === "questionnaire" ? (
+            <QuestionnaireControls studyKey={studyKey} def={def} entry={entry} />
+          ) : (
+          <>
           {entry.instances.map((inst, idx) => (
             <div key={inst.id} className="rounded-lg border border-dashed border-line p-2">
               <div className="mb-1.5 flex items-center justify-between text-xs text-ink-soft">
@@ -230,6 +318,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
           <button type="button" className="text-xs font-medium text-teal" onClick={() => addStudyInstance(studyKey)}>
             + предыдущее / ещё результат
           </button>
+          </>
+          )}
         </div>
       )}
       {!open && (
@@ -324,7 +414,8 @@ export function PlusStudyButton() {
   function choose(i: number) {
     const s = filtered[i];
     if (!s) return;
-    if (session.studies.some((e) => e.key === s.key)) return;
+    const exists = session.studies.some((e) => e.key === s.key);
+    if (exists && s.category !== "questionnaire") return;
     addStudy(s.key);
     setOpen(false);
     setQ("");
@@ -400,7 +491,7 @@ export function PlusStudyButton() {
                     key={s.key}
                     type="button"
                     data-idx={i}
-                    disabled={on}
+                    disabled={on && s.category !== "questionnaire"}
                     onMouseEnter={() => setIdx(i)}
                     onClick={() => choose(i)}
                     className={`mb-1 w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium last:mb-0 ${
@@ -418,7 +509,13 @@ export function PlusStudyButton() {
                     {s.hint ? (
                       <span className="mt-0.5 block text-[10px] font-normal opacity-80">{s.hint}</span>
                     ) : null}
-                    {on ? <span className="font-normal opacity-80"> · добавлен</span> : ""}
+                    {on ? (
+                      <span className="font-normal opacity-80">
+                        {s.category === "questionnaire" ? " · контроль" : " · добавлен"}
+                      </span>
+                    ) : (
+                      ""
+                    )}
                   </button>
                 );
               })}
@@ -450,7 +547,11 @@ export function DeviationsSpoiler() {
         <ul className="mt-1.5 space-y-1 text-xs leading-snug">
           {list.map((d, i) => (
             <li key={`${d.studyKey}-${d.label}-${i}`}>
-              <span className="font-medium">{d.study}.</span> {d.label}: {d.value}
+              <span className="font-medium">
+                {d.study}
+                {d.date ? ` · ${d.date}` : ""}.
+              </span>{" "}
+              {d.label}: {d.value}
               {d.normal ? <span className="text-ink-soft"> · норма {d.normal}</span> : null}
             </li>
           ))}

@@ -226,7 +226,10 @@ export default function StudiesTab() {
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
   const [validationError, setValidationError] = useState('')
+  const [reorder, setReorder] = useState(false)
+  const [overField, setOverField] = useState(null)
   const templateRef = useRef(null)
+  const dragFrom = useRef(null)
   useEscapeToClose(() => setFormOpen(false), formOpen)
   const builtinKeys = new Set([...PRESET_STUDIES.map((s) => s.key), ...STUDIES.map((s) => s.key)])
 
@@ -279,6 +282,59 @@ export default function StudiesTab() {
 
   function removeField(idx) {
     setForm({ ...form, fields: form.fields.filter((_, i) => i !== idx) })
+  }
+
+  function duplicateField(idx) {
+    setForm((prev) => {
+      const src = prev.fields[idx]
+      if (!src) return prev
+      const baseKey = (src.key || slugifyFieldKey(src.label) || 'field').replace(/_\d+$/, '')
+      const used = new Set(prev.fields.map((f) => fieldKeyOf(f)))
+      let n = 2
+      let key = `${baseKey}_${n}`
+      while (used.has(key)) key = `${baseKey}_${++n}`
+      const copy = {
+        ...src,
+        key,
+        label: src.label ? `${src.label} (копия)` : 'копия',
+        options: Array.isArray(src.options) ? [...src.options] : [],
+        optionDraft: '',
+      }
+      const fields = [...prev.fields]
+      fields.splice(idx + 1, 0, copy)
+      return { ...prev, fields }
+    })
+  }
+
+  function moveField(from, to) {
+    if (from == null || from === to || from < 0 || to < 0) return
+    setForm((prev) => {
+      if (from >= prev.fields.length || to >= prev.fields.length) return prev
+      const fields = [...prev.fields]
+      const [item] = fields.splice(from, 1)
+      fields.splice(to, 0, item)
+      return { ...prev, fields }
+    })
+  }
+
+  function toggleRef(idx, opt) {
+    setForm((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => {
+        if (i !== idx) return f
+        if (f.kind === 'multi') {
+          const parts = String(f.normal || '')
+            .split(/[,;/|]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+          const has = parts.some((p) => p.toLowerCase() === opt.toLowerCase())
+          const next = has ? parts.filter((p) => p.toLowerCase() !== opt.toLowerCase()) : [...parts, opt]
+          return { ...f, normal: next.join(', ') }
+        }
+        const cur = String(f.normal || '').trim()
+        return { ...f, normal: cur.toLowerCase() === opt.toLowerCase() ? '' : opt }
+      }),
+    }))
   }
 
   function addOptions(idx, raw) {
@@ -477,17 +533,54 @@ export default function StudiesTab() {
               <div className="scenarios-block">
                 <div className="scenarios-block-label">Пункты (название → тег создаётся сам)</div>
                 <p className="settings-note-inline study-field-hint">
-                  «Один из / несколько» — чипы на приёме. «Формула» считает из других пунктов, например остаточная
-                  моча ≤15% объёма пузыря. Сравнение больше/меньше референса подсвечивает отклонение.
+                  «Один из / несколько» — чипы на приёме. Референс у текста и «один из» — норма: другое значение
+                  попадёт в отклонения. «Копия» вставляет пункт сразу под оригинал (например отдельно для мужчин и женщин).
+                  «Порядок» — перетаскивание.
                 </p>
                 {form.fields.map((f, idx) => {
                   const others = form.fields
                     .map((x, i) => ({ i, key: fieldKeyOf(x), label: x.label || fieldKeyOf(x) }))
                     .filter((x) => x.i !== idx && x.key)
                   const showRef = f.kind === 'number' || f.kind === 'formula' || f.kind === 'text'
+                  const refParts = String(f.normal || '')
+                    .split(/[,;/|]+/)
+                    .map((s) => s.trim().toLowerCase())
+                    .filter(Boolean)
                   return (
-                    <div key={idx} className="study-field-block">
+                    <div
+                      key={idx}
+                      className={`study-field-block${overField === idx ? ' is-over' : ''}`}
+                      onDragOver={(e) => {
+                        if (!reorder) return
+                        e.preventDefault()
+                        setOverField(idx)
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setOverField(null)
+                        moveField(dragFrom.current, idx)
+                        dragFrom.current = null
+                      }}
+                    >
                       <div className="study-field-editor-row">
+                        {reorder ? (
+                          <span
+                            className="study-field-grip"
+                            draggable
+                            title="Перетащи"
+                            onDragStart={(e) => {
+                              dragFrom.current = idx
+                              e.dataTransfer.effectAllowed = 'move'
+                              e.dataTransfer.setData('text/plain', String(idx))
+                            }}
+                            onDragEnd={() => {
+                              dragFrom.current = null
+                              setOverField(null)
+                            }}
+                          >
+                            ⋮⋮
+                          </span>
+                        ) : null}
                         <input placeholder="название" value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
                         <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
                         <input
@@ -506,6 +599,7 @@ export default function StudiesTab() {
                             <option key={k.value} value={k.value}>{k.label}</option>
                           ))}
                         </select>
+                        <button type="button" className="btn-secondary btn-small" onClick={() => duplicateField(idx)}>копия</button>
                         <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
                       </div>
 
@@ -537,6 +631,26 @@ export default function StudiesTab() {
                               if ((f.optionDraft || '').trim()) addOptions(idx, f.optionDraft)
                             }}
                           />
+                        </div>
+                      )}
+
+                      {(f.kind === 'select' || f.kind === 'multi') && (f.options || []).length > 0 && (
+                        <div className="study-field-ref-row">
+                          <span className="study-field-ref-label">референс</span>
+                          {(f.options || []).map((opt) => {
+                            const on = refParts.includes(String(opt).trim().toLowerCase())
+                            return (
+                              <button
+                                type="button"
+                                key={opt}
+                                className={`study-field-opt${on ? ' is-ref' : ''}`}
+                                onClick={() => toggleRef(idx, opt)}
+                                title={on ? 'Это норма — нажми, чтобы снять' : 'Отметить как норму'}
+                              >
+                                {opt}
+                              </button>
+                            )
+                          })}
                         </div>
                       )}
 
@@ -645,7 +759,13 @@ export default function StudiesTab() {
 
                       <input
                         className="study-field-normal"
-                        placeholder="подпись нормы (если пусто — соберётся из сравнения)"
+                        placeholder={
+                          f.kind === 'text'
+                            ? 'референс текстом — норма. Иное значение уйдёт в отклонения'
+                            : f.kind === 'select' || f.kind === 'multi'
+                              ? 'референс текстом, если норма не из списка вариантов'
+                              : 'подпись нормы (если пусто — соберётся из сравнения)'
+                        }
                         value={f.normal}
                         onChange={(e) => updateField(idx, { normal: e.target.value })}
                       />
@@ -659,6 +779,9 @@ export default function StudiesTab() {
                   )
                 })}
                 <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => setReorder((v) => !v)}>
+                  {reorder ? 'порядок включён' : 'порядок'}
+                </button>
               </div>
 
               <div className="study-template-chips">

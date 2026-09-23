@@ -498,7 +498,6 @@ export function ProtocolPage() {
                 selected={session.complaints}
                 onPick={(opt) => {
                   applyComplaintOption(optMenu.base, opt);
-                  setOptMenu(null);
                 }}
                 onClose={() => setOptMenu(null)}
               />

@@ -3178,4 +3178,21 @@
   border-radius: 6px;
   font-size: 12.5px;
 }
+.legacy-surface .study-field-grip {
+  cursor: grab;
+  user-select: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -1px;
+  padding: 4px 2px;
+}
+.legacy-surface .study-field-block.is-over {
+  outline: 2px solid var(--teal, #3d6b5e);
+}
+.legacy-surface .study-field-opt.is-ref {
+  background: var(--teal, #3d6b5e);
+  color: var(--paper, #fff);
+  border-color: var(--teal, #3d6b5e);
+}
 

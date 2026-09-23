@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import {
+  complaintOptionsSelected,
   findComplaintVariant,
   liveComplaintTemplates,
   optionsForComplaint,
@@ -176,9 +177,8 @@ export function ComplaintOptionMenu({
 }) {
   const options = optionsForComplaint(state.base);
   const items = ["", ...options];
-  const variant = findComplaintVariant(selected, state.base);
-  const current = variant && variant.startsWith(state.base + " ") ? variant.slice(state.base.length + 1) : "";
-  const startIdx = Math.max(0, items.indexOf(current));
+  const picked = complaintOptionsSelected(findComplaintVariant(selected, state.base), state.base, options);
+  const startIdx = Math.max(0, items.indexOf(picked[0] || ""));
   const [idx, setIdx] = useState(startIdx);
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 220, maxH: 220 });
@@ -249,28 +249,37 @@ export function ComplaintOptionMenu({
       className="fixed z-[85] overflow-auto rounded-md border border-line bg-surface shadow-lg outline-none"
     >
       <div className="border-b border-line px-2 py-1 text-[10px] tracking-wide text-mute uppercase">
-        {state.base}
+        {state.base} · можно несколько
       </div>
       <ul>
-        {items.map((opt, i) => (
+        {items.map((opt, i) => {
+          const on = !!opt && picked.some((p) => p.toLowerCase() === opt.toLowerCase());
+          return (
           <li key={opt || "empty"} role="presentation">
             <button
               type="button"
               data-idx={i}
               role="option"
-              aria-selected={i === idx}
+              aria-selected={on || i === idx}
               onMouseEnter={() => setIdx(i)}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onPick(opt)}
-              className={`flex w-full px-2 py-1.5 text-left text-sm ${
-                i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
+              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${
+                i === idx || on ? "bg-teal-soft text-teal" : "hover:bg-paper"
               } ${!opt ? "text-mute" : ""}`}
             >
+              <span className="w-3 text-xs">{on ? "✓" : ""}</span>
               {opt || "без уточнения"}
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
+      <div className="border-t border-line p-1">
+        <button type="button" className="w-full rounded-md bg-teal px-2 py-1 text-xs font-medium text-paper" onClick={onClose}>
+          готово
+        </button>
+      </div>
     </div>,
     document.body,
   );
@@ -299,7 +308,7 @@ export function ComplaintChips({
         const opts = optionsForComplaint(t, templates);
         const variant = findComplaintVariant(selected, t, templates);
         const on = !!variant;
-        const currentOpt = variant && variant.startsWith(t + " ") ? variant.slice(t.length + 1) : "";
+        const picked = complaintOptionsSelected(variant, t, opts);
         return (
           <div key={t} className="flex max-w-full flex-col items-start gap-0.5">
             <span className={`inline-flex items-center gap-0.5 ${chipClass(on, dashed)}`}>
@@ -351,8 +360,8 @@ export function ComplaintChips({
                   <button
                     key={o}
                     type="button"
-                    className={chipClass(currentOpt === o, true)}
-                    onClick={() => onApplyOption(t, currentOpt === o ? "" : o)}
+                    className={chipClass(picked.some((p) => p.toLowerCase() === o.toLowerCase()), true)}
+                    onClick={() => onApplyOption(t, o)}
                   >
                     {o}
                   </button>

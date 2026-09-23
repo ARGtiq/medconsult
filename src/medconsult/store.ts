@@ -5,7 +5,7 @@ import { showToast } from "@/legacy/lib/toast";
 import { applyComputed } from "./data/studies";
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
-import { complaintBaseOf, composeComplaint, findComplaintVariant, getStudyLive } from "./live";
+import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
 const SESSION_KEY = "medconsult_v2_session";
@@ -409,9 +409,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   addStudy(key) {
     const session = get().session;
-    if (session.studies.some((s) => s.key === key)) return;
-    const prevInst = findPreviousStudy(get().visits, session.patientId, key, get().patients);
     const def = getStudyLive(key);
+    if (session.studies.some((s) => s.key === key)) {
+      if (def?.category === "questionnaire") {
+        get().addStudyInstance(key);
+        const next = { ...get().session, openSection: key };
+        persistSession(next);
+        set({ session: next });
+        get().setToast("Контрольная анкета. Прошлые ответы скрыты — включи «прошлые» в шапке");
+      }
+      return;
+    }
+    const prevInst = findPreviousStudy(get().visits, session.patientId, key, get().patients);
     const seeded: Record<string, string> = {};
     if (def) {
       for (const f of def.fields) {
@@ -557,8 +566,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     })();
     const b = base.trim();
-    const composed = composeComplaint(b, option);
+    const catalog = optionsForComplaint(b, templates);
     const existing = findComplaintVariant(session.complaints, b, templates);
+    const selected = complaintOptionsSelected(existing, b, catalog);
+    let nextOpts: string[];
+    if (!option) nextOpts = [];
+    else if (selected.some((s) => s.toLowerCase() === option.toLowerCase())) {
+      nextOpts = selected.filter((s) => s.toLowerCase() !== option.toLowerCase());
+    } else nextOpts = [...selected, option];
+    const ordered = catalog.filter((o) => nextOpts.some((s) => s.toLowerCase() === o.toLowerCase()));
+    const extras = nextOpts.filter((s) => !catalog.some((o) => o.toLowerCase() === s.toLowerCase()));
+    const composed = composeComplaintOptions(b, [...ordered, ...extras]);
     const complaints = session.complaints.filter((c) => c !== existing && c !== b);
     if (!complaints.includes(composed)) complaints.push(composed);
     persistSession({ ...session, complaints });
