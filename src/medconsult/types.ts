@@ -13,8 +13,12 @@ export type StudyField = {
   unit?: string;
   normal?: string;
   defaultValue?: string;
-  kind?: "text" | "number" | "select" | "multi";
+  kind?: "text" | "number" | "select" | "multi" | "groups";
   options?: string[];
+  /** Mutually exclusive sets. One pick from each row, e.g. ровные/неровные and четкие/нечеткие. */
+  optionGroups?: string[][];
+  /** Show this field only when `field` contains one of `values`. */
+  showIf?: { field: string; values: string[] };
   computed?: boolean;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";

@@ -4,13 +4,14 @@ import { BUILTIN_STUDIES } from '../data/studyProtocols'
 import { STUDIES } from '../../medconsult/data/studies'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import useEscapeToClose from '../lib/useEscapeToClose'
-import { showToast } from '../lib/toast'
+import { applyMarkup } from '../lib/md'
 
 const KIND_OPTIONS = [
   { value: 'text', label: 'текст' },
   { value: 'number', label: 'число' },
   { value: 'select', label: 'один из' },
   { value: 'multi', label: 'несколько' },
+  { value: 'groups', label: 'исключающие' },
   { value: 'formula', label: 'формула' },
 ]
 
@@ -33,6 +34,9 @@ function blankField() {
     defaultValue: '',
     kind: 'text',
     options: [],
+    optionGroups: [],
+    groupDrafts: [],
+    showIf: null,
     optionDraft: '',
     formula: '',
     computed: false,
@@ -59,7 +63,7 @@ function slugifyKey(label) {
   return (label || '').trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_') || `study_${Date.now()}`
 }
 
-function slugifyFieldKey(label) {
+function cyrSlug(label) {
   return (label || '')
     .trim()
     .replace(/ё/g, 'е')
@@ -69,6 +73,26 @@ function slugifyFieldKey(label) {
     .replace(/^_+|_+$/g, '')
 }
 
+const TRANSLIT = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
+  к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
+  х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+}
+
+function translitKey(label) {
+  let out = ''
+  for (const ch of (label || '').trim().toLowerCase()) {
+    if (TRANSLIT[ch] != null) out += TRANSLIT[ch]
+    else if (/[a-z0-9]/.test(ch)) out += ch
+    else out += '_'
+  }
+  return out.replace(/_+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+function slugifyFieldKey(label) {
+  return translitKey(label)
+}
+
 function parseNum(v) {
   if (v === '' || v == null) return null
   const n = parseFloat(String(v).replace(',', '.'))
@@ -76,6 +100,7 @@ function parseNum(v) {
 }
 
 function editorKind(f) {
+  if (f.kind === 'groups') return 'groups'
   if (f.computed || (f.formula && String(f.formula).trim())) return 'formula'
   if (f.kind === 'select' || f.kind === 'multi' || f.kind === 'number' || f.kind === 'text') return f.kind
   if (Array.isArray(f.options) && f.options.length) return 'select'
@@ -92,6 +117,9 @@ function toEditorField(f) {
     defaultValue: f.defaultValue || '',
     kind: editorKind(f),
     options: Array.isArray(f.options) ? [...f.options] : [],
+    optionGroups: Array.isArray(f.optionGroups) ? f.optionGroups.map((g) => [...g]) : [],
+    groupDrafts: [],
+    showIf: f.showIf?.field ? { field: f.showIf.field, values: [...(f.showIf.values || [])] } : null,
     optionDraft: '',
     formula: f.formula || '',
     computed: !!f.computed,
@@ -155,6 +183,12 @@ function serializeField(f) {
     out.computed = true
     const formula = (f.formula || '').trim()
     if (formula) out.formula = formula
+  } else if (kind === 'groups') {
+    out.kind = 'groups'
+    const groups = (Array.isArray(f.optionGroups) ? f.optionGroups : [])
+      .map((g) => (Array.isArray(g) ? g : []).map((s) => String(s).trim()).filter(Boolean))
+      .filter((g) => g.length)
+    if (groups.length) out.optionGroups = groups
   } else if (kind === 'select' || kind === 'multi') {
     out.kind = kind
     const opts = (Array.isArray(f.options) ? f.options : [])
@@ -180,6 +214,12 @@ function serializeField(f) {
   if (normal) out.normal = normal
   const preset = (f.defaultValue || '').trim()
   if (preset) out.defaultValue = preset
+  if (f.showIf?.field && (f.showIf.values || []).filter(Boolean).length) {
+    out.showIf = {
+      field: String(f.showIf.field).trim(),
+      values: f.showIf.values.map((s) => String(s).trim()).filter(Boolean),
+    }
+  }
   return out
 }
 
@@ -259,21 +299,28 @@ export default function StudiesTab() {
   }
 
   function updateField(idx, patch) {
-    setForm((prev) => ({
-      ...prev,
-      fields: prev.fields.map((f, i) => {
+    setForm((prev) => {
+      let template = prev.template || ''
+      const fields = prev.fields.map((f, i) => {
         if (i !== idx) return f
         const merged = { ...f, ...patch }
         if (patch.label !== undefined) {
           const auto = slugifyFieldKey(patch.label)
-          const wasAuto = !f.key || f.key === slugifyFieldKey(f.label)
-          if (wasAuto) merged.key = auto
+          const wasAuto = !f.key || f.key === slugifyFieldKey(f.label) || f.key === cyrSlug(f.label)
+          if (wasAuto) {
+            if (f.key && auto && f.key !== auto && template.includes(`{${f.key}}`)) {
+              template = template.split(`{${f.key}}`).join(`{${auto}}`)
+            }
+            merged.key = auto
+          }
         }
         if (patch.kind === 'formula') merged.computed = true
         else if (patch.kind && patch.kind !== 'formula') merged.computed = false
+        if (patch.kind === 'groups' && !(merged.optionGroups || []).length) merged.optionGroups = [[]]
         return merged
-      }),
-    }))
+      })
+      return { ...prev, fields, template }
+    })
   }
 
   function addField() {
@@ -355,6 +402,90 @@ export default function StudiesTab() {
   function removeOption(idx, oi) {
     const f = form.fields[idx]
     updateField(idx, { options: (f.options || []).filter((_, i) => i !== oi) })
+  }
+
+  function addGroup(idx) {
+    const f = form.fields[idx]
+    updateField(idx, { kind: 'groups', optionGroups: [...(f.optionGroups || []), []] })
+  }
+
+  function removeGroup(idx, gi) {
+    const f = form.fields[idx]
+    updateField(idx, { optionGroups: (f.optionGroups || []).filter((_, i) => i !== gi) })
+  }
+
+  function setGroupDraft(idx, gi, value) {
+    const f = form.fields[idx]
+    const drafts = [...(f.groupDrafts || [])]
+    drafts[gi] = value
+    updateField(idx, { groupDrafts: drafts })
+  }
+
+  function addGroupOpt(idx, gi, raw) {
+    const extra = splitOptions(raw)
+    if (!extra.length) return
+    const f = form.fields[idx]
+    const groups = (f.optionGroups || []).map((g) => [...g])
+    const group = groups[gi] || []
+    const have = new Set(group.map((s) => s.toLowerCase()))
+    extra.forEach((o) => {
+      if (!have.has(o.toLowerCase())) {
+        group.push(o)
+        have.add(o.toLowerCase())
+      }
+    })
+    groups[gi] = group
+    const drafts = [...(f.groupDrafts || [])]
+    drafts[gi] = ''
+    updateField(idx, { kind: 'groups', optionGroups: groups, groupDrafts: drafts })
+  }
+
+  function removeGroupOpt(idx, gi, oi) {
+    const f = form.fields[idx]
+    const groups = (f.optionGroups || []).map((g) => [...g])
+    groups[gi] = (groups[gi] || []).filter((_, i) => i !== oi)
+    updateField(idx, { optionGroups: groups })
+  }
+
+  function parentChoices(fieldKey) {
+    const parent = form.fields.find((x) => fieldKeyOf(x) === fieldKey)
+    if (!parent) return []
+    if (parent.kind === 'groups') return (parent.optionGroups || []).flat().filter(Boolean)
+    return parent.options || []
+  }
+
+  function toggleShowValue(idx, opt) {
+    const f = form.fields[idx]
+    const cur = f.showIf?.values || []
+    const has = cur.some((v) => v.toLowerCase() === opt.toLowerCase())
+    const values = has ? cur.filter((v) => v.toLowerCase() !== opt.toLowerCase()) : [...cur, opt]
+    updateField(idx, { showIf: { field: f.showIf.field, values } })
+  }
+
+  function addChild(idx) {
+    const parent = form.fields[idx]
+    const key = fieldKeyOf(parent)
+    if (!key) return
+    setForm((prev) => {
+      const child = { ...blankField(), showIf: { field: key, values: [] } }
+      const fields = [...prev.fields]
+      fields.splice(idx + 1, 0, child)
+      return { ...prev, fields }
+    })
+  }
+
+  function markupTemplate(before, after = before) {
+    const el = templateRef.current
+    const text = form.template || ''
+    const start = el?.selectionStart ?? text.length
+    const end = el?.selectionEnd ?? text.length
+    const res = applyMarkup(text, start, end, before, after)
+    setForm((prev) => ({ ...prev, template: res.next }))
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(res.from, res.to)
+    })
   }
 
   function applyFormulaPreset(idx, kind) {
@@ -531,13 +662,44 @@ export default function StudiesTab() {
               {validationError && <div className="ai-error">{validationError}</div>}
 
               <div className="scenarios-block">
-                <div className="scenarios-block-label">Пункты (название → тег создаётся сам)</div>
+                <div className="scenarios-block-label">Пункты (название → тег-транскрипция)</div>
                 <p className="settings-note-inline study-field-hint">
-                  «Один из / несколько» — чипы на приёме. Референс у текста и «один из» — норма: другое значение
-                  попадёт в отклонения. «Копия» вставляет пункт сразу под оригинал (например отдельно для мужчин и женщин).
-                  «Порядок» — перетаскивание.
+                  Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
+                  «Подпункт» появляется на приёме только при выбранном значении. «Порядок» оставляет названия и даёт их перетаскивать.
+                  В тексте шаблона: жирный, курсив, список.
                 </p>
                 {form.fields.map((f, idx) => {
+                  if (reorder) {
+                    return (
+                      <div
+                        key={idx}
+                        draggable
+                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}`}
+                        onDragStart={(e) => {
+                          dragFrom.current = idx
+                          e.dataTransfer.effectAllowed = 'move'
+                          e.dataTransfer.setData('text/plain', String(idx))
+                        }}
+                        onDragEnd={() => {
+                          dragFrom.current = null
+                          setOverField(null)
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault()
+                          setOverField(idx)
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          setOverField(null)
+                          moveField(dragFrom.current, idx)
+                          dragFrom.current = null
+                        }}
+                      >
+                        {f.label || 'без названия'}
+                        {f.showIf?.field ? <span className="study-field-reorder-if"> · если {f.showIf.values?.join(' / ') || f.showIf.field}</span> : null}
+                      </div>
+                    )
+                  }
                   const others = form.fields
                     .map((x, i) => ({ i, key: fieldKeyOf(x), label: x.label || fieldKeyOf(x) }))
                     .filter((x) => x.i !== idx && x.key)
@@ -549,7 +711,7 @@ export default function StudiesTab() {
                   return (
                     <div
                       key={idx}
-                      className={`study-field-block${overField === idx ? ' is-over' : ''}`}
+                      className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}`}
                       onDragOver={(e) => {
                         if (!reorder) return
                         e.preventDefault()
@@ -600,7 +762,53 @@ export default function StudiesTab() {
                           ))}
                         </select>
                         <button type="button" className="btn-secondary btn-small" onClick={() => duplicateField(idx)}>копия</button>
+                        <button type="button" className="btn-secondary btn-small" onClick={() => addChild(idx)} title="Пункт ниже, виден только при выбранном значении">подпункт</button>
                         <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
+                      </div>
+
+                      <div className="study-field-showif">
+                        <span className="study-field-ref-label">если</span>
+                        <select
+                          value={f.showIf?.field || ''}
+                          onChange={(e) => {
+                            const field = e.target.value
+                            updateField(idx, {
+                              showIf: field
+                                ? { field, values: f.showIf?.field === field ? (f.showIf.values || []) : [] }
+                                : null,
+                            })
+                          }}
+                        >
+                          <option value="">всегда видно</option>
+                          {others.map((o) => (
+                            <option key={o.key} value={o.key}>{o.label}</option>
+                          ))}
+                        </select>
+                        {f.showIf?.field ? (
+                          parentChoices(f.showIf.field).length ? (
+                            parentChoices(f.showIf.field).map((opt) => {
+                              const on = (f.showIf.values || []).some((v) => v.toLowerCase() === opt.toLowerCase())
+                              return (
+                                <button
+                                  type="button"
+                                  key={opt}
+                                  className={`study-field-opt${on ? ' is-ref' : ''}`}
+                                  onClick={() => toggleShowValue(idx, opt)}
+                                  title={on ? 'Подпункт откроется при этом значении' : 'Показать подпункт при этом значении'}
+                                >
+                                  {opt}
+                                </button>
+                              )
+                            })
+                          ) : (
+                            <input
+                              className="study-field-opt-input"
+                              placeholder="значение, при котором виден"
+                              value={(f.showIf.values || []).join(', ')}
+                              onChange={(e) => updateField(idx, { showIf: { field: f.showIf.field, values: splitOptions(e.target.value) } })}
+                            />
+                          )
+                        ) : null}
                       </div>
 
                       {(f.kind === 'select' || f.kind === 'multi') && (
@@ -631,6 +839,44 @@ export default function StudiesTab() {
                               if ((f.optionDraft || '').trim()) addOptions(idx, f.optionDraft)
                             }}
                           />
+                        </div>
+                      )}
+
+                      {f.kind === 'groups' && (
+                        <div className="study-field-groups">
+                          <p className="settings-note-inline">В одной строке варианты исключают друг друга. Следующая строка — другая пара.</p>
+                          {(f.optionGroups || []).map((group, gi) => (
+                            <div key={gi} className="study-field-group">
+                              <span className="study-field-ref-label">или</span>
+                              {group.filter(Boolean).map((opt, oi) => (
+                                <button
+                                  type="button"
+                                  key={`${opt}-${oi}`}
+                                  className="study-field-opt"
+                                  onClick={() => removeGroupOpt(idx, gi, oi)}
+                                >
+                                  {opt} ×
+                                </button>
+                              ))}
+                              <input
+                                className="study-field-opt-input"
+                                placeholder="ровные, неровные"
+                                value={(f.groupDrafts || [])[gi] || ''}
+                                onChange={(e) => setGroupDraft(idx, gi, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ',') {
+                                    e.preventDefault()
+                                    addGroupOpt(idx, gi, e.currentTarget.value)
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  if (e.currentTarget.value.trim()) addGroupOpt(idx, gi, e.currentTarget.value)
+                                }}
+                              />
+                              <button type="button" className="remove-btn" onClick={() => removeGroup(idx, gi)} title="Убрать пару">×</button>
+                            </div>
+                          ))}
+                          <button type="button" className="btn-secondary btn-small" onClick={() => addGroup(idx)}>+ пара</button>
                         </div>
                       )}
 
@@ -814,9 +1060,14 @@ export default function StudiesTab() {
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                Нажми тег или перетащи его в текст шаблона.
+                Нажми тег или перетащи его в текст шаблона. Выдели фрагмент и нажми Ж, К или список.
               </p>
 
+              <div className="study-template-format">
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('**')} title="Полужирный">Ж</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('*')} title="Курсив">К</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n- ', '')} title="Пункт списка">список</button>
+              </div>
               <AutoResizeTextarea
                 textareaRef={templateRef}
                 placeholder="Шаблон текста, напр. «УЗИ почек от {date}: правая почка — {rightSize} мм...»"

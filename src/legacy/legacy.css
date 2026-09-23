@@ -3196,3 +3196,40 @@
   border-color: var(--teal, #3d6b5e);
 }
 
+
+.legacy-surface .study-field-block.is-sub {
+  margin-left: 18px;
+}
+.legacy-surface .study-field-reorder {
+  cursor: grab;
+  font-weight: 600;
+  user-select: none;
+}
+.legacy-surface .study-field-reorder-if {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.legacy-surface .study-field-showif,
+.legacy-surface .study-field-group,
+.legacy-surface .study-field-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.legacy-surface .study-field-groups {
+  flex-direction: column;
+  align-items: stretch;
+}
+.legacy-surface .study-field-groups > p {
+  margin: 0;
+}
+.legacy-surface .study-template-format {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.legacy-surface .study-template-format .btn-small {
+  min-width: 28px;
+  font-weight: 700;
+}

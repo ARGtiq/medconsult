@@ -5,6 +5,7 @@ import {
   applyComputed,
   collectDeviations,
   fieldAbnormal,
+  fieldShown,
   formatRefHint,
   groupDeviations,
   referenceInsertValue,
@@ -44,11 +45,45 @@ function FieldControl({
       </span>
     );
   }
-  if ((f.kind === "select" || f.kind === "multi") && f.options?.length) {
+  if ((f.kind === "groups" && f.optionGroups?.length) || ((f.kind === "select" || f.kind === "multi") && f.options?.length)) {
+    if (f.kind === "groups" && f.optionGroups?.length) {
+      const picked = splitMulti(value);
+      return (
+        <div className="mt-0.5 space-y-1">
+          {f.optionGroups.map((group, gi) => (
+            <div key={gi} className="flex flex-wrap gap-1">
+              {group.map((opt) => {
+                const on = picked.some((p) => p.toLowerCase() === opt.toLowerCase());
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      on ? "bg-teal text-paper" : "border border-line bg-surface text-ink"
+                    }`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const rest = picked.filter((p) => !group.some((g) => g.toLowerCase() === p.toLowerCase()));
+                      const next = on ? rest : [...rest, opt];
+                      const ordered = (f.optionGroups || []).flatMap((g) =>
+                        g.filter((o) => next.some((n) => n.toLowerCase() === o.toLowerCase())),
+                      );
+                      onChange(ordered.join(", "));
+                    }}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
     const picked = f.kind === "multi" ? splitMulti(value) : value ? [value] : [];
     return (
       <div className="mt-0.5 flex flex-wrap gap-1">
-        {f.options.map((opt) => {
+        {(f.options || []).map((opt) => {
           const on = picked.some((p) => p.toLowerCase() === opt.toLowerCase());
           return (
             <button
@@ -238,14 +273,14 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 />
               ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {def.fields.map((f) => {
+                {def.fields.filter((f) => fieldShown(f, inst.fields)).map((f) => {
                   const fields = applyComputed(def, inst.fields);
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = fieldAbnormal(value, f.normal, f, fields);
                   const omitted = (inst.omit || []).includes(f.key);
                   const pickable = (def.category === "lab" || def.sparse) && !f.computed;
-                  const wide = f.kind === "select" || f.kind === "multi";
+                  const wide = f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
                   const share =
                     f.refOf && f.refOfMode !== "value" && !f.computed
                       ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")
@@ -256,8 +291,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                     <div
                       key={f.key}
                       className={`rounded-md px-1.5 py-1 ${wide ? "col-span-2 sm:col-span-3" : ""} ${
-                        f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"
-                      }`}
+                        f.showIf ? "ml-3 border-l-2 border-line" : ""
+                      } ${f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"}`}
                     >
                       <span className="flex items-center justify-between gap-1">
                         <button

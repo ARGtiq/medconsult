@@ -5,13 +5,14 @@ import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/openrouter";
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
+import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
 import { packsForCodeLive, useTemplates } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
-import { copyText, polishLocal } from "./copy";
+import { copyText, hasMarkup, polishLocal } from "./copy";
 import {
   compactGuideline,
   complaintsForSession,
@@ -197,7 +198,7 @@ export function ProtocolPage() {
       ${blocks
         .map(
           (b) =>
-            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${escapeHtml(b.text)}</div></div>`,
+            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text)}</div></div>`,
         )
         .join("")}
     `;
@@ -937,7 +938,7 @@ export function ProtocolPage() {
                 <Copy className="size-3.5" />
               </button>
             </header>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{b.text}</p>
+            <ProtocolText text={b.text} />
           </article>
         ))}
         {blocks.length === 0 && (
@@ -1047,6 +1048,18 @@ export function ProtocolPage() {
         <div className={`min-h-0 min-w-0 ${mobileTab === "preview" ? "block" : "hidden md:block"}`}>{preview}</div>
       </div>
     </AppShell>
+  );
+}
+
+function ProtocolText({ text }: { text: string }) {
+  if (!hasMarkup(text)) {
+    return <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>;
+  }
+  return (
+    <div
+      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+      dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
+    />
   );
 }
 

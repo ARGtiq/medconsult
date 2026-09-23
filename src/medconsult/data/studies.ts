@@ -552,6 +552,17 @@ function isAbnormalVsRef(num: number, op: string, min?: number, max?: number): b
   }
 }
 
+/** True unless the field is a conditional sub-item whose parent value is not selected. */
+export function fieldShown(field: StudyField, values: Record<string, string>): boolean {
+  const rule = field.showIf;
+  if (!rule?.field || !rule.values?.length) return true;
+  const parts = String(values[rule.field] || "")
+    .split(/[,;/]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return rule.values.some((v) => parts.includes(v.trim().toLowerCase()));
+}
+
 /** Compare a filled value to structured ref and/or the `normal` hint. */
 export function fieldAbnormal(
   value: string,
@@ -613,7 +624,7 @@ export function fieldAbnormal(
     if (t != null) return le[1] === "<" ? num >= t : num > t;
   }
 
-  if (field && (field.kind === "select" || field.kind === "multi" || field.kind === "text")) {
+  if (field && (field.kind === "select" || field.kind === "multi" || field.kind === "text" || field.kind === "groups")) {
     const nrmQ = (normal || field.normal || "").trim();
     const numericHint = field.kind === "text" && num != null && /\d/.test(nrmQ);
     if (nrmQ && nrmQ.length <= 80 && !/^[~≈]/.test(nrmQ) && !numericHint) {
@@ -622,7 +633,7 @@ export function fieldAbnormal(
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean);
       if (accepted.length) {
-        if (field.kind === "multi") {
+        if (field.kind === "multi" || field.kind === "groups") {
           const parts = v
             .split(/[,;/]+/)
             .map((s) => s.trim().toLowerCase())
@@ -690,7 +701,7 @@ export function collectDeviations(
       }
       for (const f of def.fields) {
         const val = (fields[f.key] || "").trim();
-        if (!val) continue;
+        if (!val || !fieldShown(f, fields)) continue;
         if (fieldAbnormal(val, f.normal, f, fields)) {
           out.push({
             study: def.label,
@@ -805,6 +816,7 @@ export function fillStudyTemplate(
   if (def.sparse || def.category === "lab") {
     const bits: string[] = [];
     for (const f of visible) {
+      if (!fieldShown(f, fields)) continue;
       const v = (fields[f.key] || "").trim();
       if (!v) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
@@ -818,9 +830,10 @@ export function fillStudyTemplate(
 
   let text = def.template.replaceAll("{date}", date);
   for (const f of def.fields) {
-    const v = omit.has(f.key) ? "" : (fields[f.key] || "").trim();
+    const hidden = !fieldShown(f, fields);
+    const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    const replacement = omit.has(f.key) || (!v && f.computed) ? "" : withPrev(v, p);
+    const replacement = omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
     text = text.replaceAll(`{${f.key}}`, replacement);
   }
   return text
@@ -828,7 +841,9 @@ export function fillStudyTemplate(
     .replace(/:\s*,/g, ": ")
     .replace(/\s*\(\s*%?\s*\)/g, "")
     .replace(/\s*\(—%?\)/g, "")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[^\S\n]{2,}/g, " ")
+    .replace(/^\s*[-*] \s*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .replace(/\s+\./g, ".")
     .trim();
 }
