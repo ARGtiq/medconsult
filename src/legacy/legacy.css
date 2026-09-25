@@ -1435,6 +1435,15 @@
 }
 .legacy-surface .study-field-row { display: flex; flex-direction: column; gap: 3px; }
 .legacy-surface .study-field-label { font-size: 11.5px; color: var(--ink-soft); }
+.legacy-surface .study-field-heading {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
 .legacy-surface .study-field-row input {
   padding: 6px 9px;
   border: 1px solid var(--line);
@@ -2416,6 +2425,9 @@
 /* Settings page */
 .legacy-surface .settings-page { display: flex; flex-direction: column; gap: 16px; }
 .legacy-surface .settings-tabs { display: flex; gap: 8px; }
+.legacy-surface .study-list-tabs { flex-wrap: wrap; }
+.legacy-surface .study-list-tabs button { padding: 6px 12px; font-size: 12.5px; }
+.legacy-surface .study-list-count { margin-left: 4px; font-weight: 650; opacity: 0.75; }
 .legacy-surface .settings-tabs button {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -3153,6 +3165,17 @@
   max-width: min(820px, calc(100vw - 24px));
 }
 .legacy-surface .study-field-hint { margin: 0 0 8px; }
+.legacy-surface .study-field-block.is-heading {
+  background: transparent;
+  border-style: dashed;
+}
+.legacy-surface .study-field-reorder.is-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
 .legacy-surface .study-field-block {
   display: flex;
   flex-direction: column;

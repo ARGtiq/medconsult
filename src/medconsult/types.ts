@@ -13,7 +13,7 @@ export type StudyField = {
   unit?: string;
   normal?: string;
   defaultValue?: string;
-  kind?: "text" | "number" | "select" | "multi" | "groups";
+  kind?: "text" | "number" | "select" | "multi" | "groups" | "heading";
   options?: string[];
   /** Mutually exclusive sets. One pick from each row, e.g. ровные/неровные and четкие/нечеткие. */
   optionGroups?: string[][];

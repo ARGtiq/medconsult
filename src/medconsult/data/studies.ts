@@ -758,6 +758,7 @@ export function collectDeviations(
         continue;
       }
       for (const f of def.fields) {
+        if (f.kind === "heading") continue;
         const val = (fields[f.key] || "").trim();
         if (!val || !fieldShown(f, fields)) continue;
         if (fieldAbnormal(val, f.normal, f, fields)) {
@@ -847,11 +848,12 @@ function studyAutoTag(
   prevFields: Record<string, string> | undefined,
   omit: Set<string>,
 ): string | null {
-  if (def.fields.some((f) => f.key === tag)) return null;
+  if (def.fields.some((f) => f.kind !== "heading" && f.key === tag)) return null;
   if (tag === "name") return def.label;
   if (tag !== "summary" && tag !== "lines" && tag !== "abnormal") return null;
   const bits: { label: string; shown: string }[] = [];
   for (const f of def.fields) {
+    if (f.kind === "heading") continue;
     if (omit.has(f.key) || !fieldShown(f, fields)) continue;
     const v = (fields[f.key] || "").trim();
     if (!v) continue;
@@ -909,6 +911,7 @@ export function fillStudyTemplate(
   if ((def.sparse || def.category === "lab") && !useLabTemplate(def)) {
     const bits: string[] = [];
     for (const f of visible) {
+      if (f.kind === "heading") continue;
       if (!fieldShown(f, fields)) continue;
       const v = (fields[f.key] || "").trim();
       if (!v) continue;
@@ -926,7 +929,7 @@ export function fillStudyTemplate(
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    const replacement = omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
+    const replacement = f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
     text = text.replaceAll(`{${f.key}}`, replacement);
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {

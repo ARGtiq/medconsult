@@ -90,6 +90,9 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
           {mode === 'fields' && study.fields?.length > 0 ? (
             <div className="study-fields-grid">
               {study.fields.map((f) => (
+                f.kind === 'heading' ? (
+                  <div key={f.key} className="study-field-heading">{f.label}</div>
+                ) : (
                 <label key={f.key} className="study-field-row">
                   <span className="study-field-label">{f.label}{f.unit ? `, ${f.unit}` : ''}</span>
                   <input
@@ -99,6 +102,7 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
                     placeholder={f.normal || ''}
                   />
                 </label>
+                )
               ))}
             </div>
           ) : (

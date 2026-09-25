@@ -306,6 +306,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
               ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, inst.fields))).map((f) => {
+                  if (f.kind === "heading") {
+                    return (
+                      <div key={f.key || f.label} className="col-span-2 px-0.5 pt-1 sm:col-span-3">
+                        <div className="text-[11px] font-semibold tracking-wide text-mute uppercase">{f.label}</div>
+                      </div>
+                    );
+                  }
                   const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields));
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";

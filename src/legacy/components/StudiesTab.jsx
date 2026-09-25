@@ -14,6 +14,7 @@ const KIND_OPTIONS = [
   { value: 'multi', label: 'несколько' },
   { value: 'groups', label: 'исключающие' },
   { value: 'formula', label: 'формула' },
+  { value: 'heading', label: 'заголовок' },
 ]
 
 const AUTO_TAGS = [
@@ -111,6 +112,7 @@ function parseNum(v) {
 }
 
 function editorKind(f) {
+  if (f.kind === 'heading') return 'heading'
   if (f.kind === 'groups') return 'groups'
   if (f.computed || (f.formula && String(f.formula).trim())) return 'formula'
   if (f.kind === 'select' || f.kind === 'multi' || f.kind === 'number' || f.kind === 'text') return f.kind
@@ -194,6 +196,7 @@ function serializeField(f) {
   const key = (f.key || slugifyFieldKey(f.label)).trim()
   const label = (f.label || '').trim()
   if (!key || !label) return null
+  if ((f.kind || 'text') === 'heading') return { key, label, kind: 'heading' }
   const out = { key, label }
   const unit = (f.unit || '').trim()
   if (unit) out.unit = unit
@@ -355,6 +358,7 @@ export default function StudiesTab() {
   })
   const [overField, setOverField] = useState(null)
   const [dragKids, setDragKids] = useState([])
+  const [listTab, setListTab] = useState('all')
   function pickSide(side) {
     setTemplateSide(side)
     try {
@@ -447,7 +451,23 @@ export default function StudiesTab() {
       }
       const nextField = fields[idx]
       const nextKey = (nextField.key || '').trim()
-      template = syncFieldLine(template, oldLabel, oldKey, nextField.label, nextKey)
+      const isHeading = nextField.kind === 'heading'
+      if (isHeading) {
+        for (const line of [autoFieldLine(oldLabel, oldKey), autoFieldLine(oldLabel, nextKey), autoFieldLine(nextField.label, nextKey)]) {
+          if (!line) continue
+          const dropped = replaceWholeLine(template, line, '')
+          if (dropped != null) template = dropped
+        }
+      } else {
+        template = syncFieldLine(template, oldLabel, oldKey, nextField.label, nextKey)
+        if (current.kind === 'heading') {
+          const line = autoFieldLine(nextField.label, nextKey)
+          if (line && !template.includes(`{${nextKey}}`)) {
+            const trimmed = template.replace(/\s+$/, '')
+            template = trimmed ? `${trimmed}\n${line}` : line
+          }
+        }
+      }
       const tokenOnly = oldKey && nextKey ? (prev.template || '').split(`{${oldKey}}`).join(`{${nextKey}}`) : (prev.template || '')
       const templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
       fields = fields.map((f, i) => {
@@ -464,6 +484,10 @@ export default function StudiesTab() {
 
   function addField() {
     setForm({ ...form, fields: [...form.fields, blankField()] })
+  }
+
+  function addHeading() {
+    setForm({ ...form, fields: [...form.fields, { ...blankField(), kind: 'heading' }] })
   }
 
   function removeField(idx) {
@@ -495,7 +519,7 @@ export default function StudiesTab() {
       const fields = [...prev.fields]
       fields.splice(idx + 1, 0, copy)
       let template = prev.template || ''
-      const line = autoFieldLine(copy.label, key)
+      const line = src.kind === 'heading' ? '' : autoFieldLine(copy.label, key)
       if (line && !template.includes(`{${key}}`)) {
         const trimmed = template.replace(/\s+$/, '')
         template = trimmed ? `${trimmed}\n${line}` : line
@@ -873,7 +897,7 @@ export default function StudiesTab() {
     refresh()
   }
 
-  const fieldTags = form.fields.filter((f) => fieldKeyOf(f) && f.label.trim())
+  const fieldTags = form.fields.filter((f) => f.kind !== 'heading' && fieldKeyOf(f) && f.label.trim())
 
   return (
     <div className="settings-tab">
@@ -931,6 +955,7 @@ export default function StudiesTab() {
                 <p className="settings-note-inline study-field-hint">
                   Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
                   «Подпункт» появляется на приёме при значении или если число в диапазоне. Фраза из «по умолчанию» встанет сама.
+                  «Заголовок» делит пункты на блоки и в протокол не пишется.
                   «Порядок» оставляет названия и даёт их перетаскивать.
                   В тексте шаблона строка «название - {'{тег}'}» появляется сама. Её можно править.
                 </p>
@@ -940,7 +965,7 @@ export default function StudiesTab() {
                       <div
                         key={idx}
                         draggable
-                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${dragKids.includes(idx) ? ' is-with' : ''}`}
+                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${dragKids.includes(idx) ? ' is-with' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
                         onDragStart={(e) => {
                           dragFrom.current = idx
                           setDragKids(f.showIf?.field ? [] : descendantIdxs(form.fields, idx))
@@ -969,8 +994,8 @@ export default function StudiesTab() {
                     )
                   }
                   const others = form.fields
-                    .map((x, i) => ({ i, key: fieldKeyOf(x), label: x.label || fieldKeyOf(x) }))
-                    .filter((x) => x.i !== idx && x.key)
+                    .map((x, i) => ({ i, key: fieldKeyOf(x), label: x.label || fieldKeyOf(x), kind: x.kind }))
+                    .filter((x) => x.i !== idx && x.key && x.kind !== 'heading')
                   const showRef = f.kind === 'number' || f.kind === 'formula' || f.kind === 'text'
                   const refParts = String(f.normal || '')
                     .split(/[,;/|]+/)
@@ -979,7 +1004,7 @@ export default function StudiesTab() {
                   return (
                     <div
                       key={idx}
-                      className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}`}
+                      className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
                       onDragOver={(e) => {
                         e.preventDefault()
                         setOverField(idx)
@@ -1010,14 +1035,18 @@ export default function StudiesTab() {
                         >
                           ⋮⋮
                         </span>
-                        <input placeholder="название" value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
-                        <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
+                        <input placeholder={f.kind === 'heading' ? 'заголовок блока' : 'название'} value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
+                        {f.kind !== 'heading' && (
+                          <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
+                        )}
+                        {f.kind !== 'heading' && (
                         <input
                           placeholder="тег"
                           value={f.key}
                           onChange={(e) => updateField(idx, { key: e.target.value.replace(/[{}\s]/g, '') })}
                           title="Тег в шаблоне. Меняется сразу, пока правишь название"
                         />
+                        )}
                         <select
                           className="study-field-kind"
                           value={f.kind || 'text'}
@@ -1029,10 +1058,14 @@ export default function StudiesTab() {
                           ))}
                         </select>
                         <button type="button" className="btn-secondary btn-small" onClick={() => duplicateField(idx)}>копия</button>
+                        {f.kind !== 'heading' && (
                         <button type="button" className="btn-secondary btn-small" onClick={() => addChild(idx)} title="Пункт ниже, виден только при выбранном значении">подпункт</button>
+                        )}
                         <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
                       </div>
 
+                      {f.kind !== 'heading' && (
+                      <>
                       <div className="study-field-showif">
                         <span className="study-field-ref-label">если</span>
                         <select
@@ -1349,10 +1382,13 @@ export default function StudiesTab() {
                         value={f.defaultValue || ''}
                         onChange={(e) => updateField(idx, { defaultValue: e.target.value })}
                       />
+                      </>
+                      )}
                     </div>
                   )
                 })}
                 <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>
+                <button type="button" className="btn-secondary btn-small" onClick={addHeading}>+ заголовок</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => setReorder((v) => !v)}>
                   {reorder ? 'порядок включён' : 'порядок'}
                 </button>
@@ -1461,15 +1497,50 @@ export default function StudiesTab() {
       )}
 
       <div className="drug-db-list">
-        <h4>Все исследования ({studies.length})</h4>
+        <div className="settings-tabs study-list-tabs" role="tablist" aria-label="Шаблоны исследований">
+          {[
+            ['all', 'Все'],
+            ['instrumental', 'Инструментальные'],
+            ['lab', 'Лабораторные'],
+          ].map(([id, label]) => {
+            const n = studies.filter((s) => {
+              if (s.category === 'questionnaire') return id === 'all'
+              if (id === 'lab') return s.category === 'lab'
+              if (id === 'instrumental') return s.category !== 'lab'
+              return true
+            }).length
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={listTab === id}
+                className={listTab === id ? 'active' : ''}
+                onClick={() => setListTab(id)}
+              >
+                {label}
+                <span className="study-list-count">{n}</span>
+              </button>
+            )
+          })}
+        </div>
         {studies
+          .filter((s) => {
+            if (s.category === 'questionnaire') return listTab === 'all'
+            if (listTab === 'lab') return s.category === 'lab'
+            if (listTab === 'instrumental') return s.category !== 'lab'
+            return true
+          })
           .sort((a, b) => a.label.localeCompare(b.label))
           .map((s) => {
             const fields = s.fields || []
             const bits = []
+            const headings = fields.filter((f) => f.kind === 'heading').length
+            const dataFields = fields.length - headings
             if (fields.some((f) => f.kind === 'select' || f.kind === 'multi')) bits.push('выбор')
             if (fields.some((f) => f.computed || f.formula)) bits.push('формулы')
             if (fields.some((f) => f.refOp)) bits.push('референс')
+            if (headings) bits.push(`заголовки ${headings}`)
             return (
               <div key={s.key} className="drug-db-card">
                 <div className="drug-db-card-top">
@@ -1483,7 +1554,7 @@ export default function StudiesTab() {
                 <div className="drug-db-line">{s.template}</div>
                 {fields.length > 0 && (
                   <div className="drug-db-line">
-                    Полей: {fields.length}
+                    Полей: {dataFields}
                     {bits.length ? ` · ${bits.join(' · ')}` : ''}
                   </div>
                 )}
