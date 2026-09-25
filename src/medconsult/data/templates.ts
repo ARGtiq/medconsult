@@ -43,6 +43,25 @@ export type ObjectiveTemplate = {
   codes?: string[];
 };
 
+/** Named set of protocol blocks plus text already filled in. */
+export type GlobalTemplate = {
+  id: string;
+  name: string;
+  codes: string[];
+  kind: WorkKind;
+  stdBlocks: string[];
+  extraKinds: string[];
+  complaints: string[];
+  anamnesis: string;
+  anamnesisVitae: string;
+  objective: string;
+  localStatus: string[];
+  diagnosisCode: string;
+  diagnosisTitle: string;
+  recommendations: string[];
+  notes: string;
+};
+
 export type TemplatesState = {
   localPacks: LocalPack[];
   chronic: VitaePreset[];
@@ -52,6 +71,7 @@ export type TemplatesState = {
   visitPacks: VisitPack[];
   questionnaires: ScaleDef[];
   objective: ObjectiveTemplate[];
+  globalTemplates: GlobalTemplate[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -174,6 +194,7 @@ export const seedTemplates = (): TemplatesState => ({
   visitPacks: SEED_VISIT_PACKS.map((p) => ({ ...p, codes: [...p.codes], stdBlocks: [...p.stdBlocks], extraKinds: [...p.extraKinds], localPackIds: [...p.localPackIds] })),
   questionnaires: cloneScales(QUESTION_SCALES),
   objective: SEED_OBJECTIVE.map((x) => ({ ...x, codes: x.codes ? [...x.codes] : [] })),
+  globalTemplates: [],
 });
 
 export function normalizeComplaint(raw: unknown): ComplaintTemplate | null {
@@ -229,6 +250,38 @@ function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
   const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : `obj_${label}`;
   const codes = Array.isArray(o.codes) ? o.codes.map((c) => String(c).trim()).filter(Boolean) : [];
   return { id, label, text, codes };
+}
+
+function asLines(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => String(x));
+}
+
+export function normalizeGlobal(raw: unknown): GlobalTemplate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Partial<GlobalTemplate>;
+  const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : "";
+  const name = typeof o.name === "string" ? o.name.trim() : "";
+  if (!id && !name) return null;
+  const kind =
+    o.kind === "followup" || o.kind === "study" || o.kind === "document" || o.kind === "primary" ? o.kind : "primary";
+  return {
+    id: id || `gtpl_${Date.now().toString(36)}`,
+    name: name || "шаблон",
+    codes: Array.isArray(o.codes) ? o.codes.map((c) => String(c).trim()).filter(Boolean) : [],
+    kind,
+    stdBlocks: Array.isArray(o.stdBlocks) ? o.stdBlocks.map(String) : [...ALL_STD],
+    extraKinds: Array.isArray(o.extraKinds) ? o.extraKinds.map(String) : [],
+    complaints: asLines(o.complaints),
+    anamnesis: typeof o.anamnesis === "string" ? o.anamnesis : "",
+    anamnesisVitae: typeof o.anamnesisVitae === "string" ? o.anamnesisVitae : "",
+    objective: typeof o.objective === "string" ? o.objective : "",
+    localStatus: asLines(o.localStatus),
+    diagnosisCode: typeof o.diagnosisCode === "string" ? o.diagnosisCode : "",
+    diagnosisTitle: typeof o.diagnosisTitle === "string" ? o.diagnosisTitle : "",
+    recommendations: asLines(o.recommendations),
+    notes: typeof o.notes === "string" ? o.notes : "",
+  };
 }
 
 const OBJECTIVE_BLOCK_MIG = "medconsult_mig_objective_block";
@@ -291,6 +344,9 @@ function read(): TemplatesState {
       objective: Array.isArray(parsed.objective)
         ? (parsed.objective.map(normalizeObjective).filter(Boolean) as ObjectiveTemplate[])
         : seed.objective,
+      globalTemplates: Array.isArray(parsed.globalTemplates)
+        ? (parsed.globalTemplates.map(normalizeGlobal).filter(Boolean) as GlobalTemplate[])
+        : [],
     };
     if (migrated.changed) {
       try {
@@ -345,6 +401,17 @@ export function getComplaintTemplates(): ComplaintTemplate[] {
 
 export function getVisitPacks(): VisitPack[] {
   return read().visitPacks;
+}
+
+export function getGlobalTemplates(): GlobalTemplate[] {
+  return read().globalTemplates || [];
+}
+
+export function globalsMatchingCode(code: string): GlobalTemplate[] {
+  const all = getGlobalTemplates();
+  if (!code) return [];
+  const prefix = code.split(".")[0];
+  return all.filter((p) => p.codes.includes(code) || (prefix && p.codes.includes(prefix)));
 }
 
 export function getQuestionScales(): ScaleDef[] {

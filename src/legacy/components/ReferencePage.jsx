@@ -6,44 +6,74 @@ import PrintTemplatesTab from './PrintTemplatesTab'
 import TreatmentSchemesTab from './TreatmentSchemesTab'
 import Mkb10Page from './Mkb10Page'
 
-export default function ReferencePage({ initialTab, initialItemId, templatesContent }) {
-  const [tab, setTab] = useState(initialTab === 'studies' ? 'templates' : (initialTab || 'mkb'))
+function startTab(initialTab) {
+  if (initialTab === 'studies' || initialTab === 'templates') return 'blocks'
+  if (initialTab === 'groups') return 'drugs'
+  return initialTab || 'mkb'
+}
+
+function DrugsHub({ initialSub, initialItemId }) {
+  const [sub, setSub] = useState(initialSub === 'groups' ? 'groups' : 'drugs')
+  return (
+    <div>
+      <div className="settings-tabs">
+        <button type="button" className={sub === 'drugs' ? 'active' : ''} onClick={() => setSub('drugs')}>
+          Препараты
+        </button>
+        <button type="button" className={sub === 'groups' ? 'active' : ''} onClick={() => setSub('groups')}>
+          Группы
+        </button>
+      </div>
+      {sub === 'drugs' && <DrugsTab initialItemId={initialItemId} />}
+      {sub === 'groups' && <DrugGroupsTab />}
+    </div>
+  )
+}
+
+export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent }) {
+  const [tab, setTab] = useState(startTab(initialTab))
 
   return (
     <div className="guidelines-page">
       <h2 className="guidelines-title">Справочник</h2>
       <p className="settings-note-inline">
-        Медицинское содержание: МКБ-10, шаблоны, клинреки, группы, лекарства, схемы, печать.
-        Исследования — внутри «Шаблоны». Как ведёт себя приложение — в Настройках.
+        МКБ-10, блоки, наборы, глобальные шаблоны, клинреки, схемы, лекарства, печать.
+        Исследования — внутри «Блоки».
       </p>
       <div className="settings-tabs">
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
           МКБ-10
         </button>
-        <button type="button" className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>
-          Шаблоны
+        <button type="button" className={tab === 'blocks' ? 'active' : ''} onClick={() => setTab('blocks')}>
+          Блоки
+        </button>
+        <button type="button" className={tab === 'packs' ? 'active' : ''} onClick={() => setTab('packs')}>
+          Наборы
+        </button>
+        <button type="button" className={tab === 'global' ? 'active' : ''} onClick={() => setTab('global')}>
+          Глобальные
         </button>
         <button type="button" className={tab === 'guidelines' ? 'active' : ''} onClick={() => setTab('guidelines')}>
-          Клинические рекомендации
-        </button>
-        <button type="button" className={tab === 'groups' ? 'active' : ''} onClick={() => setTab('groups')}>
-          Группы лекарств
-        </button>
-        <button type="button" className={tab === 'drugs' ? 'active' : ''} onClick={() => setTab('drugs')}>
-          Лекарства
+          Клинреки
         </button>
         <button type="button" className={tab === 'schemes' ? 'active' : ''} onClick={() => setTab('schemes')}>
           Схемы лечения
+        </button>
+        <button type="button" className={tab === 'drugs' ? 'active' : ''} onClick={() => setTab('drugs')}>
+          Лекарства
         </button>
         <button type="button" className={tab === 'print' ? 'active' : ''} onClick={() => setTab('print')}>
           Печать
         </button>
       </div>
       {tab === 'mkb' && <Mkb10Page />}
-      {tab === 'templates' && (templatesContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
+      {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
+      {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
+      {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
       {tab === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
-      {tab === 'groups' && <DrugGroupsTab />}
-      {tab === 'drugs' && <DrugsTab initialItemId={initialTab === 'drugs' ? initialItemId : null} />}
+      {tab === 'drugs' && (
+        <DrugsHub initialSub={initialTab === 'groups' ? 'groups' : 'drugs'} initialItemId={initialTab === 'drugs' ? initialItemId : null} />
+      )}
       {tab === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
       {tab === 'print' && <PrintTemplatesTab />}
     </div>

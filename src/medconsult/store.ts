@@ -4,7 +4,7 @@ import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
@@ -804,6 +804,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
     get().setSession({
       templateId: pack.id,
+      globalTemplateId: undefined,
       visitKind,
       mode,
       docStd: pack.stdBlocks,
@@ -813,6 +814,67 @@ export const useAppStore = create<AppStore>((set, get) => ({
       openSection: pack.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
     });
     get().setToast(`Набор: ${pack.name}`);
+  },
+
+  applyGlobalTemplate(id: string) {
+    const tpl = getGlobalTemplates().find((p) => p.id === id);
+    if (!tpl) return;
+    const session = get().session;
+    const kinds = getDocKinds();
+    const extraBlocks: ExtraBlock[] = [];
+    tpl.extraKinds.forEach((kindId) => {
+      const existing = (session.extraBlocks || []).find((b) => b.kindId === kindId);
+      if (existing) {
+        extraBlocks.push(existing);
+        return;
+      }
+      const kind = kinds.find((k) => k.id === kindId);
+      const patient = get().patients.find((p) => p.id === session.patientId);
+      let text = "";
+      if (kind?.copyPrevious) {
+        text =
+          findPreviousExtra(get().visits, session.patientId, kindId, get().patients) ||
+          patient?.globals?.extraLast?.[kindId] ||
+          "";
+      }
+      extraBlocks.push({ id: uid("xb"), kindId, title: kind?.title || "Блок", text });
+    });
+    const allStd = STD_DOC_BLOCKS.map((b) => b.id);
+    const hidden = allStd.filter((b) => !tpl.stdBlocks.includes(b));
+    let mode = session.mode;
+    let visitKind = session.visitKind;
+    if (tpl.kind === "document") {
+      mode = "document";
+    } else if (tpl.kind === "study") {
+      mode = "study";
+    } else {
+      visitKind = tpl.kind;
+      mode = session.studies.length ? "consult_study" : "consult";
+    }
+    const lines = (list: string[]) => list.map((s) => s.trim()).filter(Boolean);
+    const complaints = lines(tpl.complaints);
+    const localStatus = lines(tpl.localStatus);
+    const recommendations = lines(tpl.recommendations);
+    get().setSession({
+      globalTemplateId: tpl.id,
+      templateId: undefined,
+      visitKind,
+      mode,
+      docStd: tpl.stdBlocks,
+      extraBlocks,
+      hiddenBlocks: hidden,
+      openSection: tpl.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
+      ...(complaints.length ? { complaints } : {}),
+      ...(tpl.anamnesis.trim() ? { anamnesis: tpl.anamnesis, anamnesisChipMode: false } : {}),
+      ...(tpl.anamnesisVitae.trim() ? { anamnesisVitae: tpl.anamnesisVitae, vitaeChipMode: false } : {}),
+      ...(tpl.objective.trim() ? { objective: tpl.objective } : {}),
+      ...(localStatus.length ? { localStatus } : {}),
+      ...(tpl.diagnosisCode.trim() ? { diagnosisCode: tpl.diagnosisCode.trim() } : {}),
+      ...(tpl.diagnosisTitle.trim() ? { diagnosisTitle: tpl.diagnosisTitle } : {}),
+      ...(recommendations.length ? { recommendations } : {}),
+      ...(tpl.notes.trim() ? { notes: tpl.notes } : {}),
+    });
+    get().setToast(`Шаблон: ${tpl.name}`);
   },
 
   ensureGlobals() {

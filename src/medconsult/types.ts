@@ -133,6 +133,7 @@ export type SessionState = {
   docStd: string[];
   extraBlocks: ExtraBlock[];
   templateId?: string;
+  globalTemplateId?: string;
   allergies: string[];
   currentMedications: string[];
 };

@@ -3425,14 +3425,25 @@
 }
 .legacy-surface .study-template-chips-scroll {
   overflow-y: auto;
-  max-height: 200px;
-  min-height: 0;
-  margin: 0 0 8px;
+  min-height: 72px;
+  margin: 0;
   padding-right: 2px;
 }
 .legacy-surface .study-template-pane.is-float .study-template-chips-scroll {
-  flex: 0 1 auto;
-  max-height: 42%;
+  flex: 0 0 auto;
+}
+.legacy-surface .study-template-split {
+  flex: 0 0 auto;
+  height: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  cursor: ns-resize;
+  background: var(--line);
+  touch-action: none;
+}
+.legacy-surface .study-template-split:hover,
+.legacy-surface .study-template-split:active {
+  background: var(--teal);
 }
 .legacy-surface .study-template-text-scroll {
   min-height: 160px;
@@ -3463,19 +3474,38 @@
 }
 .legacy-surface .study-field-spoiler {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
   width: 100%;
   margin: 0 0 4px;
-  padding: 6px 8px;
+  padding: 4px 8px 4px 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper, var(--panel));
   text-align: left;
-  cursor: pointer;
 }
 .legacy-surface .study-field-spoiler.is-sub { margin-left: 12px; width: calc(100% - 12px); }
+.legacy-surface .study-field-spoiler.is-over {
+  outline: 2px solid var(--teal, #3d6b5e);
+}
+.legacy-surface .study-field-spoiler.is-with {
+  outline: 1px dashed var(--teal, #3d6b5e);
+}
+.legacy-surface .study-field-spoiler-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 2px 0;
+}
 .legacy-surface .study-field-spoiler-title {
   font-size: 12.5px;
   font-weight: 650;

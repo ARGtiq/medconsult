@@ -98,9 +98,21 @@ function PresetPicker({
   function setDate(id: string, date: string) {
     onChange(selected.map((s) => (s.id === id ? { ...s, date } : s)));
   }
+  const customSelected = selected.filter((s) => !presets.some((p) => p.id === s.id));
   return (
     <div className="mt-1">
       <div className="flex flex-wrap gap-1">
+        {customSelected.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onChange(selected.filter((x) => x.id !== s.id))}
+            className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
+            title="Свой пункт. Нажми, чтобы убрать"
+          >
+            {s.label}
+          </button>
+        ))}
         {sorted.map((p) => {
           const on = selected.some((s) => s.id === p.id);
           return (

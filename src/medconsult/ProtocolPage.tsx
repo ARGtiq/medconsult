@@ -7,7 +7,7 @@ import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
-import { PlusDocBlockButton, PlusPackButton } from "./DocBlocks";
+import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
 import { packsForCodeLive, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
@@ -354,6 +354,7 @@ export function ProtocolPage() {
         {kindBtn("study", "обследование")}
         {kindBtn("document", "другой документ")}
         <PlusPackButton />
+        <PlusGlobalButton />
         <PlusStudyButton />
         {documentMode && <PlusDocBlockButton />}
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>

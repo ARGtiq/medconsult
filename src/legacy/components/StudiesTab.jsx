@@ -423,7 +423,6 @@ export default function StudiesTab() {
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
   const [validationError, setValidationError] = useState('')
-  const [reorder, setReorder] = useState(false)
   const [templateSide, setTemplateSide] = useState(() => {
     try {
       return localStorage.getItem('medconsult_study_template_side') || 'right'
@@ -449,6 +448,17 @@ export default function StudiesTab() {
     }
   })
   const [openField, setOpenField] = useState(null)
+  const [tagH, setTagH] = useState(() => {
+    try {
+      const n = Number(localStorage.getItem('medconsult_study_tag_h'))
+      if (n >= 72 && n <= 480) return n
+    } catch {
+      /* ignore */
+    }
+    return 160
+  })
+  const tagHRef = useRef(160)
+  tagHRef.current = tagH
   function pickSide(side) {
     setTemplateSide(side)
     try {
@@ -486,7 +496,6 @@ export default function StudiesTab() {
 
   function openNew() {
     setForm(blankForm())
-    setReorder(false)
     setOpenField(null)
     setFormOpen(true)
   }
@@ -505,7 +514,6 @@ export default function StudiesTab() {
       dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
       templateEdited: merged.templateEdited === true,
     })
-    setReorder(false)
     setOpenField(null)
     setFormOpen(true)
   }
@@ -647,6 +655,34 @@ export default function StudiesTab() {
       })
     }
     return idxs.sort((a, b) => a - b)
+  }
+
+  function onTagSplitDown(e) {
+    e.preventDefault()
+    const pane = e.currentTarget.closest('.study-template-pane')
+    const chips = pane?.querySelector('.study-template-chips-scroll')
+    if (!pane || !chips) return
+    const startY = e.clientY
+    const startH = chips.getBoundingClientRect().height
+    const paneRect = pane.getBoundingClientRect()
+    const chipsTop = chips.getBoundingClientRect().top - paneRect.top
+    const cap = templateSide === 'below' ? 480 : Math.max(72, paneRect.height - chipsTop - 128)
+    const move = (ev) => {
+      const next = Math.round(Math.min(cap, Math.max(72, startH + (ev.clientY - startY))))
+      tagHRef.current = next
+      setTagH(next)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      try {
+        localStorage.setItem('medconsult_study_tag_h', String(tagHRef.current))
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
   function moveField(from, to) {
@@ -1030,13 +1066,6 @@ export default function StudiesTab() {
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
                 <button
                   type="button"
-                  className={`btn-secondary btn-small${reorder ? ' is-on' : ''}`}
-                  onClick={() => setReorder((v) => !v)}
-                >
-                  {reorder ? 'порядок вкл' : 'порядок'}
-                </button>
-                <button
-                  type="button"
                   className={`btn-secondary btn-small${foldIdle ? ' is-on' : ''}`}
                   title="Неактивные пункты сворачиваются в строку: название и краткое описание"
                   onClick={() => pickFold(!foldIdle)}
@@ -1073,27 +1102,15 @@ export default function StudiesTab() {
                   Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
                   «Подпункт» появляется на приёме при значении или если число в диапазоне. Фраза из «по умолчанию» встанет сама.
                   «Заголовок» делит пункты на блоки и в протокол не пишется.
-                  «Порядок» оставляет названия и даёт их перетаскивать.
+                  За ⋮⋮ пункт перетаскивается и в развёрнутом виде, и в спойлере. Подпункты едут вместе с пунктом.
                   В тексте шаблона строка «название - {'{тег}'}» появляется сама. Её можно править.
                 </p>
                 {form.fields.map((f, idx) => {
-                  if (reorder) {
+                  if (foldIdle && openField !== idx) {
                     return (
                       <div
                         key={idx}
-                        draggable
-                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${dragKids.includes(idx) ? ' is-with' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
-                        onDragStart={(e) => {
-                          dragFrom.current = idx
-                          setDragKids(f.showIf?.field ? [] : descendantIdxs(form.fields, idx))
-                          e.dataTransfer.effectAllowed = 'move'
-                          e.dataTransfer.setData('text/plain', String(idx))
-                        }}
-                        onDragEnd={() => {
-                          dragFrom.current = null
-                          setDragKids([])
-                          setOverField(null)
-                        }}
+                        className={`study-field-spoiler${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}${overField === idx ? ' is-over' : ''}${dragKids.includes(idx) ? ' is-with' : ''}`}
                         onDragOver={(e) => {
                           e.preventDefault()
                           setOverField(idx)
@@ -1105,22 +1122,29 @@ export default function StudiesTab() {
                           dragFrom.current = null
                         }}
                       >
-                        {f.label || 'без названия'}
-                        {f.showIf?.field ? <span className="study-field-reorder-if"> · если {describeShow(f.showIf) || f.showIf.field}</span> : null}
+                        <span
+                          className="study-field-grip"
+                          draggable
+                          title="Перетащи. Подпункты едут вместе с пунктом, сам подпункт — отдельно"
+                          onDragStart={(e) => {
+                            dragFrom.current = idx
+                            setDragKids(f.showIf?.field ? [] : descendantIdxs(form.fields, idx))
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', String(idx))
+                          }}
+                          onDragEnd={() => {
+                            dragFrom.current = null
+                            setDragKids([])
+                            setOverField(null)
+                          }}
+                        >
+                          ⋮⋮
+                        </span>
+                        <button type="button" className="study-field-spoiler-open" onClick={() => setOpenField(idx)}>
+                          <span className="study-field-spoiler-title">{(f.label || '').trim() || 'без названия'}</span>
+                          <span className="study-field-spoiler-meta">{fieldBrief(f)}</span>
+                        </button>
                       </div>
-                    )
-                  }
-                  if (foldIdle && openField !== idx) {
-                    return (
-                      <button
-                        type="button"
-                        key={idx}
-                        className={`study-field-spoiler${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
-                        onClick={() => setOpenField(idx)}
-                      >
-                        <span className="study-field-spoiler-title">{(f.label || '').trim() || 'без названия'}</span>
-                        <span className="study-field-spoiler-meta">{fieldBrief(f)}</span>
-                      </button>
                     )
                   }
                   const others = form.fields
@@ -1573,7 +1597,7 @@ export default function StudiesTab() {
                   с названием
                 </button>
               </div>
-              <div className="study-template-chips-scroll">
+              <div className="study-template-chips-scroll" style={{ height: tagH, maxHeight: tagH, flexBasis: tagH }}>
               <div className="study-template-chips">
                 {AUTO_TAGS.map((tag) => (
                   <button
@@ -1620,13 +1644,28 @@ export default function StudiesTab() {
                 {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется. Режим «с названием» пишет такой тег сам. {'{summary}'} — все заполненные, {'{lines}'} — с новой строки, {'{abnormal}'} — только вне нормы.
               </p>
               </div>
+              <div
+                className="study-template-split"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Высота тегов и текста"
+                title="Потяни, чтобы изменить высоту тегов и текста"
+                onPointerDown={onTagSplitDown}
+              />
 
               <div className="study-template-format">
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('**')} title="Полужирный">Ж</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('*')} title="Курсив">К</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n- ', '')} title="Пункт списка">список</button>
               </div>
-              <div className="study-template-text-scroll">
+              <div
+                className="study-template-text-scroll"
+                style={
+                  templateSide === 'below'
+                    ? { height: Math.max(140, 480 - tagH), maxHeight: 'none', flex: 'none' }
+                    : undefined
+                }
+              >
               <textarea
                 ref={templateRef}
                 className="study-template-text"

@@ -7,6 +7,7 @@ import {
   STD_DOC_BLOCKS,
   type ComplaintTemplate,
   type DocKind,
+  type GlobalTemplate,
   type ObjectiveTemplate,
   type TemplatesState,
   type VitaePreset,
@@ -17,6 +18,9 @@ import { searchIcd } from "./live";
 import { Typeahead } from "./Typeahead";
 import type { LocalPack, WorkKind } from "./types";
 import StudiesTab from "@/legacy/components/StudiesTab";
+import { useAppStore } from "./store";
+
+type BlockTab = "objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires" | "studies";
 
 function IcdCodesField({
   codes,
@@ -89,9 +93,14 @@ function parseOptions(raw: string): ScaleItem["options"] {
     });
 }
 
-export function TemplatesEditor() {
-  const [layer, setLayer] = useState<"blocks" | "packs" | "studies">("blocks");
-  const [tab, setTab] = useState<"objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
+export function TemplatesEditor({
+  layer = "blocks",
+  initialSection,
+}: {
+  layer?: "blocks" | "packs" | "global";
+  initialSection?: BlockTab;
+}) {
+  const [tab, setTab] = useState<BlockTab>(initialSection || "status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
   const echo = useRef(false);
@@ -113,11 +122,12 @@ export function TemplatesEditor() {
     echo.current = false;
   }
 
+  const title = layer === "packs" ? "Наборы" : layer === "global" ? "Глобальные шаблоны" : "Блоки";
+
   return (
     <section className="mb-4 rounded-[10px] border border-line bg-surface p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 className="font-display text-lg">Шаблоны</h2>
-        <span className="text-xs text-mute">сначала блоки, потом набор из них</span>
+        <h2 className="font-display text-lg">{title}</h2>
         <button
           type="button"
           className="ml-auto text-xs text-mute"
@@ -125,35 +135,15 @@ export function TemplatesEditor() {
             resetTemplates();
             setData(seedTemplates());
           }}
-          hidden={layer === "studies"}
+          hidden={layer === "global" || (layer === "blocks" && tab === "studies")}
         >
           сбросить к заводским
         </button>
       </div>
-      <div className="mb-3 flex flex-wrap gap-1">
-        {(
-          [
-            ["blocks", "блоки"],
-            ["packs", "наборы"],
-            ["studies", "исследования"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setLayer(id)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              layer === id ? "bg-teal text-paper" : "border border-line bg-paper"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
       {layer === "blocks" && (
         <>
           <p className="mb-2 text-xs text-ink-soft">
-            Словари чипов: жалобы, статус, перенесённые, операции, анкеты, виды доп. блоков. Из них потом собирается набор.
+            Словари чипов и исследования. Из чипов потом собирается набор, из исследований — протокол.
           </p>
           <div className="mb-3 flex flex-wrap gap-1">
             {(
@@ -165,6 +155,7 @@ export function TemplatesEditor() {
                 ["surgery", "операции"],
                 ["questionnaires", "анкеты"],
                 ["docs", "виды блоков"],
+                ["studies", "исследования"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -210,6 +201,7 @@ export function TemplatesEditor() {
             />
           )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
+          {tab === "studies" && <StudiesTab />}
         </>
       )}
       {layer === "packs" && (
@@ -220,8 +212,307 @@ export function TemplatesEditor() {
           onChange={(visitPacks) => persist({ visitPacks })}
         />
       )}
-      {layer === "studies" && <StudiesTab />}
+      {layer === "global" && (
+        <GlobalTemplatesEditor
+          items={data.globalTemplates || []}
+          docKinds={data.docKinds}
+          onChange={(globalTemplates) => persist({ globalTemplates })}
+        />
+      )}
     </section>
+  );
+}
+
+function linesText(value: string[]) {
+  return value.join("\n");
+}
+
+function textLines(raw: string) {
+  return raw.split("\n");
+}
+
+function blankGlobal(): GlobalTemplate {
+  return {
+    id: `gtpl_${Date.now().toString(36)}`,
+    name: "новый шаблон",
+    codes: [],
+    kind: "primary",
+    stdBlocks: STD_DOC_BLOCKS.map((b) => b.id),
+    extraKinds: [],
+    complaints: [],
+    anamnesis: "",
+    anamnesisVitae: "",
+    objective: "",
+    localStatus: [],
+    diagnosisCode: "",
+    diagnosisTitle: "",
+    recommendations: [],
+    notes: "",
+  };
+}
+
+function GlobalTemplatesEditor({
+  items,
+  docKinds,
+  onChange,
+}: {
+  items: GlobalTemplate[];
+  docKinds: DocKind[];
+  onChange: (items: GlobalTemplate[]) => void;
+}) {
+  const [sel, setSel] = useState(items[0]?.id || "");
+  const current = items.find((p) => p.id === sel) || items[0];
+
+  function patch(p: Partial<GlobalTemplate>) {
+    if (!current) return;
+    onChange(items.map((x) => (x.id === current.id ? { ...x, ...p } : x)));
+  }
+
+  function toggleBlock(id: string) {
+    if (!current) return;
+    const set = new Set(current.stdBlocks);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    patch({ stdBlocks: [...set] });
+  }
+
+  function toggleExtra(id: string) {
+    if (!current) return;
+    const set = new Set(current.extraKinds);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    patch({ extraKinds: [...set] });
+  }
+
+  function takeFromProtocol() {
+    if (!current) return;
+    const s = useAppStore.getState().session;
+    const all = STD_DOC_BLOCKS.map((b) => b.id);
+    const stdBlocks = s.mode === "document" ? s.docStd || [] : all.filter((id) => !s.hiddenBlocks.includes(id));
+    const kind = s.mode === "document" ? "document" : s.mode === "study" ? "study" : s.visitKind;
+    patch({
+      kind,
+      stdBlocks,
+      extraKinds: (s.extraBlocks || []).map((b) => b.kindId),
+      complaints: [...(s.complaints || [])],
+      anamnesis: s.anamnesis || "",
+      anamnesisVitae: s.anamnesisVitae || "",
+      objective: s.objective || "",
+      localStatus: [...(s.localStatus || [])],
+      diagnosisCode: s.diagnosisCode || "",
+      diagnosisTitle: s.diagnosisTitle || "",
+      recommendations: [...(s.recommendations || [])],
+      notes: s.notes || "",
+    });
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs text-ink-soft">
+        Глобальный шаблон — какие блоки открыть и что в них уже написано. На протоколе кнопка «шаблон». Пустые поля при
+        вставке не затирают то, что уже введено.
+      </p>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {items.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setSel(p.id)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              current?.id === p.id ? "bg-teal text-paper" : "border border-line bg-paper"
+            }`}
+          >
+            {p.name || "без названия"}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="rounded-full border border-dashed border-teal/50 px-2.5 py-1 text-xs font-medium text-teal"
+          onClick={() => {
+            const next = blankGlobal();
+            onChange([...items, next]);
+            setSel(next.id);
+          }}
+        >
+          + шаблон
+        </button>
+      </div>
+      {current ? (
+        <div className="space-y-2 rounded-lg border border-line bg-paper p-2">
+          <div className="flex flex-wrap gap-1">
+            <input
+              value={current.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              placeholder="название, напр. цистит первичный"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+            <button type="button" className="text-xs text-teal" onClick={takeFromProtocol}>
+              взять с протокола
+            </button>
+            <button
+              type="button"
+              className="text-xs text-danger"
+              onClick={() => {
+                const next = items.filter((p) => p.id !== current.id);
+                onChange(next);
+                setSel(next[0]?.id || "");
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+            <IcdCodesField codes={current.codes} onChange={(codes) => patch({ codes })} />
+          </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">вид</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(
+                [
+                  ["primary", "первичный"],
+                  ["followup", "повторный"],
+                  ["study", "обследование"],
+                  ["document", "другой документ"],
+                ] as [WorkKind, string][]
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => patch({ kind: id })}
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    current.kind === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] tracking-wide text-mute uppercase">блоки</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {STD_DOC_BLOCKS.map((b) => {
+                const on = current.stdBlocks.includes(b.id);
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => toggleBlock(b.id)}
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                    }`}
+                  >
+                    {b.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {docKinds.length > 0 && (
+            <div>
+              <div className="text-[10px] tracking-wide text-mute uppercase">доп. блоки</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {docKinds.map((b) => {
+                  const on = current.extraKinds.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleExtra(b.id)}
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
+                      }`}
+                    >
+                      {b.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">жалобы, каждая с новой строки</span>
+            <textarea
+              value={linesText(current.complaints)}
+              onChange={(e) => patch({ complaints: textLines(e.target.value) })}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">анамнез заболевания</span>
+            <textarea
+              value={current.anamnesis}
+              onChange={(e) => patch({ anamnesis: e.target.value })}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">анамнез жизни</span>
+            <textarea
+              value={current.anamnesisVitae}
+              onChange={(e) => patch({ anamnesisVitae: e.target.value })}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">объективный статус</span>
+            <textarea
+              value={current.objective}
+              onChange={(e) => patch({ objective: e.target.value })}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">локальный статус, каждая строка — чип</span>
+            <textarea
+              value={linesText(current.localStatus)}
+              onChange={(e) => patch({ localStatus: textLines(e.target.value) })}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <div className="flex flex-wrap gap-1">
+            <input
+              value={current.diagnosisCode}
+              onChange={(e) => patch({ diagnosisCode: e.target.value })}
+              placeholder="код МКБ"
+              className="w-28 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+            <input
+              value={current.diagnosisTitle}
+              onChange={(e) => patch({ diagnosisTitle: e.target.value })}
+              placeholder="формулировка диагноза"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </div>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">назначения, каждое с новой строки</span>
+            <textarea
+              value={linesText(current.recommendations)}
+              onChange={(e) => patch({ recommendations: textLines(e.target.value) })}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="text-[10px] tracking-wide text-mute uppercase">заметки</span>
+            <textarea
+              value={current.notes}
+              onChange={(e) => patch({ notes: e.target.value })}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+          </label>
+        </div>
+      ) : (
+        <p className="text-xs text-mute">Пока нет шаблонов — нажми «+ шаблон».</p>
+      )}
+    </div>
   );
 }
 
@@ -255,8 +546,8 @@ function VisitPacksEditor({
   return (
     <div>
       <p className="mb-2 text-xs text-ink-soft">
-        Набор — готовый документ: вид приёма, какие блоки, какие пакеты статуса, коды МКБ. На протоколе выбирается кнопкой
-        «набор».
+        Набор — какие блоки открыть, без готового текста. На протоколе кнопка «набор». Готовый текст — во вкладке
+        «Глобальные».
       </p>
       <div className="mb-2 flex flex-wrap gap-1">
         {packs.map((p) => (
