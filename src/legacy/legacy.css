@@ -3338,6 +3338,18 @@
   padding: 8px;
 }
 .legacy-surface .study-template-side { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.legacy-surface .study-date-format {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+.legacy-surface .study-date-format > span {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+}
 .legacy-surface .study-side-bar {
   position: sticky;
   top: 0;
@@ -3356,6 +3368,7 @@
   font-weight: 650;
   color: var(--ink);
 }
+.legacy-surface .study-date-format .btn-small.is-on,
 .legacy-surface .study-template-side .btn-small.is-on,
 .legacy-surface .study-side-bar .btn-small.is-on {
   background: var(--teal);

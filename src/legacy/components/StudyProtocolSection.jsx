@@ -2,14 +2,17 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import AutoResizeTextarea from './AutoResizeTextarea'
 
-function formatDate(iso) {
+function formatDate(iso, format) {
   if (!iso) return ''
-  const [y, m, d] = iso.split('-')
+  const [y, m, d] = String(iso).split('-')
+  if (!y || !m || !d) return String(iso)
+  if (format === 'iso') return `${y}-${m}-${d}`
+  if (format === 'short') return `${d}.${m}.${y.slice(-2)}`
   return `${d}.${m}.${y}`
 }
 
-export function fillTemplate(template, date, fieldValues) {
-  let text = template.replace('{date}', formatDate(date))
+export function fillTemplate(template, date, fieldValues, dateFormat) {
+  let text = template.replace('{date}', formatDate(date, dateFormat))
   text = text.replace(/\{(\w+)\}/g, (_, key) => (fieldValues?.[key]?.trim() ? fieldValues[key].trim() : '__'))
   return text
 }
@@ -29,13 +32,13 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
   function updateField(fieldKey, value) {
     const next = { ...fieldValues, [fieldKey]: value }
     onFieldsChange(fieldsKey, next)
-    onTextChange(textKey, fillTemplate(study.template, visitDate, next))
+    onTextChange(textKey, fillTemplate(study.template, visitDate, next, study.dateFormat))
   }
 
   function switchMode(next) {
     onModeChange(modeKey, next)
     if (next === 'text' && !sectionValues[textKey]) {
-      onTextChange(textKey, fillTemplate(study.template, visitDate, fieldValues))
+      onTextChange(textKey, fillTemplate(study.template, visitDate, fieldValues, study.dateFormat))
     }
   }
 
@@ -101,7 +104,7 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
           ) : (
             <AutoResizeTextarea
               className="study-protocol-text"
-              value={sectionValues[textKey] ?? fillTemplate(study.template, visitDate, fieldValues)}
+              value={sectionValues[textKey] ?? fillTemplate(study.template, visitDate, fieldValues, study.dateFormat)}
               onChange={(e) => onTextChange(textKey, e.target.value)}
             />
           )}

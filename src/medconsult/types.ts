@@ -43,6 +43,10 @@ export type StudyDef = {
   referenceNotes: string;
   hint?: string;
   sparse?: boolean;
+  /** Protocol date: iso `2026-09-25` (default) or short `25.09.26`. */
+  dateFormat?: "iso" | "short";
+  /** Lab/sparse studies use `template` in the protocol only after the user edits it. */
+  templateEdited?: boolean;
 };
 
 export type StudyInstance = {

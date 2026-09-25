@@ -5,6 +5,7 @@ import { STUDIES } from '../../medconsult/data/studies'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { applyMarkup } from '../lib/md'
+import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
 
 const KIND_OPTIONS = [
   { value: 'text', label: 'текст' },
@@ -56,6 +57,8 @@ function blankForm() {
     template: '',
     fields: [blankField()],
     referenceNotes: '',
+    dateFormat: 'iso',
+    templateEdited: false,
   }
 }
 
@@ -378,6 +381,8 @@ export default function StudiesTab() {
       referenceNotes: merged.referenceNotes || '',
       sparse: merged.sparse,
       hint: merged.hint,
+      dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
+      templateEdited: merged.templateEdited === true,
     })
     setFormOpen(true)
   }
@@ -387,9 +392,10 @@ export default function StudiesTab() {
       let template = prev.template || ''
       const current = prev.fields[idx]
       if (!current) return prev
+      const oldLabel = current.label || ''
+      const oldKey = (current.key || '').trim()
       let fields = prev.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f))
       if (patch.label !== undefined && patch.key === undefined) {
-        const oldKey = (current.key || '').trim()
         let auto = slugifyFieldKey(patch.label)
         if (auto) {
           const used = new Set(
@@ -415,7 +421,27 @@ export default function StudiesTab() {
             fields = fields.map((f, i) => (i === idx ? { ...f, key: auto } : f))
           }
         }
+      } else if (patch.key !== undefined && patch.label === undefined) {
+        const manual = String(patch.key || '').replace(/[{}\s]/g, '')
+        if (oldKey && manual && oldKey !== manual) {
+          template = template.split(`{${oldKey}}`).join(`{${manual}}`)
+          fields = fields.map((f, i) => {
+            if (i === idx) return { ...f, key: manual }
+            let next = f
+            if (next.showIf?.field === oldKey) next = { ...next, showIf: { ...next.showIf, field: manual } }
+            if (next.formula && String(next.formula).includes(`{${oldKey}}`)) {
+              next = { ...next, formula: String(next.formula).split(`{${oldKey}}`).join(`{${manual}}`) }
+            }
+            if (next.refOf === oldKey) next = { ...next, refOf: manual }
+            return next
+          })
+        }
       }
+      const nextField = fields[idx]
+      const nextKey = (nextField.key || '').trim()
+      template = syncFieldLine(template, oldLabel, oldKey, nextField.label, nextKey)
+      const tokenOnly = oldKey && nextKey ? (prev.template || '').split(`{${oldKey}}`).join(`{${nextKey}}`) : (prev.template || '')
+      const templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
       fields = fields.map((f, i) => {
         if (i !== idx) return f
         const merged = f
@@ -424,7 +450,7 @@ export default function StudiesTab() {
         if (patch.kind === 'groups' && !(merged.optionGroups || []).length) return { ...merged, optionGroups: [[]] }
         return merged
       })
-      return { ...prev, fields, template }
+      return { ...prev, fields, template, templateEdited }
     })
   }
 
@@ -433,7 +459,13 @@ export default function StudiesTab() {
   }
 
   function removeField(idx) {
-    setForm({ ...form, fields: form.fields.filter((_, i) => i !== idx) })
+    setForm((prev) => {
+      const f = prev.fields[idx]
+      const line = autoFieldLine(f?.label, f?.key)
+      const template = replaceWholeLine(prev.template || '', line, '') ?? (prev.template || '')
+      const templateEdited = template !== (prev.template || '') ? true : !!prev.templateEdited
+      return { ...prev, template, templateEdited, fields: prev.fields.filter((_, i) => i !== idx) }
+    })
   }
 
   function duplicateField(idx) {
@@ -454,7 +486,14 @@ export default function StudiesTab() {
       }
       const fields = [...prev.fields]
       fields.splice(idx + 1, 0, copy)
-      return { ...prev, fields }
+      let template = prev.template || ''
+      const line = autoFieldLine(copy.label, key)
+      if (line && !template.includes(`{${key}}`)) {
+        const trimmed = template.replace(/\s+$/, '')
+        template = trimmed ? `${trimmed}\n${line}` : line
+      }
+      const templateEdited = template !== (prev.template || '') ? true : !!prev.templateEdited
+      return { ...prev, fields, template, templateEdited }
     })
   }
 
@@ -683,7 +722,7 @@ export default function StudiesTab() {
     const start = el?.selectionStart ?? text.length
     const end = el?.selectionEnd ?? text.length
     const res = applyMarkup(text, start, end, before, after)
-    setForm((prev) => ({ ...prev, template: res.next }))
+    setForm((prev) => ({ ...prev, template: res.next, templateEdited: true }))
     requestAnimationFrame(() => {
       if (!el) return
       el.focus()
@@ -739,7 +778,7 @@ export default function StudiesTab() {
     const start = el?.selectionStart ?? text.length
     const end = el?.selectionEnd ?? text.length
     const next = text.slice(0, start) + token + text.slice(end)
-    setForm((prev) => ({ ...prev, template: next }))
+    setForm((prev) => ({ ...prev, template: next, templateEdited: true }))
     requestAnimationFrame(() => {
       if (!el) return
       el.focus()
@@ -833,8 +872,8 @@ export default function StudiesTab() {
       <p className="settings-note-inline">
         Список исследований и их шаблоны текста — общие для всех визитов с типом "Протокол исследований".
         Своё исследование с тем же ключом, что встроенное, переопределяет его. Предустановленные можно скрыть
-        крестиком и вернуть из блока внизу. В шаблон перетащи или нажми тег поля — подставится{' '}
-        <code>{'{fieldKey}'}</code>; <code>{'{date}'}</code> — дата исследования.
+        крестиком и вернуть из блока внизу. В шаблон само встаёт «название - {'{тег}'}»,
+        строку можно править. <code>{'{date}'}</code> — дата, формат задаётся у шаблона.
       </p>
 
       <button type="button" className="btn-primary" onClick={openNew}>
@@ -861,9 +900,15 @@ export default function StudiesTab() {
                   className={validationError && !form.label.trim() ? 'input-error' : ''}
                   placeholder="Название исследования"
                   value={form.label}
-                  onChange={(e) => setForm({ ...form, label: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setForm((prev) => ({ ...prev, label: value }))
+                  }}
                 />
-                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                <select value={form.category} onChange={(e) => {
+                  const value = e.target.value
+                  setForm((prev) => ({ ...prev, category: value }))
+                }}>
                   <option value="instrumental">Инструментальное</option>
                   <option value="lab">Лабораторное</option>
                 </select>
@@ -878,7 +923,7 @@ export default function StudiesTab() {
                   Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
                   «Подпункт» появляется на приёме при значении или если число в диапазоне. Фраза из «по умолчанию» встанет сама.
                   «Порядок» оставляет названия и даёт их перетаскивать.
-                  В тексте шаблона: жирный, курсив, список.
+                  В тексте шаблона строка «название - {'{тег}'}» появляется сама. Её можно править.
                 </p>
                 {form.fields.map((f, idx) => {
                   if (reorder) {
@@ -1311,6 +1356,25 @@ export default function StudiesTab() {
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>текст справа</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
               </div>
+              <div className="study-date-format" role="group" aria-label="Формат даты">
+                <span>Дата</span>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${form.dateFormat === 'short' ? '' : ' is-on'}`}
+                  onClick={() => setForm((prev) => ({ ...prev, dateFormat: 'iso' }))}
+                  title="В протоколе: 2026-09-25"
+                >
+                  2026-09-25
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${form.dateFormat === 'short' ? ' is-on' : ''}`}
+                  onClick={() => setForm((prev) => ({ ...prev, dateFormat: 'short' }))}
+                  title="В протоколе: 25.09.26"
+                >
+                  25.09.26
+                </button>
+              </div>
               <div className="study-template-chips">
                 <button
                   type="button"
@@ -1325,15 +1389,17 @@ export default function StudiesTab() {
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
                   const token = `{${key}}`
+                  const line = autoFieldLine(f.label, key)
+                  const payload = line && !(form.template || '').includes(token) ? line : token
                   return (
                     <button
                       type="button"
                       key={`${key}-${idx}`}
                       className="study-template-chip"
                       draggable
-                      onDragStart={(e) => onChipDragStart(e, token)}
-                      onClick={() => insertToken(token)}
-                      title="Перетащи в шаблон или нажми"
+                      onDragStart={(e) => onChipDragStart(e, payload)}
+                      onClick={() => insertToken(payload)}
+                      title={payload === line ? 'Вставить название и тег' : 'Вставить тег в место курсора'}
                     >
                       {f.label} {token}
                     </button>
@@ -1341,7 +1407,7 @@ export default function StudiesTab() {
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                Нажми тег или перетащи его в текст шаблона. Выдели фрагмент и нажми Ж, К или список.
+                Строка «название - {'{тег}'}» уже в тексте, её можно править. Чип вставляет тег в курсор, если строки ещё нет — всю строку.
               </p>
 
               <div className="study-template-format">
@@ -1351,9 +1417,12 @@ export default function StudiesTab() {
               </div>
               <AutoResizeTextarea
                 textareaRef={templateRef}
-                placeholder="Шаблон текста, напр. «УЗИ почек от {date}: правая почка — {rightSize} мм...»"
+                placeholder="Chlamydia trachomatis - {chlamydia_trachomatis}"
                 value={form.template}
-                onChange={(e) => setForm({ ...form, template: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
+                }}
               />
               </div>
               </div>
@@ -1361,7 +1430,10 @@ export default function StudiesTab() {
               <AutoResizeTextarea
                 placeholder="Шпаргалка с нормами (текстом, показывается по кнопке «ℹ️ Нормы» на приёме)"
                 value={form.referenceNotes}
-                onChange={(e) => setForm({ ...form, referenceNotes: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setForm((prev) => ({ ...prev, referenceNotes: value }))
+                }}
               />
 
               <div className="drug-form-actions">

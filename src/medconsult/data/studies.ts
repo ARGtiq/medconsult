@@ -694,6 +694,32 @@ export type Deviation = {
   date?: string;
 };
 
+export function formatStudyDate(iso: string | undefined | null, format?: string | null): string {
+  const raw = String(iso || "").trim();
+  if (!raw) return "—";
+  if (format !== "short") return raw;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) return raw;
+  return `${m[3]}.${m[2]}.${m[1].slice(-2)}`;
+}
+
+function composeStudyDate(
+  current: string | undefined,
+  previous: string | undefined,
+  format?: string | null,
+): string {
+  const cur = current ? formatStudyDate(current, format) : "—";
+  if (previous && previous !== current) return `${cur} (ранее ${formatStudyDate(previous, format)})`;
+  return cur;
+}
+
+function useLabTemplate(def: StudyDef): boolean {
+  const text = (def.template || "").trim();
+  if (!text) return false;
+  if (!STUDIES.some((s) => s.key === def.key)) return true;
+  return def.templateEdited === true;
+}
+
 function prettyDate(iso?: string) {
   if (!iso) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -808,10 +834,7 @@ export function fillStudyTemplate(
   const seeded = applyConditionalDefaults(def, instance.fields);
   const fields = applyComputed(def, seeded);
   const prevFields = previous ? applyComputed(def, previous.fields) : undefined;
-  const date =
-    previous?.date && previous.date !== instance.date
-      ? `${instance.date || "—"} (ранее ${previous.date})`
-      : instance.date || "—";
+  const date = composeStudyDate(instance.date, previous?.date, def.dateFormat);
   const omit = new Set(instance.omit || []);
   const visible = def.fields.filter((f) => !omit.has(f.key));
 
@@ -846,7 +869,7 @@ export function fillStudyTemplate(
     return `${prefix} от ${date}: ${bits.join("; ")}.`;
   }
 
-  if (def.sparse || def.category === "lab") {
+  if ((def.sparse || def.category === "lab") && !useLabTemplate(def)) {
     const bits: string[] = [];
     for (const f of visible) {
       if (!fieldShown(f, fields)) continue;
