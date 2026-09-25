@@ -1606,6 +1606,26 @@
   line-height: 1.3;
 }
 .legacy-surface .study-template-chip:active { cursor: grabbing; }
+.legacy-surface .study-template-chip.is-auto {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border-radius: 8px;
+  cursor: pointer;
+  max-width: 220px;
+  text-align: left;
+}
+.legacy-surface .study-template-chip.is-auto code {
+  font-size: 12px;
+  font-weight: 650;
+}
+.legacy-surface .study-template-chip.is-auto span {
+  font-size: 10px;
+  line-height: 1.25;
+  font-weight: 500;
+  opacity: 0.85;
+}
 .legacy-surface .study-template-chips-hint { margin: 0 0 4px; }
 .legacy-surface .study-protocol-text {
   width: 100%;

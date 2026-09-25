@@ -826,6 +826,43 @@ export function formatDeviations(list: Deviation[]) {
     .join(". ");
 }
 
+function filledFieldBit(
+  f: StudyField,
+  fields: Record<string, string>,
+  prevFields?: Record<string, string>,
+): { label: string; shown: string } | null {
+  const v = (fields[f.key] || "").trim();
+  if (!v) return null;
+  const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+  const unit = f.unit ? ` ${f.unit}` : "";
+  const shown = p && p !== v ? `${v}${unit} (${p})` : `${v}${unit}`;
+  return { label: f.label, shown };
+}
+
+/** `{name}` `{summary}` `{lines}` `{abnormal}` — unless a field already owns that key. */
+function studyAutoTag(
+  tag: string,
+  def: StudyDef,
+  fields: Record<string, string>,
+  prevFields: Record<string, string> | undefined,
+  omit: Set<string>,
+): string | null {
+  if (def.fields.some((f) => f.key === tag)) return null;
+  if (tag === "name") return def.label;
+  if (tag !== "summary" && tag !== "lines" && tag !== "abnormal") return null;
+  const bits: { label: string; shown: string }[] = [];
+  for (const f of def.fields) {
+    if (omit.has(f.key) || !fieldShown(f, fields)) continue;
+    const v = (fields[f.key] || "").trim();
+    if (!v) continue;
+    if (tag === "abnormal" && !fieldAbnormal(v, f.normal, f, fields)) continue;
+    const bit = filledFieldBit(f, fields, prevFields);
+    if (bit) bits.push(bit);
+  }
+  if (tag === "lines") return bits.map((b) => `${b.label} - ${b.shown}`).join("\n");
+  return bits.map((b) => `${b.label} ${b.shown}`).join(", ");
+}
+
 export function fillStudyTemplate(
   def: StudyDef,
   instance: { date: string; fields: Record<string, string>; omit?: string[] },
@@ -891,6 +928,12 @@ export function fillStudyTemplate(
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
     const replacement = omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
     text = text.replaceAll(`{${f.key}}`, replacement);
+  }
+  for (const tag of ["name", "summary", "lines", "abnormal"]) {
+    if (!text.includes(`{${tag}}`)) continue;
+    const value = studyAutoTag(tag, def, fields, prevFields, omit);
+    if (value == null) continue;
+    text = text.replaceAll(`{${tag}}`, value);
   }
   for (const f of def.fields) {
     if (!f.showIf?.field || !fieldShown(f, fields) || omit.has(f.key)) continue;

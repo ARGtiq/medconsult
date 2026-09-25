@@ -311,7 +311,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = fieldAbnormal(value, f.normal, f, fields);
                   const omitted = (inst.omit || []).includes(f.key);
-                  const pickable = (def.category === "lab" || def.sparse) && !f.computed;
+                  const pickable = !f.computed;
                   const wide = f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
                   const share =
                     f.refOf && f.refOfMode !== "value" && !f.computed
@@ -375,9 +375,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 })}
               </div>
               )}
-              {def.category === "lab" && (
-                <p className="mt-1 text-[10px] text-mute">В протокол — только заполненные. Клик по названию пункта — не вставлять.</p>
-              )}
+              <p className="mt-1 text-[10px] text-mute">Клик по названию пункта скрывает его из протокола. Ещё раз — вернуть.</p>
               {def.referenceNotes && (
                 <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>
               )}

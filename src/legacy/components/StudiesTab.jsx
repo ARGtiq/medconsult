@@ -16,6 +16,14 @@ const KIND_OPTIONS = [
   { value: 'formula', label: 'формула' },
 ]
 
+const AUTO_TAGS = [
+  { token: '{date}', hint: 'дата в выбранном формате' },
+  { token: '{name}', hint: 'название исследования' },
+  { token: '{summary}', hint: 'все заполненные пункты в одну строку' },
+  { token: '{lines}', hint: 'каждый пункт с новой строки: название - значение' },
+  { token: '{abnormal}', hint: 'только пункты вне нормы' },
+]
+
 const REF_OPS = [
   { value: '', label: '—' },
   { value: 'lt', label: '<' },
@@ -873,7 +881,8 @@ export default function StudiesTab() {
         Список исследований и их шаблоны текста — общие для всех визитов с типом "Протокол исследований".
         Своё исследование с тем же ключом, что встроенное, переопределяет его. Предустановленные можно скрыть
         крестиком и вернуть из блока внизу. В шаблон само встаёт «название - {'{тег}'}»,
-        строку можно править. <code>{'{date}'}</code> — дата, формат задаётся у шаблона.
+        строку можно править. <code>{'{date}'}</code> — дата,
+        <code>{'{summary}'}</code> — заполненные пункты, <code>{'{abnormal}'}</code> — только вне нормы.
       </p>
 
       <button type="button" className="btn-primary" onClick={openNew}>
@@ -1376,16 +1385,20 @@ export default function StudiesTab() {
                 </button>
               </div>
               <div className="study-template-chips">
-                <button
-                  type="button"
-                  className="study-template-chip"
-                  draggable
-                  onDragStart={(e) => onChipDragStart(e, '{date}')}
-                  onClick={() => insertToken('{date}')}
-                  title="Перетащи в шаблон или нажми"
-                >
-                  {'{date}'}
-                </button>
+                {AUTO_TAGS.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag.token}
+                    className="study-template-chip is-auto"
+                    draggable
+                    onDragStart={(e) => onChipDragStart(e, tag.token)}
+                    onClick={() => insertToken(tag.token)}
+                    title={tag.hint}
+                  >
+                    <code>{tag.token}</code>
+                    <span>{tag.hint}</span>
+                  </button>
+                ))}
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
                   const token = `{${key}}`
@@ -1407,7 +1420,7 @@ export default function StudiesTab() {
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                Строка «название - {'{тег}'}» уже в тексте, её можно править. Чип вставляет тег в курсор, если строки ещё нет — всю строку.
+                {'{summary}'} собирает заполненные пункты. {'{lines}'} — то же, но каждый с новой строки как «название - значение». {'{abnormal}'} — только вне нормы. Строку «название - {'{тег}'}» можно править: чип вставляет тег в курсор, если строки ещё нет — всю строку.
               </p>
 
               <div className="study-template-format">
