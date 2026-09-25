@@ -83,7 +83,9 @@ export const BACKUP_SECTIONS: BackupSection[] = [
     keys: [
       "medconsult_ai_provider",
       "medconsult_openrouter_key",
+      "medconsult_openrouter_model",
       "medconsult_google_key",
+      "medconsult_google_model",
       "medconsult_supabase_url",
       "medconsult_supabase_anon_key",
       "medconsult_auto_sync_enabled",

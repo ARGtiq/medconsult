@@ -25,14 +25,22 @@ function _ss() {
 // Клиент для AI-вызовов. Поддерживает два провайдера на выбор:
 // - OpenRouter (унифицированный доступ к разным моделям, платный по токенам)
 // - Google AI Studio напрямую (свой ключ с ai.google.dev, у Gemini есть бесплатный лимит)
-// Оба используют модель Gemini. Ключи хранятся только в localStorage браузера.
+// Оба ходят в выбранную модель. Список моделей качается с сервера и лежит в localStorage.
 
 const PROVIDER_KEY = 'medconsult_ai_provider'
 const OPENROUTER_KEY = 'medconsult_openrouter_key'
 const GOOGLE_KEY = 'medconsult_google_key'
+const MODEL_KEYS = {
+  openrouter: 'medconsult_openrouter_model',
+  google: 'medconsult_google_model',
+}
+const CATALOG_KEY = 'medconsult_ai_model_catalog'
+const CATALOG_TTL = 24 * 60 * 60 * 1000
 
-const OPENROUTER_MODEL = 'google/gemini-2.5-flash'
-const GOOGLE_MODEL = 'gemini-2.5-flash'
+const DEFAULT_MODELS = {
+  openrouter: 'google/gemini-2.5-flash',
+  google: 'gemini-2.5-flash',
+}
 
 export function getProvider() {
   return _ls().getItem(PROVIDER_KEY) || 'openrouter'
@@ -56,6 +64,109 @@ export function hasApiKey() {
   return !!getApiKey()
 }
 
+export function getModel(provider = getProvider()) {
+  const saved = _ls().getItem(MODEL_KEYS[provider] || MODEL_KEYS.openrouter)
+  return (saved || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter).trim()
+}
+
+export function setModel(provider, value) {
+  const id = String(value || '').trim().replace(/^models\//, '')
+  if (!id) return
+  _ls().setItem(MODEL_KEYS[provider] || MODEL_KEYS.openrouter, id)
+}
+
+function readCatalog() {
+  try {
+    return JSON.parse(_ls().getItem(CATALOG_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+export function getModelCatalog(provider = getProvider()) {
+  const row = readCatalog()[provider] || {}
+  return {
+    at: row.at || 0,
+    models: Array.isArray(row.models) ? row.models : [],
+  }
+}
+
+function writeCatalog(provider, models) {
+  const all = readCatalog()
+  all[provider] = { at: Date.now(), models }
+  _ls().setItem(CATALOG_KEY, JSON.stringify(all))
+  return all[provider]
+}
+
+function slimModel(id, name) {
+  const clean = String(id || '').trim().replace(/^models\//, '')
+  if (!clean || clean.includes(':')) return null
+  if (/embed/i.test(clean)) return null
+  return { id: clean, name: String(name || clean).trim() || clean }
+}
+
+export async function refreshModels(provider = getProvider(), apiKey = getApiKey(provider)) {
+  const models = provider === 'google' ? await fetchGoogleModels(apiKey) : await fetchOpenRouterModels()
+  if (!models.length) throw new Error('Сервер вернул пустой список моделей')
+  return writeCatalog(provider, models)
+}
+
+async function fetchOpenRouterModels() {
+  const res = await fetch('https://openrouter.ai/api/v1/models')
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}`)
+  const data = await res.json()
+  const seen = new Set()
+  const list = []
+  for (const m of data.data || []) {
+    const out = m.architecture?.output_modalities || []
+    const modality = m.architecture?.modality || ''
+    if (!(out.includes('text') || /->text/.test(modality))) continue
+    const row = slimModel(m.id, m.name)
+    if (!row || seen.has(row.id)) continue
+    seen.add(row.id)
+    list.push(row)
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  return list
+}
+
+async function fetchGoogleModels(apiKey) {
+  if (!apiKey) throw new Error('Сначала сохрани ключ Google AI Studio')
+  const seen = new Set()
+  const list = []
+  let pageToken = ''
+  for (let i = 0; i < 6; i++) {
+    const url = new URL('https://generativelanguage.googleapis.com/v1beta/models')
+    url.searchParams.set('key', apiKey)
+    url.searchParams.set('pageSize', '100')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+    const res = await fetch(url)
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Google AI ${res.status}: ${text.slice(0, 160)}`)
+    }
+    const data = await res.json()
+    for (const m of data.models || []) {
+      const methods = m.supportedGenerationMethods || []
+      if (!methods.includes('generateContent')) continue
+      const row = slimModel(m.name, m.displayName)
+      if (!row || seen.has(row.id)) continue
+      seen.add(row.id)
+      list.push(row)
+    }
+    pageToken = data.nextPageToken || ''
+    if (!pageToken) break
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  return list
+}
+
+export function catalogIsStale(provider = getProvider()) {
+  const { at, models } = getModelCatalog(provider)
+  if (!models.length) return true
+  return Date.now() - at > CATALOG_TTL
+}
+
 async function callOpenRouterProvider(systemPrompt, userPrompt) {
   const apiKey = getApiKey('openrouter')
   if (!apiKey) throw new Error('Не задан ключ OpenRouter — добавь его в настройках сверху')
@@ -67,7 +178,7 @@ async function callOpenRouterProvider(systemPrompt, userPrompt) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model: getModel('openrouter'),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -89,7 +200,7 @@ async function callGoogleProvider(systemPrompt, userPrompt) {
   const apiKey = getApiKey('google')
   if (!apiKey) throw new Error('Не задан ключ Google AI Studio — добавь его в настройках сверху')
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${apiKey}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel('google'))}:generateContent?key=${apiKey}`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -126,7 +237,7 @@ export async function testAiConnection() {
   try {
     const result = await callAI('Ответь одним словом.', 'Скажи "ок".')
     const latency = Math.round(performance.now() - start)
-    return { ok: true, latency, provider: getProvider(), sample: result.slice(0, 60) }
+    return { ok: true, latency, provider: getProvider(), model: getModel(), sample: result.slice(0, 60) }
   } catch (e) {
     const latency = Math.round(performance.now() - start)
     return { ok: false, latency, provider: getProvider(), error: e.message }
