@@ -31,6 +31,39 @@ function splitMulti(value: string) {
     .filter(Boolean);
 }
 
+export function FitTextarea({
+  value,
+  onChange,
+  inputMode,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  inputMode?: "decimal" | "text" | "none";
+  placeholder?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      inputMode={inputMode === "none" ? undefined : inputMode}
+      onChange={(e) => onChange(e.target.value)}
+      className={`block w-full resize-none overflow-hidden break-words ${className || ""}`}
+    />
+  );
+}
+
 function FieldControl({
   f,
   value,
@@ -112,11 +145,11 @@ function FieldControl({
     );
   }
   return (
-    <input
+    <FitTextarea
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       inputMode={f.kind === "number" || f.unit ? "decimal" : "text"}
-      className="w-full bg-transparent text-sm font-semibold outline-none tabular-nums"
+      className="bg-transparent text-sm leading-snug font-semibold outline-none"
     />
   );
 }
@@ -208,6 +241,7 @@ function QuestionnaireControls({
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
   const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
   const selected = session.openSection === studyKey;
@@ -326,17 +360,19 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       : null;
                   const hint = formatRefHint(f);
                   const insert = f.computed ? "" : referenceInsertValue(f);
+                  const foldId = `${inst.id}:${f.key}`;
+                  const isFolded = !!folded[foldId];
                   return (
                     <div
                       key={f.key}
-                      className={`rounded-md px-1.5 py-1 ${wide ? "col-span-2 sm:col-span-3" : ""} ${
+                      className={`min-w-0 rounded-md px-1.5 py-1 ${wide ? "col-span-2 sm:col-span-3" : ""} ${
                         f.showIf ? "ml-3 border-l-2 border-line" : ""
                       } ${f.computed ? "bg-teal-soft" : omitted ? "bg-paper opacity-50" : bad ? "bg-danger-soft" : "bg-paper"}`}
                     >
-                      <span className="flex items-center justify-between gap-1">
+                      <span className="flex items-start justify-between gap-1">
                         <button
                           type="button"
-                          className={`block text-[10px] ${pickable ? "text-teal" : "text-mute"}`}
+                          className={`block min-w-0 flex-1 text-left text-[10px] ${pickable ? "text-teal" : "text-mute"}`}
                           title={pickable ? (omitted ? "не пойдёт в протокол — нажми, чтобы вставить" : "в протоколе · нажми, чтобы убрать") : undefined}
                           onClick={(e) => {
                             if (!pickable) return;
@@ -347,7 +383,22 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                           {f.label}
                           {pickable ? (omitted ? " · нет" : " · в текст") : f.computed ? " · формула" : ""}
                         </button>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[10px] text-mute"
+                          aria-expanded={!isFolded}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setFolded((prev) => ({ ...prev, [foldId]: !prev[foldId] }));
+                          }}
+                        >
+                          {isFolded ? "развернуть" : "свернуть"}
+                        </button>
                       </span>
+                      {isFolded ? (
+                        <p className="truncate text-xs font-semibold">{value || "—"}</p>
+                      ) : (
+                        <>
                       <FieldControl
                         f={f}
                         value={fields[f.key] || ""}
@@ -377,6 +428,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                           {previous?.date ? ` · ${previous.date}` : ""}
                         </span>
                       )}
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -388,7 +441,12 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
               )}
             </div>
           ))}
-          <button type="button" className="text-xs font-medium text-teal" onClick={() => addStudyInstance(studyKey)}>
+          <button
+            type="button"
+            className="text-xs font-medium text-teal"
+            title="Новая строка результата. Если есть прошлые значения — они копируются"
+            onClick={() => addStudyInstance(studyKey)}
+          >
             + предыдущее / ещё результат
           </button>
           <button type="button" className="ml-3 text-[11px] font-medium text-teal" onClick={asText}>
@@ -641,7 +699,10 @@ export function DeviationsSpoiler() {
               </div>
               <ul className="mt-0.5 space-y-0.5 text-xs leading-snug">
                 {g.items.map((d, i) => (
-                  <li key={`${d.label}-${i}`}>
+                  <li
+                    key={`${d.label}-${i}`}
+                    className={d.depth ? "ml-3 border-l border-warn-line pl-2" : undefined}
+                  >
                     {d.label}: {d.value}
                     {d.normal ? <span className="text-ink-soft"> · норма {d.normal}</span> : null}
                   </li>

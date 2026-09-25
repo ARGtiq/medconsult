@@ -7,6 +7,7 @@ import {
   STD_DOC_BLOCKS,
   type ComplaintTemplate,
   type DocKind,
+  type ObjectiveTemplate,
   type TemplatesState,
   type VitaePreset,
   type VisitPack,
@@ -89,7 +90,7 @@ function parseOptions(raw: string): ScaleItem["options"] {
 
 export function TemplatesEditor() {
   const [layer, setLayer] = useState<"blocks" | "packs">("blocks");
-  const [tab, setTab] = useState<"status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
+  const [tab, setTab] = useState<"objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
   const echo = useRef(false);
@@ -154,6 +155,7 @@ export function TemplatesEditor() {
           <div className="mb-3 flex flex-wrap gap-1">
             {(
               [
+                ["objective", "объективный статус"],
                 ["status", "локальный статус"],
                 ["complaints", "жалобы"],
                 ["chronic", "перенесённые"],
@@ -174,6 +176,9 @@ export function TemplatesEditor() {
               </button>
             ))}
           </div>
+          {tab === "objective" && (
+            <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
+          )}
           {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
           {tab === "complaints" && (
             <ComplaintDictEditor
@@ -677,6 +682,67 @@ function QuestionnaireEditor({
       ) : (
         <p className="text-xs text-mute">Пока нет анкет — нажми «+ анкета».</p>
       )}
+    </div>
+  );
+}
+
+function ObjectiveEditor({
+  items,
+  onChange,
+}: {
+  items: ObjectiveTemplate[];
+  onChange: (p: ObjectiveTemplate[]) => void;
+}) {
+  function patch(i: number, p: Partial<ObjectiveTemplate>) {
+    onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-soft">
+        Готовые тексты объективного статуса. На протоколе клик подставляет текст целиком, его можно сразу править. Пустые
+        коды МКБ — шаблон для любого диагноза.
+      </p>
+      {items.map((item, i) => (
+        <div key={item.id} className="rounded-lg border border-line bg-paper p-2">
+          <div className="flex gap-2">
+            <input
+              value={item.label}
+              onChange={(e) => patch(i, { label: e.target.value })}
+              placeholder="название"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+            />
+            <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+              ×
+            </button>
+          </div>
+          <div className="mt-1">
+            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+            <IcdCodesField
+              codes={item.codes || []}
+              onChange={(codes) => patch(i, { codes })}
+              placeholder="МКБ, если шаблон только для этого кода"
+            />
+          </div>
+          <textarea
+            value={item.text}
+            onChange={(e) => patch(i, { text: e.target.value })}
+            rows={3}
+            className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs"
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs font-medium text-teal"
+        onClick={() =>
+          onChange([
+            ...items,
+            { id: `obj_${Date.now().toString(36)}`, label: "новый", text: "Состояние удовлетворительное.", codes: [] },
+          ])
+        }
+      >
+        + шаблон статуса
+      </button>
     </div>
   );
 }

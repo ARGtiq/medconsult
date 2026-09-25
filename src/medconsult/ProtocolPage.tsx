@@ -9,7 +9,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
-import { packsForCodeLive, useTemplates } from "./data/templates";
+import { packsForCodeLive, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -32,7 +32,7 @@ import {
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
 import { collectDeviations } from "./data/studies";
-import { PlusStudyButton, StudyCard, DeviationsSpoiler } from "./StudyCard";
+import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 import type { SessionState } from "./types";
@@ -73,6 +73,18 @@ export function ProtocolPage() {
     () => packsForCodeLive(session.diagnosisCode),
     [session.diagnosisCode, templates.localPacks],
   );
+  const objectiveTemplates = useMemo(() => {
+    const code = session.diagnosisCode.trim().toUpperCase();
+    const prefix = code.split(".")[0];
+    const list = templates.objective || [];
+    const rank = (item: ObjectiveTemplate) => {
+      if (!code) return 1;
+      const codes = (item.codes || []).map((c) => c.toUpperCase());
+      if (!codes.length) return 1;
+      return codes.some((c) => c === code || c === prefix) ? 0 : 2;
+    };
+    return [...list].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label, "ru"));
+  }, [session.diagnosisCode, templates.objective]);
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();
   const codeHit = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
@@ -660,12 +672,59 @@ export function ProtocolPage() {
             onRemove={() => toggleBlock("status")}
             voice={(t) => setSession({ objective: session.objective ? `${session.objective} ${t}` : t })}
           >
-            <textarea
+            <div className="mb-2">
+              <div className="mb-1 text-[10px] tracking-wide text-mute uppercase">объективный статус</div>
+              <div className="flex flex-wrap gap-1">
+                {objectiveTemplates.map((tpl) => {
+                  const on = session.objective.trim() === tpl.text.trim();
+                  const code = session.diagnosisCode.trim().toUpperCase();
+                  const prefix = code.split(".")[0];
+                  const byIcd =
+                    !!code &&
+                    (tpl.codes || []).some((c) => {
+                      const u = c.toUpperCase();
+                      return u === code || u === prefix;
+                    });
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      title={tpl.text}
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        on ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+                      }`}
+                      onClick={() => setSession({ objective: tpl.text })}
+                    >
+                      {tpl.label}
+                      {byIcd ? " · мкб" : ""}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
+                  onClick={() => {
+                    const text = session.objective.trim();
+                    const label = text.split(/[.!?\n]/)[0]?.trim().slice(0, 42) || "свой";
+                    const res = addObjectiveTemplate(label, text);
+                    store.setToast(
+                      res === "added"
+                        ? "Шаблон объективного статуса сохранён"
+                        : res === "exists"
+                          ? "Такой текст уже есть в шаблонах"
+                          : "Сначала напишите текст статуса",
+                    );
+                  }}
+                >
+                  + в шаблоны
+                </button>
+              </div>
+            </div>
+            <FitTextarea
               value={session.objective}
-              onChange={(e) => setSession({ objective: e.target.value })}
-              rows={2}
-              className="mb-2 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              onChange={(v) => setSession({ objective: v })}
               placeholder="Объективный статус"
+              className="mb-2 rounded-md border border-line bg-paper px-2 py-1 text-sm outline-none"
             />
             {packs.map((p) => (
               <div key={p.id} className="mb-1">

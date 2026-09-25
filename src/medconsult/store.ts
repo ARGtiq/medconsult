@@ -3,7 +3,7 @@ import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
-import { applyComputed, applyConditionalDefaults } from "./data/studies";
+import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
@@ -460,14 +460,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   addStudyInstance(key) {
     const session = get().session;
-    const studies = session.studies.map((s) =>
-      s.key === key
-        ? { ...s, instances: [...s.instances, { id: uid("i"), date: todayISO(), fields: {} }] }
-        : s,
-    );
+    const def = getStudyLive(key);
+    let copied = false;
+    const studies = session.studies.map((s) => {
+      if (s.key !== key) return s;
+      const built = buildAddedInstance(s, {
+        copy: def?.category !== "questionnaire",
+        today: todayISO(),
+        id: uid("i"),
+      });
+      if (built.copied) copied = true;
+      return { ...s, instances: [...s.instances, built.instance] };
+    });
     const next = { ...session, studies };
     persistSession(next);
     set({ session: next });
+    if (copied) get().setToast("Скопировал предыдущие значения");
   },
 
   updateInstance(key, instanceId, fields, date) {

@@ -713,6 +713,8 @@ export type Deviation = {
   value: string;
   normal: string;
   date?: string;
+  /** Nesting of a conditional sub-item. 0 = root field. */
+  depth?: number;
 };
 
 export function formatStudyDate(iso: string | undefined | null, format?: string | null): string {
@@ -748,6 +750,48 @@ function prettyDate(iso?: string) {
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
+function fieldDepth(field: StudyField, byKey: Map<string, StudyField>): number {
+  let depth = 0;
+  let cur: StudyField | undefined = field;
+  const seen = new Set<string>();
+  while (cur?.showIf?.field && !seen.has(cur.key)) {
+    seen.add(cur.key);
+    depth += 1;
+    cur = byKey.get(cur.showIf.field);
+    if (depth > 8) break;
+  }
+  return depth;
+}
+
+function instanceHasValues(fields?: Record<string, string>) {
+  return Object.values(fields || {}).some((v) => String(v || "").trim());
+}
+
+/** Next «+ предыдущее / ещё результат» row. Copies the prior visit, or the last filled row. */
+export function buildAddedInstance(
+  entry: { instances: StudyInstance[]; previous?: StudyInstance },
+  opts: { copy: boolean; today: string; id: string },
+): { instance: StudyInstance; copied: boolean } {
+  const last = entry.instances[entry.instances.length - 1];
+  let source: StudyInstance | undefined;
+  if (opts.copy) {
+    if (entry.instances.length === 1 && entry.previous && instanceHasValues(entry.previous.fields)) {
+      source = entry.previous;
+    } else if (last && instanceHasValues(last.fields)) {
+      source = last;
+    }
+  }
+  const fromPrev = !!source && source === entry.previous;
+  return {
+    copied: !!source,
+    instance: {
+      id: opts.id,
+      date: source && fromPrev && source.date ? source.date : opts.today,
+      fields: source ? { ...source.fields } : {},
+      omit: source?.omit?.length ? [...source.omit] : undefined,
+    },
+  };
+}
 export function collectDeviations(
   studies: { key: string; instances: { date?: string; fields: Record<string, string> }[] }[],
   lookup: (key: string) => StudyDef | null | undefined,
@@ -757,9 +801,9 @@ export function collectDeviations(
     const def = lookup(entry.key);
     if (!def) continue;
     for (const inst of entry.instances || []) {
-      const fields = applyComputed(def, inst.fields || {});
       const date = prettyDate(inst.date);
       if (def.category === "questionnaire") {
+        const fields = applyComputed(def, inst.fields || {});
         const scale = scaleFromStudyKey(def.key, liveScales());
         const raw = (fields[scale?.totalKey || ""] || "").trim();
         const n = parseScore(raw);
@@ -778,20 +822,24 @@ export function collectDeviations(
         }
         continue;
       }
+      const byKey = new Map(def.fields.map((f) => [f.key, f]));
+      const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields || {}));
       for (const f of def.fields) {
         if (f.kind === "heading") continue;
         const val = (fields[f.key] || "").trim();
         if (!val || !fieldShown(f, fields)) continue;
-        if (fieldAbnormal(val, f.normal, f, fields)) {
-          out.push({
-            study: def.label,
-            studyKey: entry.key,
-            label: f.label,
-            value: f.unit ? `${val} ${f.unit}` : val,
-            normal: f.normal || "",
-            date,
-          });
-        }
+        const abnormal = fieldAbnormal(val, f.normal, f, fields);
+        const child = !!f.showIf?.field;
+        if (!abnormal && !child) continue;
+        out.push({
+          study: def.label,
+          studyKey: entry.key,
+          label: f.label,
+          value: f.unit ? `${val} ${f.unit}` : val,
+          normal: abnormal ? f.normal || "" : "",
+          date,
+          depth: fieldDepth(f, byKey),
+        });
       }
     }
   }

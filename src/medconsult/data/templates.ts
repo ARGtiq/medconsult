@@ -35,6 +35,14 @@ export type ComplaintTemplate = {
   options?: string[];
 };
 
+/** Named paragraph for the objective-status block. */
+export type ObjectiveTemplate = {
+  id: string;
+  label: string;
+  text: string;
+  codes?: string[];
+};
+
 export type TemplatesState = {
   localPacks: LocalPack[];
   chronic: VitaePreset[];
@@ -43,6 +51,7 @@ export type TemplatesState = {
   complaints: ComplaintTemplate[];
   visitPacks: VisitPack[];
   questionnaires: ScaleDef[];
+  objective: ObjectiveTemplate[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -146,6 +155,15 @@ export const SEED_VISIT_PACKS: VisitPack[] = [
   },
 ];
 
+export const SEED_OBJECTIVE: ObjectiveTemplate[] = [
+  { id: "obj_sat", label: "удовлетворительное", text: "Состояние удовлетворительное." },
+  {
+    id: "obj_exam",
+    label: "осмотр",
+    text: "Состояние удовлетворительное. Кожные покровы обычной окраски. Живот мягкий, безболезненный. Симптом поколачивания отрицательный с обеих сторон. Наружные половые органы без особенностей.",
+  },
+];
+
 export const seedTemplates = (): TemplatesState => ({
   localPacks: LOCAL_PACKS.map((p) => ({ ...p, chips: [...p.chips] })),
   chronic: SEED_CHRONIC.map((x) => ({ ...x })),
@@ -154,6 +172,7 @@ export const seedTemplates = (): TemplatesState => ({
   complaints: SEED_COMPLAINTS.map((c) => ({ text: c.text, options: c.options ? [...c.options] : undefined })),
   visitPacks: SEED_VISIT_PACKS.map((p) => ({ ...p, codes: [...p.codes], stdBlocks: [...p.stdBlocks], extraKinds: [...p.extraKinds], localPackIds: [...p.localPackIds] })),
   questionnaires: cloneScales(QUESTION_SCALES),
+  objective: SEED_OBJECTIVE.map((x) => ({ ...x, codes: x.codes ? [...x.codes] : [] })),
 });
 
 export function normalizeComplaint(raw: unknown): ComplaintTemplate | null {
@@ -200,6 +219,17 @@ function mergeQuestionnaires(saved: ScaleDef[], seed: ScaleDef[]): ScaleDef[] {
   });
 }
 
+function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { id?: unknown; label?: unknown; text?: unknown; codes?: unknown };
+  const text = typeof o.text === "string" ? o.text.trim() : "";
+  if (!text) return null;
+  const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : text.slice(0, 42);
+  const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : `obj_${label}`;
+  const codes = Array.isArray(o.codes) ? o.codes.map((c) => String(c).trim()).filter(Boolean) : [];
+  return { id, label, text, codes };
+}
+
 function read(): TemplatesState {
   const seed = seedTemplates();
   if (typeof window === "undefined") return seed;
@@ -218,6 +248,9 @@ function read(): TemplatesState {
         Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
           ? mergeQuestionnaires(parsed.questionnaires, seed.questionnaires)
           : seed.questionnaires,
+      objective: Array.isArray(parsed.objective)
+        ? (parsed.objective.map(normalizeObjective).filter(Boolean) as ObjectiveTemplate[])
+        : seed.objective,
     };
   } catch {
     return seed;
@@ -317,6 +350,22 @@ export function addLocalChipToCode(code: string, chip: string) {
   }
   if (!hit.chips.includes(text)) hit.chips.push(text);
   write({ ...t, localPacks: packs });
+}
+
+export function addObjectiveTemplate(label: string, text: string): "added" | "exists" | "empty" {
+  const body = text.trim();
+  if (!body) return "empty";
+  const state = read();
+  if (state.objective.some((x) => x.text.trim() === body)) return "exists";
+  const name = label.trim() || body.slice(0, 42);
+  write({
+    ...state,
+    objective: [
+      ...state.objective,
+      { id: `obj_${Date.now().toString(36)}`, label: name, text: body, codes: [] },
+    ],
+  });
+  return "added";
 }
 
 export function resetTemplates() {
