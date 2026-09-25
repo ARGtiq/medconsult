@@ -462,8 +462,31 @@ export function interpretScore(key: string, raw: string, scale?: ScaleDef) {
 }
 
 function parseNumLoose(s: string) {
-  const n = parseFloat(String(s).replace(",", ".").replace(/[^\d.+-]/g, ""));
+  const raw = String(s ?? "").trim();
+  if (!raw) return null;
+  const lastComma = raw.lastIndexOf(",");
+  const lastDot = raw.lastIndexOf(".");
+  let t = raw;
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decAt = Math.max(lastComma, lastDot);
+    const thousand = raw[decAt] === "," ? "." : ",";
+    t = raw.split(thousand).join("").replace(raw[decAt], ".");
+  } else {
+    t = raw.replace(",", ".");
+  }
+  t = t.replace(/\s/g, "").replace(/[^\d.+-]/g, "");
+  if (!t || t === "+" || t === "-" || t === "." || t === "+." || t === "-.") return null;
+  const n = parseFloat(t);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Up to 2 decimal places, Russian comma, trailing zeros dropped. */
+function formatFormulaNumber(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  const rounded = Math.round((n + Number.EPSILON) * 100) / 100;
+  if (Math.abs(rounded) < 1e-9) return "0";
+  const text = rounded.toFixed(2).replace(/\.?0+$/, "");
+  return text.replace(".", ",");
 }
 
 export function evalFormula(expr: string, fields: Record<string, string>): string {
@@ -479,14 +502,12 @@ export function evalFormula(expr: string, fields: Record<string, string>): strin
     s = s.replaceAll(`{${k}}`, n == null ? "NaN" : String(n));
   }
   s = s.replace(/\{[a-zA-Z0-9_]+\}/g, "NaN");
+  s = s.replace(/(\d),(\d)/g, "$1.$2");
   if (s.includes("NaN") || !/^[\d.eE\s+\-*/()]+$/.test(s)) return "";
   try {
     const v = Function(`"use strict"; return (${s})`)();
     if (typeof v !== "number" || !Number.isFinite(v)) return "";
-    const abs = Math.abs(v);
-    if (abs >= 100) return String(Math.round(v));
-    if (abs >= 10) return String(Math.round(v * 10) / 10);
-    return String(Math.round(v * 100) / 100);
+    return formatFormulaNumber(v);
   } catch {
     return "";
   }

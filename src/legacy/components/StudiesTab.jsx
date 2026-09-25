@@ -921,6 +921,7 @@ export default function StudiesTab() {
               <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
             </div>
             <form className="drug-form" onSubmit={save}>
+              <div className="study-editor-scroll">
               <div className="study-side-bar" role="group" aria-label="Где текст шаблона">
                 <span>Текст шаблона</span>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
@@ -1261,10 +1262,12 @@ export default function StudiesTab() {
                         <div className="study-field-formula">
                           <input
                             className="study-field-formula-input"
-                            placeholder="формула, напр. {residual}/{bladder}*100"
+                            placeholder="напр. {residual}/{bladder}*100 или {a}*{b}*0,52"
                             value={f.formula || ''}
                             onChange={(e) => updateField(idx, { formula: e.target.value, kind: 'formula' })}
+                            title="Десятичные: 12,5 и 12.5. Коэффициент можно писать как 0,52. Ответ с запятой, до сотых."
                           />
+                          <p className="settings-note-inline">12,5 и 12.5 считаются одинаково. В формуле можно 0,52. Результат с запятой, до двух знаков, нули в конце не пишутся.</p>
                           <div className="study-field-formula-chips">
                             {others.map((o) => (
                               <button
@@ -1485,7 +1488,8 @@ export default function StudiesTab() {
                 }}
               />
 
-              <div className="drug-form-actions">
+              </div>
+              <div className="drug-form-actions study-save-bar">
                 <button type="submit" className="btn-primary">Сохранить</button>
                 {form.key && builtinKeys.has(form.key) && (
                   <span className="settings-note-inline">Переопределяет встроенное исследование.</span>

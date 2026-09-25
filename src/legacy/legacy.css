@@ -3163,6 +3163,31 @@
 
 .legacy-surface .modal-box.study-editor-modal {
   max-width: min(820px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+.legacy-surface .modal-box.study-editor-modal > .drug-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(90vh - 78px);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.legacy-surface .study-editor-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding-right: 2px;
+}
+.legacy-surface .study-save-bar {
+  flex: 0 0 auto;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
 }
 .legacy-surface .study-field-hint { margin: 0 0 8px; }
 .legacy-surface .study-field-block.is-heading {
