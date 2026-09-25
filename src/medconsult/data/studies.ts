@@ -552,15 +552,47 @@ function isAbnormalVsRef(num: number, op: string, min?: number, max?: number): b
   }
 }
 
-/** True unless the field is a conditional sub-item whose parent value is not selected. */
+function numberInRule(raw: string, op: NonNullable<StudyField["showIf"]>["op"], num?: number, numMax?: number): boolean {
+  const n = parseNumLoose(raw);
+  if (n == null || !op || num == null) return false;
+  if (op === "lt") return n < num;
+  if (op === "lte") return n <= num;
+  if (op === "gt") return n > num;
+  if (op === "gte") return n >= num;
+  if (op === "eq") return n === num;
+  if (op === "range") return numMax != null && n >= num && n <= numMax;
+  return false;
+}
+
+/** True unless a conditional sub-item's parent value misses the chosen values or range. */
 export function fieldShown(field: StudyField, values: Record<string, string>): boolean {
   const rule = field.showIf;
-  if (!rule?.field || !rule.values?.length) return true;
-  const parts = String(values[rule.field] || "")
+  if (!rule?.field) return true;
+  const hasValues = !!rule.values?.length;
+  const hasOp = !!rule.op && rule.num != null && (rule.op !== "range" || rule.numMax != null);
+  if (!hasValues && !hasOp) return true;
+  const raw = String(values[rule.field] || "");
+  if (hasOp && numberInRule(raw, rule.op, rule.num, rule.numMax)) return true;
+  if (!hasValues) return false;
+  const parts = raw
     .split(/[,;/]+/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   return rule.values.some((v) => parts.includes(v.trim().toLowerCase()));
+}
+
+/** Fill an empty sub-item with its default phrase while the condition holds; clear that phrase when it does not. */
+export function applyConditionalDefaults(def: StudyDef, fields: Record<string, string>): Record<string, string> {
+  let next = fields;
+  for (const f of def.fields) {
+    const preset = (f.defaultValue || "").trim();
+    if (!preset || !f.showIf?.field) continue;
+    const shown = fieldShown(f, next);
+    const cur = (next[f.key] || "").trim();
+    if (shown && !cur) next = { ...next, [f.key]: preset };
+    else if (!shown && cur === preset) next = { ...next, [f.key]: "" };
+  }
+  return next;
 }
 
 /** Compare a filled value to structured ref and/or the `normal` hint. */
@@ -773,7 +805,8 @@ export function fillStudyTemplate(
   instance: { date: string; fields: Record<string, string>; omit?: string[] },
   previous?: StudyInstance,
 ) {
-  const fields = applyComputed(def, instance.fields);
+  const seeded = applyConditionalDefaults(def, instance.fields);
+  const fields = applyComputed(def, seeded);
   const prevFields = previous ? applyComputed(def, previous.fields) : undefined;
   const date =
     previous?.date && previous.date !== instance.date
@@ -835,6 +868,12 @@ export function fillStudyTemplate(
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
     const replacement = omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
     text = text.replaceAll(`{${f.key}}`, replacement);
+  }
+  for (const f of def.fields) {
+    if (!f.showIf?.field || !fieldShown(f, fields) || omit.has(f.key)) continue;
+    if (def.template.includes(`{${f.key}}`)) continue;
+    const phrase = (fields[f.key] || "").trim();
+    if (phrase) text = `${text} ${phrase}`;
   }
   return text
     .replace(/,\s*,/g, ",")

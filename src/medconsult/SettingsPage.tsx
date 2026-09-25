@@ -75,7 +75,10 @@ export function SettingsPage() {
             </p>
           </Card>
           <Card title="Сеанс станка">
-            <p className="mt-2 text-xs text-ink-soft">Протокол v2 + старые неймспейсы в одном файле.</p>
+            <p className="mt-2 text-xs text-ink-soft">
+              Полный архив: протокол, пациенты, шаблоны, справочники, МКБ, черновики и ключи. Выборочно — в блоке «Данные
+              приложения» ниже: отметьте разделы перед экспортом или импортом.
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -99,7 +102,10 @@ export function SettingsPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    file.text().then((raw) => useAppStore.getState().importData(raw));
+                    file.text().then((raw) => {
+                      const ok = useAppStore.getState().importData(raw);
+                      if (ok) window.location.reload();
+                    });
                   }}
                 />
               </label>

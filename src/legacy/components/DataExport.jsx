@@ -1,101 +1,142 @@
-import { useState } from 'react'
-import { store } from '../lib/store'
+import { useMemo, useState } from 'react'
+import { BACKUP_SECTIONS, REST_SECTION, exportBackup, importBackup, sectionHasData, sectionsInBackup } from '../../medconsult/data/backup'
 
-const NAMESPACE_LABELS = {
-  clinical: 'Пациенты и визиты',
-  reference: 'Шаблоны, клинреки, лекарства, группы',
-  workspace: 'Пресеты визитов',
-  system: 'Багрепорты, настройки шаблона по умолчанию',
+const ALL = [...BACKUP_SECTIONS.map((s) => s.id), REST_SECTION.id]
+
+function download(json, name) {
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+  localStorage.setItem('medconsult_last_backup', String(Date.now()))
 }
 
 export default function DataExport() {
-  const [nsOpen, setNsOpen] = useState(false)
+  const [picked, setPicked] = useState(/** @type {string[]} */ (ALL.filter((id) => id !== 'secrets')))
+  const [pending, setPending] = useState(/** @type {string | null} */ (null))
+  const [importPick, setImportPick] = useState(/** @type {string[]} */ ([]))
+  const filled = useMemo(() => {
+    /** @type {Record<string, boolean>} */
+    const map = {}
+    for (const s of [...BACKUP_SECTIONS, REST_SECTION]) map[s.id] = sectionHasData(s)
+    return map
+  }, [pending])
 
-  function downloadExport() {
-    const json = store.exportAll()
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `medconsult-export-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    localStorage.setItem('medconsult_last_backup', String(Date.now()))
+  function toggle(list, id, set) {
+    set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
   }
 
-  function downloadNamespace(ns) {
-    const json = store.exportNamespace(ns)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `medconsult-${ns}-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+  function saveSelected() {
+    if (!picked.length) return
+    download(exportBackup(picked), `medconsult-${new Date().toISOString().slice(0, 10)}.json`)
   }
 
-  function handleImportNamespace(ns, e) {
-    const file = e.target.files?.[0]
+  function saveAll() {
+    download(exportBackup(ALL), `medconsult-all-${new Date().toISOString().slice(0, 10)}.json`)
+  }
+
+  function readFile(file, onRaw) {
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        store.importNamespace(ns, reader.result)
-        window.location.reload()
-      } catch {
-        alert('Не удалось разобрать файл')
-      }
-    }
+    reader.onload = () => onRaw(String(reader.result || ''))
     reader.readAsText(file)
   }
 
-  function handleImport(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        store.importAll(reader.result)
-        window.location.reload()
-      } catch {
-        alert('Не удалось разобрать файл')
-      }
+  function stageImport(raw) {
+    const ids = sectionsInBackup(raw)
+    if (!ids.length) {
+      alert('В файле нет данных MedConsult')
+      return
     }
-    reader.readAsText(file)
+    setPending(raw)
+    setImportPick(ids)
   }
+
+  function applyImport() {
+    if (!pending || !importPick.length) return
+    try {
+      const ok = importBackup(pending, importPick)
+      if (!ok) {
+        alert('Не удалось разобрать файл')
+        return
+      }
+      window.location.reload()
+    } catch {
+      alert('Не удалось разобрать файл')
+    }
+  }
+
+  const sections = [...BACKUP_SECTIONS, REST_SECTION]
 
   return (
     <div className="data-export">
       <div className="data-export-row">
-        <button type="button" className="btn-secondary" onClick={downloadExport}>
-          Экспорт всех данных (JSON)
+        <button type="button" className="btn-secondary" onClick={saveAll}>
+          Экспорт всех данных
+        </button>
+        <button type="button" className="btn-secondary" onClick={saveSelected} disabled={!picked.length}>
+          Экспорт выбранного
         </button>
         <label className="btn-secondary file-label">
-          Импорт данных
-          <input type="file" accept="application/json" onChange={handleImport} hidden />
+          Импорт
+          <input
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => {
+              readFile(e.target.files?.[0], stageImport)
+              e.target.value = ''
+            }}
+          />
         </label>
       </div>
+      <p className="settings-note-inline">
+        В полный архив входит всё: протокол, пациенты, шаблоны приёма, исследования, лекарства, клинреки, МКБ, черновики, оформление и ключи.
+        Старые файлы экспорта тоже читаются. Отметьте разделы, если нужно забрать только часть.
+      </p>
+      <div className="data-export-namespaces">
+        {sections.map((s) => (
+          <label key={s.id} className="data-export-ns-row">
+            <span>
+              <input
+                type="checkbox"
+                checked={picked.includes(s.id)}
+                onChange={() => toggle(picked, s.id, setPicked)}
+              />{' '}
+              {s.label}
+              {filled[s.id] ? '' : ' · пусто'}
+              {s.hint ? <span className="settings-note-inline"> — {s.hint}</span> : null}
+            </span>
+          </label>
+        ))}
+      </div>
 
-      <button type="button" className="data-export-toggle" onClick={() => setNsOpen((v) => !v)}>
-        {nsOpen ? '▾' : '▸'} Выборочный экспорт/импорт по разделам
-      </button>
-
-      {nsOpen && (
+      {pending && (
         <div className="data-export-namespaces">
-          {store.getNamespaceNames().map((ns) => (
-            <div key={ns} className="data-export-ns-row">
-              <span>{NAMESPACE_LABELS[ns] || ns}</span>
-              <div className="data-export-ns-actions">
-                <button type="button" className="btn-secondary btn-small" onClick={() => downloadNamespace(ns)}>
-                  Экспорт
-                </button>
-                <label className="btn-secondary btn-small file-label">
-                  Импорт
-                  <input type="file" accept="application/json" onChange={(e) => handleImportNamespace(ns, e)} hidden />
-                </label>
-              </div>
-            </div>
+          <p className="settings-note-inline">В файле есть эти разделы. Снимите лишние и подтвердите импорт — страница перезагрузится.</p>
+          {sections.filter((s) => sectionsInBackup(pending).includes(s.id)).map((s) => (
+            <label key={s.id} className="data-export-ns-row">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={importPick.includes(s.id)}
+                  onChange={() => toggle(importPick, s.id, setImportPick)}
+                />{' '}
+                {s.label}
+              </span>
+            </label>
           ))}
+          <div className="data-export-row">
+            <button type="button" className="btn-primary btn-small" onClick={applyImport} disabled={!importPick.length}>
+              Импортировать выбранное
+            </button>
+            <button type="button" className="btn-secondary btn-small" onClick={() => setPending(null)}>
+              Отмена
+            </button>
+          </div>
         </div>
       )}
     </div>

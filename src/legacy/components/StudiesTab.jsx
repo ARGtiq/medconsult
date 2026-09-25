@@ -119,7 +119,15 @@ function toEditorField(f) {
     options: Array.isArray(f.options) ? [...f.options] : [],
     optionGroups: Array.isArray(f.optionGroups) ? f.optionGroups.map((g) => [...g]) : [],
     groupDrafts: [],
-    showIf: f.showIf?.field ? { field: f.showIf.field, values: [...(f.showIf.values || [])] } : null,
+    showIf: f.showIf?.field
+      ? {
+          field: f.showIf.field,
+          values: [...(f.showIf.values || [])],
+          op: f.showIf.op || '',
+          num: f.showIf.num ?? '',
+          numMax: f.showIf.numMax ?? '',
+        }
+      : null,
     optionDraft: '',
     formula: f.formula || '',
     computed: !!f.computed,
@@ -214,13 +222,73 @@ function serializeField(f) {
   if (normal) out.normal = normal
   const preset = (f.defaultValue || '').trim()
   if (preset) out.defaultValue = preset
-  if (f.showIf?.field && (f.showIf.values || []).filter(Boolean).length) {
-    out.showIf = {
-      field: String(f.showIf.field).trim(),
-      values: f.showIf.values.map((s) => String(s).trim()).filter(Boolean),
+  if (f.showIf?.field) {
+    const values = (f.showIf.values || []).map((s) => String(s).trim()).filter(Boolean)
+    const op = f.showIf.op || ''
+    const num = parseNum(f.showIf.num)
+    const numMax = parseNum(f.showIf.numMax)
+    const hasOp = op && num != null && (op !== 'range' || numMax != null)
+    if (values.length || hasOp) {
+      out.showIf = { field: String(f.showIf.field).trim(), values }
+      if (hasOp) {
+        out.showIf.op = op
+        out.showIf.num = num
+        if (op === 'range') out.showIf.numMax = numMax
+      }
     }
   }
   return out
+}
+
+function EditableOpt({ text, onRename, onRemove }) {
+  const [edit, setEdit] = useState(false)
+  const [draft, setDraft] = useState(text)
+  if (edit) {
+    return (
+      <input
+        autoFocus
+        className="study-field-opt-input"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            const next = draft.trim()
+            if (next && next !== text) onRename(next)
+            setEdit(false)
+          }
+          if (e.key === 'Escape') {
+            setDraft(text)
+            setEdit(false)
+          }
+        }}
+        onBlur={() => {
+          const next = draft.trim()
+          if (next && next !== text) onRename(next)
+          setEdit(false)
+        }}
+      />
+    )
+  }
+  return (
+    <span className="study-field-opt study-field-opt-edit">
+      <button type="button" className="study-field-opt-label" onClick={() => { setDraft(text); setEdit(true) }} title="Нажми, чтобы править">
+        {text}
+      </button>
+      <button type="button" className="study-field-opt-x" onClick={onRemove} title="Убрать">×</button>
+    </span>
+  )
+}
+
+function describeShow(rule) {
+  if (!rule?.field) return ''
+  const bits = []
+  if (rule.values?.length) bits.push(rule.values.join(' / '))
+  const op = { lt: '<', lte: '≤', gt: '>', gte: '≥', eq: '=', range: 'от' }
+  if (rule.op && rule.num !== '' && rule.num != null) {
+    bits.push(rule.op === 'range' ? `${rule.num}–${rule.numMax}` : `${op[rule.op] || ''}${rule.num}`)
+  }
+  return bits.join(' или ')
 }
 
 function splitOptions(raw) {
@@ -267,7 +335,23 @@ export default function StudiesTab() {
   const [formOpen, setFormOpen] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [reorder, setReorder] = useState(false)
+  const [templateSide, setTemplateSide] = useState(() => {
+    try {
+      return localStorage.getItem('medconsult_study_template_side') || 'right'
+    } catch {
+      return 'right'
+    }
+  })
   const [overField, setOverField] = useState(null)
+  const [dragKids, setDragKids] = useState([])
+  function pickSide(side) {
+    setTemplateSide(side)
+    try {
+      localStorage.setItem('medconsult_study_template_side', side)
+    } catch {
+      /* ignore */
+    }
+  }
   const templateRef = useRef(null)
   const dragFrom = useRef(null)
   useEscapeToClose(() => setFormOpen(false), formOpen)
@@ -353,14 +437,50 @@ export default function StudiesTab() {
     })
   }
 
+  function descendantIdxs(fields, parentIdx) {
+    const keys = new Set([fieldKeyOf(fields[parentIdx])].filter(Boolean))
+    const idxs = []
+    let grew = true
+    while (grew) {
+      grew = false
+      fields.forEach((f, i) => {
+        if (i === parentIdx || idxs.includes(i)) return
+        if (f.showIf?.field && keys.has(f.showIf.field)) {
+          idxs.push(i)
+          const k = fieldKeyOf(f)
+          if (k) keys.add(k)
+          grew = true
+        }
+      })
+    }
+    return idxs.sort((a, b) => a - b)
+  }
+
   function moveField(from, to) {
     if (from == null || from === to || from < 0 || to < 0) return
     setForm((prev) => {
-      if (from >= prev.fields.length || to >= prev.fields.length) return prev
-      const fields = [...prev.fields]
-      const [item] = fields.splice(from, 1)
-      fields.splice(to, 0, item)
-      return { ...prev, fields }
+      const fields = prev.fields
+      if (from >= fields.length || to >= fields.length) return prev
+      const moving = fields[from]
+      const kids = moving?.showIf?.field ? [] : descendantIdxs(fields, from)
+      const blockIdx = [from, ...kids]
+      const blockSet = new Set(blockIdx)
+      const block = blockIdx.slice().sort((a, b) => a - b).map((i) => fields[i])
+      const rest = fields.filter((_, i) => !blockSet.has(i))
+      let insertAt
+      if (blockSet.has(to)) {
+        const last = Math.max(...blockIdx)
+        const nextExternal = fields.findIndex((_, i) => i > last && !blockSet.has(i))
+        if (nextExternal < 0) return prev
+        insertAt = rest.indexOf(fields[nextExternal]) + 1
+      } else if (from < to) {
+        insertAt = rest.indexOf(fields[to]) + 1
+      } else {
+        insertAt = rest.indexOf(fields[to])
+      }
+      if (insertAt < 0) return prev
+      rest.splice(insertAt, 0, ...block)
+      return { ...prev, fields: rest }
     })
   }
 
@@ -369,14 +489,24 @@ export default function StudiesTab() {
       ...prev,
       fields: prev.fields.map((f, i) => {
         if (i !== idx) return f
-        if (f.kind === 'multi') {
-          const parts = String(f.normal || '')
+        if (f.kind === 'multi' || f.kind === 'groups') {
+          let parts = String(f.normal || '')
             .split(/[,;/|]+/)
             .map((s) => s.trim())
             .filter(Boolean)
           const has = parts.some((p) => p.toLowerCase() === opt.toLowerCase())
-          const next = has ? parts.filter((p) => p.toLowerCase() !== opt.toLowerCase()) : [...parts, opt]
-          return { ...f, normal: next.join(', ') }
+          if (has) parts = parts.filter((p) => p.toLowerCase() !== opt.toLowerCase())
+          else {
+            if (f.kind === 'groups') {
+              const group = (f.optionGroups || []).find((g) => g.some((o) => String(o).toLowerCase() === opt.toLowerCase()))
+              if (group) {
+                const siblings = new Set(group.map((o) => String(o).toLowerCase()))
+                parts = parts.filter((p) => !siblings.has(p.toLowerCase()))
+              }
+            }
+            parts = [...parts, opt]
+          }
+          return { ...f, normal: parts.join(', ') }
         }
         const cur = String(f.normal || '').trim()
         return { ...f, normal: cur.toLowerCase() === opt.toLowerCase() ? '' : opt }
@@ -402,6 +532,42 @@ export default function StudiesTab() {
   function removeOption(idx, oi) {
     const f = form.fields[idx]
     updateField(idx, { options: (f.options || []).filter((_, i) => i !== oi) })
+  }
+
+  function renameToken(prev, next) {
+    if (!prev || !next || prev === next) return
+    setForm((formNow) => ({
+      ...formNow,
+      fields: formNow.fields.map((f) => {
+        const options = (f.options || []).map((o) => (o === prev ? next : o))
+        const optionGroups = (f.optionGroups || []).map((g) => g.map((o) => (o === prev ? next : o)))
+        const normal = String(f.normal || '')
+          .split(/[,;/|]+/)
+          .map((s) => (s.trim() === prev ? next : s.trim()))
+          .filter(Boolean)
+          .join(', ')
+        const showIf = f.showIf?.values
+          ? { ...f.showIf, values: f.showIf.values.map((v) => (v === prev ? next : v)) }
+          : f.showIf
+        return { ...f, options, optionGroups, normal: f.normal ? normal : f.normal, showIf }
+      }),
+    }))
+  }
+
+  function renameOption(idx, oi, next) {
+    const prev = String(form.fields[idx]?.options?.[oi] || '')
+    const name = next.trim()
+    if (!name || name === prev) return
+    setForm((formNow) => ({
+      ...formNow,
+      fields: formNow.fields.map((f, i) => {
+        if (i !== idx) return f
+        const options = [...(f.options || [])]
+        options[oi] = name
+        return { ...f, options }
+      }),
+    }))
+    renameToken(prev, name)
   }
 
   function addGroup(idx) {
@@ -447,6 +613,22 @@ export default function StudiesTab() {
     updateField(idx, { optionGroups: groups })
   }
 
+  function renameGroupOpt(idx, gi, oi, next) {
+    const prev = String(form.fields[idx]?.optionGroups?.[gi]?.[oi] || '')
+    const name = next.trim()
+    if (!name || name === prev) return
+    setForm((formNow) => ({
+      ...formNow,
+      fields: formNow.fields.map((f, i) => {
+        if (i !== idx) return f
+        const optionGroups = (f.optionGroups || []).map((g) => [...g])
+        if (optionGroups[gi]) optionGroups[gi][oi] = name
+        return { ...f, optionGroups }
+      }),
+    }))
+    renameToken(prev, name)
+  }
+
   function parentChoices(fieldKey) {
     const parent = form.fields.find((x) => fieldKeyOf(x) === fieldKey)
     if (!parent) return []
@@ -459,7 +641,7 @@ export default function StudiesTab() {
     const cur = f.showIf?.values || []
     const has = cur.some((v) => v.toLowerCase() === opt.toLowerCase())
     const values = has ? cur.filter((v) => v.toLowerCase() !== opt.toLowerCase()) : [...cur, opt]
-    updateField(idx, { showIf: { field: f.showIf.field, values } })
+    updateField(idx, { showIf: { ...f.showIf, field: f.showIf.field, values } })
   }
 
   function addChild(idx) {
@@ -640,12 +822,18 @@ export default function StudiesTab() {
 
       {formOpen && (
         <div className="modal-overlay">
-          <div className="modal-box study-editor-modal">
+          <div className={`modal-box study-editor-modal${templateSide === 'below' ? '' : ' is-split'}`}>
             <div className="modal-header">
               <h3>{form.key ? `Редактировать: ${form.label}` : 'Новое исследование'}</h3>
               <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
             </div>
             <form className="drug-form" onSubmit={save}>
+              <div className="study-side-bar" role="group" aria-label="Где текст шаблона">
+                <span>Текст шаблона</span>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>справа</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
+              </div>
               <div className="drug-form-row">
                 <input
                   autoFocus
@@ -661,11 +849,14 @@ export default function StudiesTab() {
               </div>
               {validationError && <div className="ai-error">{validationError}</div>}
 
+              <div className={`study-editor-split is-${templateSide}`}>
+              <div className="study-editor-fields">
               <div className="scenarios-block">
                 <div className="scenarios-block-label">Пункты (название → тег-транскрипция)</div>
                 <p className="settings-note-inline study-field-hint">
                   Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
-                  «Подпункт» появляется на приёме только при выбранном значении. «Порядок» оставляет названия и даёт их перетаскивать.
+                  «Подпункт» появляется на приёме при значении или если число в диапазоне. Фраза из «по умолчанию» встанет сама.
+                  «Порядок» оставляет названия и даёт их перетаскивать.
                   В тексте шаблона: жирный, курсив, список.
                 </p>
                 {form.fields.map((f, idx) => {
@@ -674,14 +865,16 @@ export default function StudiesTab() {
                       <div
                         key={idx}
                         draggable
-                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}`}
+                        className={`study-field-block study-field-reorder${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${dragKids.includes(idx) ? ' is-with' : ''}`}
                         onDragStart={(e) => {
                           dragFrom.current = idx
+                          setDragKids(f.showIf?.field ? [] : descendantIdxs(form.fields, idx))
                           e.dataTransfer.effectAllowed = 'move'
                           e.dataTransfer.setData('text/plain', String(idx))
                         }}
                         onDragEnd={() => {
                           dragFrom.current = null
+                          setDragKids([])
                           setOverField(null)
                         }}
                         onDragOver={(e) => {
@@ -696,7 +889,7 @@ export default function StudiesTab() {
                         }}
                       >
                         {f.label || 'без названия'}
-                        {f.showIf?.field ? <span className="study-field-reorder-if"> · если {f.showIf.values?.join(' / ') || f.showIf.field}</span> : null}
+                        {f.showIf?.field ? <span className="study-field-reorder-if"> · если {describeShow(f.showIf) || f.showIf.field}</span> : null}
                       </div>
                     )
                   }
@@ -713,7 +906,6 @@ export default function StudiesTab() {
                       key={idx}
                       className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}`}
                       onDragOver={(e) => {
-                        if (!reorder) return
                         e.preventDefault()
                         setOverField(idx)
                       }}
@@ -725,24 +917,24 @@ export default function StudiesTab() {
                       }}
                     >
                       <div className="study-field-editor-row">
-                        {reorder ? (
-                          <span
-                            className="study-field-grip"
-                            draggable
-                            title="Перетащи"
-                            onDragStart={(e) => {
-                              dragFrom.current = idx
-                              e.dataTransfer.effectAllowed = 'move'
-                              e.dataTransfer.setData('text/plain', String(idx))
-                            }}
-                            onDragEnd={() => {
-                              dragFrom.current = null
-                              setOverField(null)
-                            }}
-                          >
-                            ⋮⋮
-                          </span>
-                        ) : null}
+                        <span
+                          className="study-field-grip"
+                          draggable
+                          title="Перетащи. Подпункты едут вместе с пунктом, сам подпункт — отдельно"
+                          onDragStart={(e) => {
+                            dragFrom.current = idx
+                            setDragKids(f.showIf?.field ? [] : descendantIdxs(form.fields, idx))
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', String(idx))
+                          }}
+                          onDragEnd={() => {
+                            dragFrom.current = null
+                            setDragKids([])
+                            setOverField(null)
+                          }}
+                        >
+                          ⋮⋮
+                        </span>
                         <input placeholder="название" value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
                         <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
                         <input
@@ -774,7 +966,13 @@ export default function StudiesTab() {
                             const field = e.target.value
                             updateField(idx, {
                               showIf: field
-                                ? { field, values: f.showIf?.field === field ? (f.showIf.values || []) : [] }
+                                ? {
+                                    field,
+                                    values: f.showIf?.field === field ? (f.showIf.values || []) : [],
+                                    op: f.showIf?.op || '',
+                                    num: f.showIf?.field === field ? f.showIf.num : '',
+                                    numMax: f.showIf?.field === field ? f.showIf.numMax : '',
+                                  }
                                 : null,
                             })
                           }}
@@ -805,24 +1003,56 @@ export default function StudiesTab() {
                               className="study-field-opt-input"
                               placeholder="значение, при котором виден"
                               value={(f.showIf.values || []).join(', ')}
-                              onChange={(e) => updateField(idx, { showIf: { field: f.showIf.field, values: splitOptions(e.target.value) } })}
+                              onChange={(e) => updateField(idx, { showIf: { ...f.showIf, values: splitOptions(e.target.value) } })}
                             />
                           )
+                        ) : null}
+                        {f.showIf?.field ? (
+                          <>
+                            <select
+                              value={f.showIf.op || ''}
+                              onChange={(e) => updateField(idx, { showIf: { ...f.showIf, op: e.target.value } })}
+                              title="Сравнение с числом"
+                            >
+                              <option value="">без числа</option>
+                              <option value="lt">менее</option>
+                              <option value="lte">не более</option>
+                              <option value="gt">более</option>
+                              <option value="gte">не менее</option>
+                              <option value="eq">равно</option>
+                              <option value="range">от и до</option>
+                            </select>
+                            {f.showIf.op ? (
+                              <input
+                                className="study-field-opt-input"
+                                inputMode="decimal"
+                                placeholder={f.showIf.op === 'range' ? 'от' : '120'}
+                                value={f.showIf.num ?? ''}
+                                onChange={(e) => updateField(idx, { showIf: { ...f.showIf, num: e.target.value } })}
+                              />
+                            ) : null}
+                            {f.showIf.op === 'range' ? (
+                              <input
+                                className="study-field-opt-input"
+                                inputMode="decimal"
+                                placeholder="до"
+                                value={f.showIf.numMax ?? ''}
+                                onChange={(e) => updateField(idx, { showIf: { ...f.showIf, numMax: e.target.value } })}
+                              />
+                            ) : null}
+                          </>
                         ) : null}
                       </div>
 
                       {(f.kind === 'select' || f.kind === 'multi') && (
                         <div className="study-field-options">
                           {(f.options || []).map((opt, oi) => (
-                            <button
-                              type="button"
+                            <EditableOpt
                               key={`${opt}-${oi}`}
-                              className="study-field-opt"
-                              onClick={() => removeOption(idx, oi)}
-                              title="Убрать вариант"
-                            >
-                              {opt} ×
-                            </button>
+                              text={opt}
+                              onRename={(next) => renameOption(idx, oi, next)}
+                              onRemove={() => removeOption(idx, oi)}
+                            />
                           ))}
                           <input
                             className="study-field-opt-input"
@@ -847,16 +1077,15 @@ export default function StudiesTab() {
                           <p className="settings-note-inline">В одной строке варианты исключают друг друга. Следующая строка — другая пара.</p>
                           {(f.optionGroups || []).map((group, gi) => (
                             <div key={gi} className="study-field-group">
+                              <div className="study-field-group-line">
                               <span className="study-field-ref-label">или</span>
                               {group.filter(Boolean).map((opt, oi) => (
-                                <button
-                                  type="button"
+                                <EditableOpt
                                   key={`${opt}-${oi}`}
-                                  className="study-field-opt"
-                                  onClick={() => removeGroupOpt(idx, gi, oi)}
-                                >
-                                  {opt} ×
-                                </button>
+                                  text={opt}
+                                  onRename={(next) => renameGroupOpt(idx, gi, oi, next)}
+                                  onRemove={() => removeGroupOpt(idx, gi, oi)}
+                                />
                               ))}
                               <input
                                 className="study-field-opt-input"
@@ -874,13 +1103,33 @@ export default function StudiesTab() {
                                 }}
                               />
                               <button type="button" className="remove-btn" onClick={() => removeGroup(idx, gi)} title="Убрать пару">×</button>
+                              </div>
+                              {group.filter(Boolean).length > 0 && (
+                                <div className="study-field-ref-row">
+                                  <span className="study-field-ref-label">норма</span>
+                                  {group.filter(Boolean).map((opt) => {
+                                    const on = refParts.includes(String(opt).trim().toLowerCase())
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={`ref-${opt}`}
+                                        className={`study-field-opt${on ? ' is-ref' : ''}`}
+                                        onClick={() => toggleRef(idx, opt)}
+                                        title={on ? 'Это норма — нажми, чтобы снять' : 'Клик — отметить как норму'}
+                                      >
+                                        {opt}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
                             </div>
                           ))}
                           <button type="button" className="btn-secondary btn-small" onClick={() => addGroup(idx)}>+ пара</button>
                         </div>
                       )}
 
-                      {(f.kind === 'select' || f.kind === 'multi') && (f.options || []).length > 0 && (
+                      {(f.kind === 'select' || f.kind === 'multi') && (f.options || []).length > 0 ? (
                         <div className="study-field-ref-row">
                           <span className="study-field-ref-label">референс</span>
                           {(f.options || []).map((opt) => {
@@ -898,7 +1147,7 @@ export default function StudiesTab() {
                             )
                           })}
                         </div>
-                      )}
+                      ) : null}
 
                       {f.kind === 'formula' && (
                         <div className="study-field-formula">
@@ -1017,7 +1266,11 @@ export default function StudiesTab() {
                       />
                       <input
                         className="study-field-normal"
-                        placeholder="значение по умолчанию — клик по референсу на приёме"
+                        placeholder={
+                          f.showIf?.field
+                            ? 'фраза, которая сама встанет в протокол, когда условие выполнено'
+                            : 'значение по умолчанию — клик по референсу на приёме'
+                        }
                         value={f.defaultValue || ''}
                         onChange={(e) => updateField(idx, { defaultValue: e.target.value })}
                       />
@@ -1029,7 +1282,14 @@ export default function StudiesTab() {
                   {reorder ? 'порядок включён' : 'порядок'}
                 </button>
               </div>
+              </div>
 
+              <div className="study-template-pane">
+              <div className="study-template-side">
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>текст слева</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>текст справа</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
+              </div>
               <div className="study-template-chips">
                 <button
                   type="button"
@@ -1074,6 +1334,8 @@ export default function StudiesTab() {
                 value={form.template}
                 onChange={(e) => setForm({ ...form, template: e.target.value })}
               />
+              </div>
+              </div>
 
               <AutoResizeTextarea
                 placeholder="Шпаргалка с нормами (текстом, показывается по кнопке «ℹ️ Нормы» на приёме)"

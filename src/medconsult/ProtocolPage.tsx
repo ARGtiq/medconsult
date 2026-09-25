@@ -27,6 +27,7 @@ import {
   searchDrugs,
   findStudyByChip,
   getStudyLive,
+  studyDrugHints,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
@@ -34,6 +35,7 @@ import { collectDeviations } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
+import type { SessionState } from "./types";
 
 const SPLIT_MIN = 22;
 const SPLIT_MAX = 70;
@@ -54,6 +56,7 @@ export function ProtocolPage() {
   const [ixText, setIxText] = useState<string | null>(null);
   const [ixBusy, setIxBusy] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
+  const [hubTab, setHubTab] = useState<"complaints" | "diagnosis" | "studies" | "recs" | "sheet">("diagnosis");
   const [complaintQ, setComplaintQ] = useState("");
   const [dictOpen, setDictOpen] = useState(false);
   const [optMenu, setOptMenu] = useState<OptionMenuState | null>(null);
@@ -72,11 +75,13 @@ export function ProtocolPage() {
   );
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();
+  const codeHit = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
   const fromPractice = learnedDrugs(session.complaints, session.diagnosisCode);
   const work = workKindOf(session);
   const consult = session.mode === "consult" || session.mode === "consult_study";
   const documentMode = session.mode === "document";
   const want = (id: string) => consult || (documentMode && (session.docStd || []).includes(id));
+  const showRecs = consult || want("recommendations");
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
   const blocks = useMemo(
     () => composeBlocks(session, patient, { deviations: settings.studyDeviations !== false }),
@@ -215,6 +220,36 @@ export function ProtocolPage() {
     else addRecommendation(item);
   };
 
+  const pickScenario = (name: string) => {
+    setSession({
+      scenario: session.scenario === name ? null : name,
+      guidelineId: guideline?.id || session.guidelineId,
+    });
+  };
+
+  const klinrekPanel = (
+    slice: "complaints" | "diagnosis" | "studies" | "recs" | "sheet",
+    bare?: boolean,
+  ) => (
+    <GuidelinePanel
+      diagnosisText={diagnosisText}
+      slice={slice}
+      scenario={session.scenario}
+      onPickScenario={pickScenario}
+      onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
+      onInsertClassificationLine={(line: string) =>
+        setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
+      }
+      onInsertComplaint={toggleComplaint}
+      onInsertInvestigation={insertInvestigation}
+      onInsertPlain={(text: string) => addRecommendation(text)}
+      onInsertDrug={insertDrug}
+      onInsertQuestionnaire={(key: string) => addStudy(key)}
+      addedStudyKeys={session.studies.map((s) => s.key)}
+      sheetBare={bare}
+    />
+  );
+
   function setWork(kind: "primary" | "followup" | "study" | "document") {
     if (kind === "primary") {
       setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
@@ -347,12 +382,26 @@ export function ProtocolPage() {
           list="icd-list"
           value={session.diagnosisCode}
           onChange={(e) => {
-            const hit = icd.find((i) => i.code === e.target.value);
-            setSession({ diagnosisCode: e.target.value, diagnosisTitle: hit?.title || session.diagnosisTitle });
+            const raw = e.target.value.trim();
+            const hit = icd.find((i) => i.code.toUpperCase() === raw.toUpperCase());
+            const prev = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
+            const title = session.diagnosisTitle.trim();
+            const keepCustom = !!title && title !== (prev?.title || "");
+            setSession({
+              diagnosisCode: hit ? hit.code : e.target.value,
+              diagnosisTitle: hit && !keepCustom ? hit.title : session.diagnosisTitle,
+            });
           }}
-          className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
           placeholder="Код МКБ"
         />
+        {codeHit ? (
+          <p className="mt-1 mb-1 text-xs leading-snug text-ink-soft">
+            <span className="font-medium text-ink">{codeHit.code}</span> — {codeHit.title}
+          </p>
+        ) : (
+          <div className="mb-1" />
+        )}
         <datalist id="icd-list">
           {icd.slice(0, 400).map((i) => (
             <option key={i.code} value={i.code}>
@@ -371,75 +420,22 @@ export function ProtocolPage() {
           placeholder="Формулировка диагноза"
         />
         {session.diagnosisCode && hubMode === "block" && (
-          <div className="legacy-surface mt-2">
-            <GuidelinePanel
-              diagnosisText={diagnosisText}
-              mode="diagnosis"
-              onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
-              onInsertClassificationLine={(line: string) =>
-                setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
-              }
-              onInsertComplaint={toggleComplaint}
-              onInsertInvestigation={insertInvestigation}
-              onInsertDrug={insertDrug}
-              onInsertQuestionnaire={(key: string) => addStudy(key)}
-              addedStudyKeys={session.studies.map((s) => s.key)}
-            />
+          <div className="legacy-surface klinrek-slot mt-2 space-y-2">
+            {klinrekPanel("diagnosis")}
+            {klinrekPanel("sheet")}
           </div>
         )}
       </Sec>
-      )}
-
-      {hubMode === "block" && guideline && !documentMode && (
-        <div className="rounded-[10px] border border-line bg-surface px-2.5 py-2">
-          <div className="flex items-center justify-between text-sm">
-            <div>
-              <span className="font-medium">Клинрек {guideline.title}</span>
-              {guideline.scenarios.length > 0 && (
-                <span className="ml-2 rounded bg-teal-soft px-1.5 text-[11px] font-semibold text-teal">есть сценарии</span>
-              )}
-            </div>
-            <span className="text-[11px] text-mute">не обязательно</span>
-          </div>
-          {guideline.scenarios.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {guideline.scenarios.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSession({ scenario: s, guidelineId: guideline.id })}
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    session.scenario === s ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {guideline.recs.map((r) => (
-              <button
-                key={r}
-                type="button"
-                className="rounded-full border border-dashed border-teal/40 px-2 py-0.5 text-xs text-teal"
-                onClick={() => addRecommendation(r)}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {hubMode === "modal" && guideline && !documentMode && (
         <>
           <button
             type="button"
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm"
             onClick={() => setHubOpen(true)}
           >
-            Клинрек {guideline.title} — открыть окно
+            Клинрек {guideline.title}
           </button>
           {hubOpen && (
             <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4" onClick={() => setHubOpen(false)}>
@@ -447,19 +443,30 @@ export function ProtocolPage() {
                 className="legacy-surface max-h-[80vh] w-full max-w-lg overflow-auto rounded-xl bg-surface p-4"
                 onClick={(e) => e.stopPropagation()}
               >
-                <GuidelinePanel
-                  diagnosisText={diagnosisText}
-                  mode="drugs"
-                  onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
-                  onInsertClassificationLine={(line: string) =>
-                    setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
-                  }
-                  onInsertComplaint={toggleComplaint}
-                  onInsertInvestigation={insertInvestigation}
-                  onInsertDrug={insertDrug}
-                  onInsertQuestionnaire={(key: string) => addStudy(key)}
-              addedStudyKeys={session.studies.map((s) => s.key)}
-                />
+                <div className="mb-2 text-sm font-medium">Клинрек {guideline.title}</div>
+                <div className="mb-3 flex flex-wrap gap-1">
+                  {(
+                    [
+                      ["complaints", "Жалобы"],
+                      ["diagnosis", "Диагноз"],
+                      ["studies", "Обследования"],
+                      ["recs", "Назначения"],
+                      ["sheet", "Шпаргалка"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        hubTab === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+                      }`}
+                      onClick={() => setHubTab(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {klinrekPanel(hubTab, hubTab === "sheet")}
                 <button type="button" className="mt-4 text-sm text-mute" onClick={() => setHubOpen(false)}>
                   Закрыть
                 </button>
@@ -558,22 +565,8 @@ export function ProtocolPage() {
             ) : null}
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
             <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
-            {session.diagnosisCode && (
-              <div className="legacy-surface mt-2">
-                <GuidelinePanel
-                  diagnosisText={diagnosisText}
-                  mode="complaints"
-                  onInsertComplaint={toggleComplaint}
-                  onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
-                  onInsertClassificationLine={(line: string) =>
-                    setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
-                  }
-                  onInsertInvestigation={insertInvestigation}
-                  onInsertDrug={insertDrug}
-                  onInsertQuestionnaire={(key: string) => addStudy(key)}
-              addedStudyKeys={session.studies.map((s) => s.key)}
-                />
-              </div>
+            {session.diagnosisCode && hubMode === "block" && (
+              <div className="legacy-surface klinrek-slot mt-2">{klinrekPanel("complaints")}</div>
             )}
           </Sec>
       )}
@@ -722,6 +715,12 @@ export function ProtocolPage() {
           </Sec>
       )}
 
+      {session.diagnosisCode && hubMode === "block" && !documentMode && (
+        <div className="legacy-surface klinrek-slot">{klinrekPanel("studies")}</div>
+      )}
+      {!showRecs && (
+        <StudyDrugHints studies={session.studies} selected={session.recommendations} onAdd={addRecommendation} />
+      )}
       {session.studies.map((s) => (
         <StudyCard key={s.key} studyKey={s.key} />
       ))}
@@ -766,7 +765,7 @@ export function ProtocolPage() {
         </Sec>
       )}
 
-      {(consult || want("recommendations")) && (
+      {(showRecs) && (
         <Sec
           id="recommendations"
           title="Назначения"
@@ -786,6 +785,7 @@ export function ProtocolPage() {
             selected={session.recommendations}
             onAdd={addRecommendation}
           />
+          <StudyDrugHints studies={session.studies} selected={session.recommendations} onAdd={addRecommendation} />
           {session.recommendations.length > 0 && (
             <>
               <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
@@ -795,41 +795,18 @@ export function ProtocolPage() {
               />
             </>
           )}
-          {session.diagnosisCode && (
-            <div className="legacy-surface mt-2 space-y-2">
-              <GuidelinePanel
-                diagnosisText={diagnosisText}
-                mode="drugs"
-                onInsertComplaint={toggleComplaint}
-                onInsertFormulation={(text: string) => setSession({ diagnosisTitle: text })}
-                onInsertClassificationLine={(line: string) =>
-                  setSession({ diagnosisTitle: session.diagnosisTitle ? `${session.diagnosisTitle}. ${line}` : line })
-                }
-                onInsertInvestigation={insertInvestigation}
-                onInsertDrug={insertDrug}
-                onInsertQuestionnaire={(key: string) => addStudy(key)}
-              addedStudyKeys={session.studies.map((s) => s.key)}
-              />
-              <TreatmentSchemeSearch
-                diagnosisText={diagnosisText}
-                onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
-                  phaseDrugs.forEach(insertDrug);
-                  store.setToast("Фаза схемы добавлена");
-                }}
-              />
-            </div>
+          {session.diagnosisCode && hubMode === "block" && (
+            <div className="legacy-surface klinrek-slot mt-2">{klinrekPanel("recs")}</div>
           )}
-          {!session.diagnosisCode && (
-            <div className="legacy-surface mt-2">
-              <TreatmentSchemeSearch
-                diagnosisText={diagnosisText}
-                onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
-                  phaseDrugs.forEach(insertDrug);
-                  store.setToast("Фаза схемы добавлена");
-                }}
-              />
-            </div>
-          )}
+          <div className="legacy-surface mt-2">
+            <TreatmentSchemeSearch
+              diagnosisText={diagnosisText}
+              onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
+                phaseDrugs.forEach(insertDrug);
+                store.setToast("Фаза схемы добавлена");
+              }}
+            />
+          </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -1124,6 +1101,38 @@ function GlobalField({
           className="mt-1 w-full rounded-md border border-warn-line bg-surface px-2 py-1 text-xs"
         />
       )}
+    </div>
+  );
+}
+
+function StudyDrugHints({
+  studies,
+  selected,
+  onAdd,
+}: {
+  studies: SessionState["studies"];
+  selected: string[];
+  onAdd: (line: string) => void;
+}) {
+  const hints = useMemo(() => studyDrugHints(studies), [studies]);
+  const visible = hints.filter((h) => !selected.some((s) => s === h.line || s.toLowerCase().startsWith(h.name.toLowerCase())));
+  if (!visible.length) return null;
+  return (
+    <div className="mt-2">
+      <div className="text-[10px] tracking-wide text-mute uppercase">по результатам</div>
+      <div className="mt-1 flex flex-col gap-1">
+        {visible.map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            onClick={() => onAdd(h.line)}
+            className="rounded-lg border border-dashed border-teal/40 bg-paper px-2 py-1 text-left text-xs text-teal"
+          >
+            <span className="font-medium">{h.line}</span>
+            <span className="mt-0.5 block text-[10px] text-mute">{h.why}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

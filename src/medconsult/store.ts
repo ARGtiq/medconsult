@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { store as legacy } from "@/legacy/lib/store";
 import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
-import { applyComputed } from "./data/studies";
+import { exportAllBackup, importBackup } from "./data/backup";
+import { applyComputed, applyConditionalDefaults } from "./data/studies";
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
@@ -471,7 +472,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   updateInstance(key, instanceId, fields, date) {
     const def = getStudyLive(key);
-    const computed = def ? applyComputed(def, fields) : fields;
+    const raw = def ? applyConditionalDefaults(def, fields) : fields;
+    const computed = def ? applyComputed(def, raw) : fields;
     const session = get().session;
     const studies = session.studies.map((s) =>
       s.key !== key
@@ -914,44 +916,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   exportData() {
-    const { session, settings, patients, visits, recentChips } = get();
-    let legacyBlob = {};
-    try {
-      legacyBlob = JSON.parse(legacy.exportAll());
-    } catch {
-      /* */
-    }
-    let templates = {};
-    try {
-      templates = JSON.parse(localStorage.getItem("medconsult_v2_templates") || "{}");
-    } catch {
-      /* */
-    }
-    return JSON.stringify({ session, settings, patients, visits, recentChips, templates, legacy: legacyBlob }, null, 2);
+    return exportAllBackup();
   },
 
   importData(raw) {
     try {
-      const data = JSON.parse(raw);
-      if (data.legacy) {
-        try {
-          legacy.importAll(JSON.stringify(data.legacy));
-        } catch {
-          /* */
-        }
-      } else if (data.patients && data.visits && data.drugDatabase) {
-        try {
-          legacy.importAll(raw);
-        } catch {
-          /* */
-        }
+      const ok = importBackup(raw);
+      if (!ok) {
+        get().setToast("Файл не прочитался");
+        return false;
       }
-      if (data.session) persistSession(data.session);
-      if (data.settings) writeJson(SETTINGS_KEY, data.settings);
-      if (data.patients) writeJson(PATIENTS_KEY, data.patients);
-      if (data.visits) writeJson(VISITS_KEY, data.visits);
-      if (data.recentChips) writeJson(CHIPS_KEY, data.recentChips);
-      if (data.templates) writeJson("medconsult_v2_templates", data.templates);
       get().hydrate();
       get().setToast("Импорт выполнен");
       return true;

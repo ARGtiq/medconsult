@@ -73,7 +73,7 @@ function presetForm(g) {
   const therapyChips = explicitChips(g.nonDrugTherapyChips, g.nonDrugTherapy)
   return {
     id: g.id,
-    mkb10CodesText: (g.mkb10Codes || []).join(', '),
+    mkb10CodesText: store.normalizeMkbCodes(g.mkb10Codes).join(', '),
     requireAllCodes: !!g.requireAllCodes,
     title: g.title || '',
     definition: g.definition || '',
@@ -96,7 +96,7 @@ function presetForm(g) {
   }
 }
 
-export default function GuidelinesPage({ initialItemId }) {
+export default function GuidelinesPage({ initialItemId, editorOnly, onClose }) {
   const [guidelines, setGuidelines] = useState(store.getGuidelines())
   const [form, setForm] = useState(() => {
     const preset = initialItemId ? store.getGuideline(initialItemId) : null
@@ -104,7 +104,11 @@ export default function GuidelinesPage({ initialItemId }) {
   })
   const [formOpen, setFormOpen] = useState(!!initialItemId)
   const [validationError, setValidationError] = useState('')
-  useEscapeToClose(() => setFormOpen(false), formOpen)
+  function closeForm() {
+    setFormOpen(false)
+    if (editorOnly) onClose?.()
+  }
+  useEscapeToClose(() => closeForm(), formOpen)
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
@@ -178,7 +182,7 @@ export default function GuidelinesPage({ initialItemId }) {
     })
     registerScenarioDrugsInDb(scenarios, mkb10Codes)
     setForm(blankForm())
-    setFormOpen(false)
+    closeForm()
     refresh()
   }
 
@@ -211,7 +215,9 @@ export default function GuidelinesPage({ initialItemId }) {
     .filter(Boolean)
 
   return (
-    <div className="guidelines-page">
+    <div className={editorOnly ? 'mkb-editor-host' : 'guidelines-page'}>
+      {!editorOnly && (
+        <>
       <p className="settings-note-inline">
         Краткая шпаргалка по состояниям, привязанная к кодам МКБ-10. Терапия организована сценариями
         (тяжесть/путь введения/линия) с конкретными дозами — как в российских клинреках (reclin.ru и т.п.).
@@ -221,13 +227,15 @@ export default function GuidelinesPage({ initialItemId }) {
       <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true) }}>
         + Добавить рекомендацию
       </button>
+        </>
+      )}
 
       {formOpen && (
         <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{form.id ? `Редактировать: ${form.title}` : 'Новая рекомендация'}</h3>
-              <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
+              <button type="button" className="modal-close" onClick={() => closeForm()}>×</button>
             </div>
       <form className="drug-form" onSubmit={save}>
         <div className="drug-form-row">
@@ -394,6 +402,7 @@ export default function GuidelinesPage({ initialItemId }) {
         />
       )}
 
+      {!editorOnly && (
       <div className="drug-db-list">
         <h4>Справочник ({Object.keys(guidelines).length})</h4>
         {Object.values(guidelines)
@@ -404,7 +413,7 @@ export default function GuidelinesPage({ initialItemId }) {
                 <strong className="drug-db-card-name" onClick={() => edit(g)} title="Нажми, чтобы отредактировать">
                   {g.title}
                 </strong>
-                <span className="drug-db-group">{(g.mkb10Codes || []).join(', ')}</span>
+                <span className="drug-db-group">{store.normalizeMkbCodes(g.mkb10Codes).join(', ')}</span>
                 {isStale(g.sourceYear) && (
                   <span className="guideline-stale-badge" title="Рекомендация старше 2 лет — стоит перепроверить">
                     ⚠ обновить?
@@ -435,6 +444,7 @@ export default function GuidelinesPage({ initialItemId }) {
           ))}
         {Object.keys(guidelines).length === 0 && <p className="empty-hint">Пока пусто — добавь первую рекомендацию выше.</p>}
       </div>
+      )}
     </div>
   )
 }

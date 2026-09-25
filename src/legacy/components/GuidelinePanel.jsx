@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import { extractCodesFromText } from '../data/mkb10'
-import { asChips, explicitChips } from '../lib/guidelineChips'
+import { explicitChips } from '../lib/guidelineChips'
 import { mdToHtml } from '../lib/md'
 import { getQuestionScales } from '../../medconsult/data/templates'
 import { studyKeyForScale } from '../../medconsult/data/questionnaires'
@@ -69,21 +69,217 @@ function freeText(notes, legacy) {
 
 export default function GuidelinePanel({
   diagnosisText,
-  mode,
+  mode = '',
+  slice = '',
+  scenario,
+  onPickScenario,
   onInsertFormulation,
   onInsertComplaint,
   onInsertClassificationLine,
   onInsertInvestigation,
+  onInsertPlain,
   onInsertDrug,
   onInsertQuestionnaire,
   addedStudyKeys,
-  formulationTag,
+  formulationTag = null,
+  sheetBare = false,
 }) {
   const codes = useMemo(() => extractCodesFromText(diagnosisText), [diagnosisText])
   const matches = useMemo(() => store.getGuidelinesForCodes(codes), [codes])
   const scales = useMemo(() => getQuestionScales(), [])
 
   if (!matches.length) return null
+
+  if (slice) {
+    const nodes = matches.map((g) => {
+      const isFormulationSource = formulationTag?.guidelineId === g.id
+      const needsUpdate = isFormulationSource && formulationTag.guidelineUpdatedAt !== g.updatedAt
+      const pictureText = freeText(g.clinicalPictureNotes, g.clinicalPicture)
+      const invText = freeText(g.investigationsNotes, g.investigations)
+      const classChips = explicitChips(g.classificationChips, g.classification)
+      const picture = explicitChips(g.clinicalPictureChips, pictureText)
+      const investigations = explicitChips(g.investigationsChips, invText)
+      const therapy = explicitChips(g.nonDrugTherapyChips, g.nonDrugTherapy || '')
+      const present = new Set(addedStudyKeys || [])
+      const qList = (g.questionnaireKeys || [])
+        .map((k) => scales.find((s) => s.totalKey === k))
+        .filter(Boolean)
+      const scenarios = g.scenarios || []
+      const picked = scenarios.find((s) => s.name === scenario)
+
+      let body = null
+      if (slice === 'complaints' && picture.length > 0) {
+        body = (
+          <>
+            <p className="guideline-panel-text-muted">Жалобы — клик в протокол</p>
+            <ChipRow chips={picture} onInsert={onInsertComplaint} />
+          </>
+        )
+      }
+      if (slice === 'diagnosis') {
+        const bits = []
+        if (classChips.length > 0) {
+          bits.push(
+            <div key="cls">
+              <p className="guideline-panel-text-muted">Классификация — клик в диагноз</p>
+              <ChipRow chips={classChips} onInsert={(text) => onInsertClassificationLine?.(text)} />
+            </div>,
+          )
+        }
+        if (g.diagnosisFormulation) {
+          bits.push(
+            <button
+              type="button"
+              key="form"
+              className={needsUpdate ? 'btn-secondary btn-small guideline-update-btn' : 'btn-secondary btn-small'}
+              onClick={() => onInsertFormulation?.(g.diagnosisFormulation, g)}
+            >
+              {needsUpdate ? 'Обновить формулировку' : isFormulationSource ? 'Формулировка вставлена' : 'Вставить формулировку'}
+            </button>,
+          )
+        }
+        if (g.redFlags) {
+          bits.push(
+            <div key="flags" className="guideline-redflags">
+              Красные флаги: <span dangerouslySetInnerHTML={{ __html: mdToHtml(g.redFlags) }} />
+            </div>,
+          )
+        }
+        if (bits.length) body = <>{bits}</>
+      }
+      if (slice === 'studies' && (investigations.length > 0 || qList.length > 0)) {
+        body = (
+          <>
+            {investigations.length > 0 && (
+              <>
+                <p className="guideline-panel-text-muted">Обследования — клик добавит исследование или строку в назначения</p>
+                <ChipRow chips={investigations} onInsert={onInsertInvestigation} />
+              </>
+            )}
+            {qList.length > 0 && onInsertQuestionnaire && (
+              <>
+                <p className="guideline-panel-text-muted">Анкеты — по одной. Повторный клик — контроль</p>
+                <div className="guideline-complaint-suggestions">
+                  {qList.map((s) => {
+                    const key = studyKeyForScale(s.totalKey)
+                    const on = present.has(key)
+                    return (
+                      <button
+                        type="button"
+                        key={s.totalKey}
+                        className="suggestion-pill suggestion-pill-guideline"
+                        onClick={() => onInsertQuestionnaire(key)}
+                      >
+                        {s.title}
+                        {on ? ' · контроль' : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )
+      }
+      if (slice === 'recs') {
+        const bits = []
+        if (therapy.length > 0) {
+          bits.push(
+            <div key="nd">
+              <p className="guideline-panel-text-muted">Немедикаментозно — клик в назначения</p>
+              <ChipRow chips={therapy} onInsert={onInsertPlain || onInsertInvestigation} />
+            </div>,
+          )
+        }
+        if (scenarios.length > 0) {
+          bits.push(
+            <div key="sc">
+              <p className="guideline-panel-text-muted">Сценарий — фильтр, в протокол сам не пишется</p>
+              <div className="guideline-complaint-suggestions">
+                {scenarios.map((s) => (
+                  <button
+                    type="button"
+                    key={s.name}
+                    className={`suggestion-pill suggestion-pill-guideline${scenario === s.name ? ' is-on' : ''}`}
+                    onClick={() => onPickScenario?.(s.name)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+              {picked ? (
+                <div className="guideline-drug-buttons">
+                  {(picked.drugs || []).map((d, i) => {
+                    const dbInfo = store.getDrugInfo(d.name)
+                    const brand = dbInfo?.brandNames ? ` (${dbInfo.brandNames.split(',')[0].trim()})` : ''
+                    return (
+                      <button type="button" key={i} className="guideline-drug-btn" onClick={() => onInsertDrug?.(d)}>
+                        {d.name}
+                        {brand}
+                        {d.dosage ? ` — ${d.dosage}` : ''}
+                        {d.frequency ? ` ${d.frequency}` : ''}
+                        {d.duration ? `, ${d.duration}` : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="guideline-panel-text-muted">Выберите сценарий — появятся только его препараты</p>
+              )}
+            </div>,
+          )
+        }
+        if (bits.length) body = <>{bits}</>
+      }
+      if (slice === 'sheet') {
+        const chunks = []
+        if (g.definition) chunks.push(['Определение', g.definition])
+        if (pictureText) chunks.push(['Клиническая картина', pictureText])
+        if (typeof g.classification === 'string' && g.classification.trim()) chunks.push(['Классификация', g.classification])
+        if (g.additionalInfo) chunks.push(['Дополнительно', g.additionalInfo])
+        if (g.nonDrugTherapy) chunks.push(['Немедикаментозно', g.nonDrugTherapy])
+        const source = [g.source, g.sourceYear].filter(Boolean).join(', ')
+        if (!chunks.length && !source) return null
+        const inner = (
+          <>
+            {chunks.map(([title, text]) => (
+              <div key={title}>
+                <p className="guideline-panel-text-muted">{title}</p>
+                <div className="guideline-panel-text-muted md-preview" dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />
+              </div>
+            ))}
+            {source ? <div className="guideline-source">{source}</div> : null}
+          </>
+        )
+        body = sheetBare ? (
+          inner
+        ) : (
+          <details className="guideline-sheet">
+            <summary>Шпаргалка{matches.length > 1 ? ` · ${g.title}` : ''}</summary>
+            {inner}
+          </details>
+        )
+      }
+      if (!body) return null
+      return (
+        <div key={g.id} className="guideline-slice">
+          {matches.length > 1 && slice !== 'sheet' ? <div className="guideline-scenario-name">{g.title}</div> : null}
+          {body}
+        </div>
+      )
+    }).filter(Boolean)
+    if (!nodes.length) return null
+    return (
+      <div className="guideline-panel">
+        {matches.length > 1 && (
+          <div className="guideline-multi-warning">
+            Совпало несколько рекомендаций — схему выбирают по более тяжёлому состоянию, а не складывают.
+          </div>
+        )}
+        {nodes}
+      </div>
+    )
+  }
 
   return (
     <div className={mode === 'complaints' ? 'guideline-panel guideline-panel-complaints' : 'guideline-panel'}>
@@ -96,7 +292,8 @@ export default function GuidelinePanel({
       {matches.map((g) => {
         const isFormulationSource = formulationTag?.guidelineId === g.id
         const needsUpdate = isFormulationSource && formulationTag.guidelineUpdatedAt !== g.updatedAt
-        const matchedCodes = (g.mkb10Codes || []).filter((c) => codes.includes(c.toUpperCase()))
+        const gCodes = store.normalizeMkbCodes(g.mkb10Codes)
+        const matchedCodes = gCodes.filter((gc) => codes.some((dc) => store.codeCovers(gc, dc)))
         const pictureText = freeText(g.clinicalPictureNotes, g.clinicalPicture)
         const invText = freeText(g.investigationsNotes, g.investigations)
         const classChips = explicitChips(g.classificationChips, g.classification)

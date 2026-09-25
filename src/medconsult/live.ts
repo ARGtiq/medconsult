@@ -4,8 +4,8 @@ import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
 import { getComplaintPresets, getComplaintTemplates, type ComplaintTemplate } from "./data/templates";
-import { STUDIES, getStudy as seedStudy, studiesFromScales } from "./data/studies";
-import type { StudyDef } from "./types";
+import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal } from "./data/studies";
+import type { StudyDef, StudyEntry, StudyField } from "./types";
 
 export function liveIcd(): { code: string; title: string }[] {
   try {
@@ -361,6 +361,91 @@ export function findStudyByChip(text: string): StudyDef | null {
   if (q.length < 3) return null;
   const includes = studies.filter((s) => s.label.toLowerCase().includes(q));
   return includes.length === 1 ? includes[0] : null;
+}
+
+/** Qualitative result that means "found", when the field has no reference of its own. */
+function valueLooksFound(value: string): boolean {
+  const v = value.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!v) return false;
+  if (/^(не(\s|$)|отриц|отсут|нет(\s|$)|норма\b|негат|neg(ative)?(\s|$)|[-—–.]+|0+)$/.test(v)) return false;
+  return true;
+}
+
+function indicatorHit(value: string, field: StudyField, all: Record<string, string>): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  const hasRef = !!(field.normal?.trim() || field.refOp);
+  if (hasRef) return fieldAbnormal(v, field.normal, field, all);
+  return valueLooksFound(v);
+}
+
+export type StudyDrugHint = {
+  id: string;
+  name: string;
+  line: string;
+  why: string;
+};
+
+/** Drug cards whose selected indicators came back positive on this visit. */
+export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
+  let drugs: {
+    name?: string;
+    dosage?: string;
+    frequency?: string;
+    duration?: string;
+    studyTriggers?: {
+      studyKeys?: string[];
+      fieldKeys?: string[];
+      timesPerDay?: string;
+      days?: string;
+      note?: string;
+    }[];
+  }[] = [];
+  try {
+    drugs = Object.values(store.getDrugInfoAll() || {});
+  } catch {
+    return [];
+  }
+  const out: StudyDrugHint[] = [];
+  for (const drug of drugs) {
+    if (!drug?.name) continue;
+    for (const trigger of drug.studyTriggers || []) {
+      const studyKeys = new Set((trigger.studyKeys || []).map(String));
+      const fieldKeys = new Set((trigger.fieldKeys || []).map(String));
+      if (!studyKeys.size || !fieldKeys.size) continue;
+      const hits: string[] = [];
+      for (const entry of entries || []) {
+        if (!studyKeys.has(entry.key)) continue;
+        const def = getStudyLive(entry.key);
+        const inst = entry.instances?.[entry.instances.length - 1];
+        if (!def || !inst) continue;
+        for (const field of def.fields || []) {
+          if (!fieldKeys.has(field.key)) continue;
+          const val = inst.fields?.[field.key] || "";
+          if (!indicatorHit(val, field, inst.fields || {})) continue;
+          hits.push(`${def.label}: ${field.label} ${val.trim()}`);
+        }
+      }
+      if (!hits.length) continue;
+      const scheme = [
+        trigger.timesPerDay ? `${trigger.timesPerDay} р/сут` : "",
+        trigger.days ? `${trigger.days} дн` : "",
+        trigger.note || "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      const line = scheme
+        ? [drug.name, drug.dosage, scheme].filter(Boolean).join(" ")
+        : drugLine({
+            name: drug.name,
+            dosage: drug.dosage,
+            frequency: drug.frequency,
+            duration: drug.duration,
+          });
+      out.push({ id: `${drug.name}|${hits.join("|")}`, name: drug.name, line, why: hits.join("; ") });
+    }
+  }
+  return out;
 }
 
 function overlayComputed(def: StudyDef): StudyDef {

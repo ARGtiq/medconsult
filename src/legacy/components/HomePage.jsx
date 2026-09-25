@@ -127,7 +127,7 @@ export default function HomePage({ onOpenDraft, onGoToVisit, onGoToPatients, onG
             {guidelines.slice(0, 4).map((g) => (
               <button type="button" key={g.id} className="home-draft-item" onClick={() => onGoToReference('guidelines')}>
                 <strong>{g.title}</strong>
-                <span>{(g.mkb10Codes || []).join(', ')}</span>
+                <span>{store.normalizeMkbCodes(g.mkb10Codes).join(', ')}</span>
               </button>
             ))}
           </div>

@@ -81,6 +81,7 @@ export function composeBlocks(
   const studyParts = (session.studies || [])
     .map((entry) => {
       const def = getStudyLive(entry.key);
+      if (entry.textMode && (entry.text || "").trim()) return entry.text.trim();
       if (!def) return "";
       return entry.instances
         .map((inst, idx) =>

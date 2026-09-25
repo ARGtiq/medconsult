@@ -1,6 +1,26 @@
 import { readClinicalSync, writeClinicalSync } from './clinicalLock'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
 
+function normalizeMkbCodes(value) {
+  const raw = Array.isArray(value) ? value : [value]
+  const out = []
+  raw.forEach((part) => {
+    const found = String(part || '').toUpperCase().match(/[A-Z]\d{2}(?:\.\d+)?/g) || []
+    found.forEach((c) => {
+      if (!out.includes(c)) out.push(c)
+    })
+  })
+  return out
+}
+
+// Родитель покрывает потомка: N31 → N31.1. Обратное неверно.
+function codeCovers(parent, child) {
+  const p = String(parent || '').trim().toUpperCase()
+  const c = String(child || '').trim().toUpperCase()
+  if (!p || !c) return false
+  return c === p || c.startsWith(`${p}.`)
+}
+
 function _ls() {
   if (typeof window === "undefined") {
     const mem = globalThis.__medconsultMemLS || (globalThis.__medconsultMemLS = {});
@@ -861,10 +881,9 @@ export const store = {
 
   // --- перекрёстные ссылки для страницы МКБ-10: что связано с этим кодом ---
   getDrugsForMkbCode(code) {
-    const norm = code.trim().toUpperCase()
-    return Object.values(readAll().drugDatabase || {}).filter((d) =>
-      (d.mkb10Codes || '').split(',').map((c) => c.trim().toUpperCase()).includes(norm)
-    )
+    const norm = String(code || '').trim().toUpperCase()
+    if (!norm) return []
+    return Object.values(readAll().drugDatabase || {}).filter((d) => normalizeMkbCodes(d.mkb10Codes).includes(norm))
   },
 
   getTreatmentSchemesForMkbCode(code) {
@@ -1027,16 +1046,19 @@ export const store = {
     return state.clinicalGuidelines
   },
 
-  // codes — массив кодов МКБ-10, извлечённых из текста диагноза (напр. ['N40', 'N41.1']).
-  // requireAllCodes у рекомендации ("для сочетаний", напр. цистит + вторичный пиелонефрит)
-  // — совпадает, только если в диагнозе есть ВСЕ её коды сразу, а не любой из них.
+  normalizeMkbCodes,
+  codeCovers,
+
+  // Код рекомендации покрывает сам код и всех потомков: N31 → N31.1, N31.2.
+  // Обратное неверно: N31.1 не подставляется на N31.
   getGuidelinesForCodes(codes) {
-    if (!codes?.length) return []
-    const norm = codes.map((c) => c.trim().toUpperCase())
+    const norm = normalizeMkbCodes(codes)
+    if (!norm.length) return []
     return Object.values(readAll().clinicalGuidelines || {}).filter((g) => {
-      const gCodes = (g.mkb10Codes || []).map((c) => c.trim().toUpperCase())
-      if (g.requireAllCodes) return gCodes.length > 0 && gCodes.every((gc) => norm.includes(gc))
-      return gCodes.some((gc) => norm.includes(gc))
+      const gCodes = normalizeMkbCodes(g.mkb10Codes)
+      if (!gCodes.length) return false
+      if (g.requireAllCodes) return gCodes.every((gc) => norm.includes(gc))
+      return gCodes.some((gc) => norm.some((dc) => codeCovers(gc, dc)))
     })
   },
 

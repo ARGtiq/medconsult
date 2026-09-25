@@ -17,8 +17,14 @@ export type StudyField = {
   options?: string[];
   /** Mutually exclusive sets. One pick from each row, e.g. ровные/неровные and четкие/нечеткие. */
   optionGroups?: string[][];
-  /** Show this field only when `field` contains one of `values`. */
-  showIf?: { field: string; values: string[] };
+  /** Show this field only when `field` matches a value and/or a numeric comparison. */
+  showIf?: {
+    field: string;
+    values: string[];
+    op?: "lt" | "lte" | "gt" | "gte" | "eq" | "range";
+    num?: number;
+    numMax?: number;
+  };
   computed?: boolean;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
@@ -50,6 +56,9 @@ export type StudyEntry = {
   key: string;
   instances: StudyInstance[];
   previous?: StudyInstance;
+  /** When set, the protocol uses this text instead of the filled template. */
+  textMode?: boolean;
+  text?: string;
 };
 
 export type ExtraBlock = {

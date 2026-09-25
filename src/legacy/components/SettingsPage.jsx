@@ -42,7 +42,7 @@ export default function SettingsPage() {
       </div>
       <div className="general-settings-block">
         <h4>Данные приложения</h4>
-        <p className="settings-note-inline">Полный бэкап (пациенты, визиты, шаблоны, база лекарств) или перенос на другое устройство.</p>
+        <p className="settings-note-inline">Полный архив или только отмеченные разделы. Старые файлы тоже подходят. После импорта страница перезагрузится.</p>
         <DataExport />
         <div className="tombstone-purge-block">
           <p className="settings-note-inline">

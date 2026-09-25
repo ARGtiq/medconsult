@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
+import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import useEscapeToClose from '../lib/useEscapeToClose'
@@ -31,11 +32,156 @@ function blankForm() {
     monitoring: '',
     mkb10Codes: '',
     evidenceLevel: '',
+    studyTriggers: [],
   }
 }
 
 function blankRegimen() {
   return { label: '', dosage: '', frequency: '', duration: '' }
+}
+
+function catalogStudies() {
+  const live = store.getAllStudies() || []
+  const hidden = new Set(store.getHiddenStudies() || [])
+  const keys = new Set(live.map((s) => s.key))
+  const extra = STUDIES.filter(
+    (s) => s.category !== 'questionnaire' && s.key !== 'questionnaires' && !keys.has(s.key) && !hidden.has(s.key),
+  )
+  return [...live, ...extra]
+}
+
+function blankTrigger() {
+  return { studyKeys: [], fieldKeys: [], timesPerDay: '', days: '', note: '' }
+}
+
+function StudyDepends({ triggers, onChange }) {
+  const studies = catalogStudies()
+  const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
+  const list = triggers.length ? triggers : [blankTrigger()]
+
+  function commit(next) {
+    onChange(next)
+  }
+
+  function patch(i, next) {
+    commit(list.map((t, idx) => (idx === i ? { ...t, ...next } : t)))
+  }
+
+  function toggleStudy(i, key) {
+    const cur = list[i].studyKeys || []
+    const studyKeys = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]
+    const allowed = new Set(
+      studies.filter((s) => studyKeys.includes(s.key)).flatMap((s) => (s.fields || []).map((f) => f.key)),
+    )
+    const fieldKeys = (list[i].fieldKeys || []).filter((k) => allowed.has(k))
+    patch(i, { studyKeys, fieldKeys })
+  }
+
+  function toggleField(i, key) {
+    const cur = list[i].fieldKeys || []
+    patch(i, { fieldKeys: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] })
+  }
+
+  const q = query.trim().toLowerCase()
+  const found = q.length >= 2 ? studies.filter((s) => s.label.toLowerCase().includes(q)).slice(0, 8) : []
+
+  return (
+    <div className="drug-trigger-block">
+      <div className="scenarios-block-label">Зависимость от исследования</div>
+      <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>
+      {list.map((t, i) => {
+        const picked = studies.filter((s) => (t.studyKeys || []).includes(s.key))
+        return (
+          <div key={i} className="drug-trigger-card">
+            <div className="drug-trigger-fields">
+              {picked.map((s) => (
+                <button type="button" key={s.key} className="study-field-opt is-ref" onClick={() => toggleStudy(i, s.key)}>
+                  {s.label} ×
+                </button>
+              ))}
+              <input
+                placeholder="исследование, например ПЦР"
+                value={active === i ? query : ''}
+                onFocus={() => setActive(i)}
+                onChange={(e) => {
+                  setActive(i)
+                  setQuery(e.target.value)
+                }}
+              />
+              {(triggers.length > 1 || (t.studyKeys || []).length > 0) && (
+                <button
+                  type="button"
+                  className="remove-btn"
+                  onClick={() => commit(list.filter((_, idx) => idx !== i))}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {active === i && found.length > 0 && (
+              <div className="guideline-complaint-suggestions">
+                {found.map((s) => (
+                  <button
+                    type="button"
+                    key={s.key}
+                    className="suggestion-pill suggestion-pill-guideline"
+                    onClick={() => {
+                      toggleStudy(i, s.key)
+                      setQuery('')
+                    }}
+                  >
+                    {(t.studyKeys || []).includes(s.key) ? '✓ ' : ''}
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {picked.map((s) => (
+              <div key={s.key}>
+                <p className="guideline-panel-text-muted">{s.label}</p>
+                <div className="guideline-complaint-suggestions">
+                  {(s.fields || []).map((f) => {
+                    const on = (t.fieldKeys || []).includes(f.key)
+                    return (
+                      <button
+                        type="button"
+                        key={f.key}
+                        className={`study-field-opt${on ? ' is-ref' : ''}`}
+                        onClick={() => toggleField(i, f.key)}
+                      >
+                        {f.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <div className="drug-trigger-fields">
+              <input
+                placeholder="приёмов в день"
+                value={t.timesPerDay || ''}
+                onChange={(e) => patch(i, { timesPerDay: e.target.value })}
+              />
+              <input
+                placeholder="дней"
+                value={t.days || ''}
+                onChange={(e) => patch(i, { days: e.target.value })}
+              />
+              <input
+                placeholder="примечание"
+                value={t.note || ''}
+                onChange={(e) => patch(i, { note: e.target.value })}
+              />
+            </div>
+          </div>
+        )
+      })}
+      <button type="button" className="btn-secondary btn-small" onClick={() => commit([...list, blankTrigger()])}>
+        + зависимость
+      </button>
+    </div>
+  )
 }
 
 // Если у препарата ещё нет regimens (создан до появления множественных схем) —
@@ -48,7 +194,7 @@ function regimensFromDrug(d) {
   return [blankRegimen()]
 }
 
-export default function DrugsTab({ initialItemId }) {
+export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
   const [form, setForm] = useState(() => {
     const preset = initialItemId ? store.getDrugInfo(initialItemId) : null
@@ -60,7 +206,11 @@ export default function DrugsTab({ initialItemId }) {
   const [extractError, setExtractError] = useState('')
   const [brandLoading, setBrandLoading] = useState(false)
   const [brandError, setBrandError] = useState('')
-  useEscapeToClose(() => setFormOpen(false), formOpen)
+  function closeForm() {
+    setFormOpen(false)
+    if (editorOnly) onClose?.()
+  }
+  useEscapeToClose(() => closeForm(), formOpen)
 
   function refresh() {
     setDrugs({ ...store.getDrugInfoAll() })
@@ -100,9 +250,18 @@ export default function DrugsTab({ initialItemId }) {
       dosage: primary.dosage || '',
       frequency: primary.frequency || '',
       duration: primary.duration || '',
+      studyTriggers: (form.studyTriggers || [])
+        .filter((t) => (t.studyKeys || []).length && (t.fieldKeys || []).length)
+        .map((t) => ({
+          studyKeys: t.studyKeys,
+          fieldKeys: t.fieldKeys,
+          timesPerDay: (t.timesPerDay || '').trim(),
+          days: (t.days || '').trim(),
+          note: (t.note || '').trim(),
+        })),
     })
     setForm(blankForm())
-    setFormOpen(false)
+    closeForm()
     refresh()
   }
 
@@ -169,7 +328,7 @@ export default function DrugsTab({ initialItemId }) {
     setExtractError('')
     try {
       const info = await extractDrugInfo(instructionText)
-      setForm((prev) => ({ ...prev, ...info }))
+      setForm((prev) => ({ ...prev, ...info, studyTriggers: prev.studyTriggers || [] }))
     } catch (e) {
       setExtractError(e.message)
     } finally {
@@ -178,17 +337,19 @@ export default function DrugsTab({ initialItemId }) {
   }
 
   return (
-    <div className="settings-tab">
+    <div className={editorOnly ? 'mkb-editor-host' : 'settings-tab'}>
+      {!editorOnly && (
       <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true) }}>
         + Добавить препарат
       </button>
+      )}
 
       {formOpen && (
         <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{form.name ? `Редактировать: ${form.name}` : 'Новый препарат'}</h3>
-              <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
+              <button type="button" className="modal-close" onClick={() => closeForm()}>×</button>
             </div>
       <form className="drug-form" onSubmit={saveForm}>
         <div className="drug-form-row">
@@ -220,6 +381,10 @@ export default function DrugsTab({ initialItemId }) {
             )}
           </div>
         </div>
+        <StudyDepends
+          triggers={form.studyTriggers || []}
+          onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
+        />
         <div className="scenarios-block">
           <div className="scenarios-block-label">
             Схема приёма {form.regimens.length > 1 ? '(несколько — на приёме можно будет выбрать нужную)' : ''}
@@ -339,6 +504,7 @@ export default function DrugsTab({ initialItemId }) {
         </div>
       )}
 
+      {!editorOnly && (
       <div className="drug-db-list">
         <h4>База препаратов ({Object.keys(drugs).length})</h4>
         {(() => {
@@ -417,6 +583,25 @@ export default function DrugsTab({ initialItemId }) {
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
               {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
               {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}
+              {(d.studyTriggers || []).map((t, i) => {
+                const all = catalogStudies()
+                const names = (t.studyKeys || []).map((k) => all.find((s) => s.key === k)?.label || k)
+                const fields = (t.fieldKeys || []).map((k) => {
+                  for (const s of all.filter((x) => (t.studyKeys || []).includes(x.key))) {
+                    const f = (s.fields || []).find((x) => x.key === k)
+                    if (f) return f.label
+                  }
+                  return k
+                })
+                return (
+                  <div key={i} className="drug-db-line">
+                    По исследованию: {names.join(', ')}
+                    {fields.length ? ` · ${fields.join(', ')}` : ''}
+                    {t.timesPerDay ? ` · ${t.timesPerDay} р/сут` : ''}
+                    {t.days ? ` · ${t.days} дн` : ''}
+                  </div>
+                )
+              })}
               {d.interactions && <div className="drug-db-line">Взаимодействия: {d.interactions}</div>}
               {d.contraindications && <div className="drug-db-line">Противопоказания: {d.contraindications}</div>}
               {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}
@@ -428,6 +613,7 @@ export default function DrugsTab({ initialItemId }) {
         })()}
         {Object.keys(drugs).length === 0 && <p className="empty-hint">Пока пусто — добавь первый препарат выше.</p>}
       </div>
+      )}
     </div>
   )
 }

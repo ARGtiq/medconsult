@@ -3,9 +3,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   applyComputed,
+  applyConditionalDefaults,
   collectDeviations,
   fieldAbnormal,
   fieldShown,
+  fillStudyTemplate,
   formatRefHint,
   groupDeviations,
   referenceInsertValue,
@@ -211,7 +213,19 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const selected = session.openSection === studyKey;
   const open = !settings.blocksAsSpoiler || selected;
   const previous = entry.previous;
-  const prevFields = previous ? applyComputed(def, previous.fields) : null;
+  const prevFields = previous ? applyComputed(def, applyConditionalDefaults(def, previous.fields)) : null;
+  const patchStudy = (patch: Partial<StudyEntry>) => {
+    setSession({
+      studies: session.studies.map((s) => (s.key === studyKey ? { ...s, ...patch } : s)),
+    });
+  };
+  const asText = () => {
+    const text = entry.instances
+      .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]))
+      .filter(Boolean)
+      .join("\n");
+    patchStudy({ textMode: true, text: text || entry.text || "" });
+  };
 
   return (
     <section
@@ -237,10 +251,28 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
           <span className="rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">было {previous.date}</span>
         )}
       </button>
-      {open && (
+      {open && entry.textMode ? (
+        <div className="mt-2">
+          <textarea
+            value={entry.text || ""}
+            onChange={(e) => patchStudy({ text: e.target.value })}
+            rows={4}
+            className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+          />
+          <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={() => patchStudy({ textMode: false })}>
+            вернуть пункты
+          </button>
+        </div>
+      ) : null}
+      {open && !entry.textMode && (
         <div className="mt-2 space-y-2">
           {def.category === "questionnaire" ? (
-            <QuestionnaireControls studyKey={studyKey} def={def} entry={entry} />
+            <>
+              <QuestionnaireControls studyKey={studyKey} def={def} entry={entry} />
+              <button type="button" className="text-[11px] font-medium text-teal" onClick={asText}>
+                как текст
+              </button>
+            </>
           ) : (
           <>
           {entry.instances.map((inst, idx) => (
@@ -273,8 +305,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 />
               ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {def.fields.filter((f) => fieldShown(f, inst.fields)).map((f) => {
-                  const fields = applyComputed(def, inst.fields);
+                {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, inst.fields))).map((f) => {
+                  const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields));
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = fieldAbnormal(value, f.normal, f, fields);
@@ -311,7 +343,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       </span>
                       <FieldControl
                         f={f}
-                        value={f.computed ? value : inst.fields[f.key] || ""}
+                        value={fields[f.key] || ""}
                         onChange={(v) => updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: v }, inst.date)}
                       />
                       {hint ? (
@@ -353,6 +385,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
           ))}
           <button type="button" className="text-xs font-medium text-teal" onClick={() => addStudyInstance(studyKey)}>
             + предыдущее / ещё результат
+          </button>
+          <button type="button" className="ml-3 text-[11px] font-medium text-teal" onClick={asText}>
+            как текст
           </button>
           </>
           )}

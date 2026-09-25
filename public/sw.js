@@ -1,4 +1,4 @@
-const CACHE = "medconsult-v2";
+const CACHE = "medconsult-v51";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
