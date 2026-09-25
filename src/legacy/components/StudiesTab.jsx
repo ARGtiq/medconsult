@@ -364,6 +364,22 @@ function describeShow(rule) {
   return bits.join(' или ')
 }
 
+function fieldBrief(f) {
+  if (f.kind === 'heading') return 'заголовок блока'
+  const kind = KIND_OPTIONS.find((k) => k.value === (f.kind || 'text'))?.label || 'текст'
+  const bits = [kind]
+  if ((f.unit || '').trim()) bits.push(String(f.unit).trim())
+  const key = (f.key || '').trim()
+  if (key) bits.push(`{${key}}`)
+  if (f.showIf?.field) {
+    const rule = describeShow(f.showIf)
+    bits.push(rule ? `если ${rule}` : `если ${f.showIf.field}`)
+  }
+  const normal = String(f.normal || '').trim()
+  if (normal) bits.push(normal.length > 48 ? `${normal.slice(0, 48)}…` : normal)
+  return bits.join(' · ')
+}
+
 function splitOptions(raw) {
   return String(raw || '')
     .split(/[,;]+/)
@@ -425,6 +441,14 @@ export default function StudiesTab() {
       return false
     }
   })
+  const [foldIdle, setFoldIdle] = useState(() => {
+    try {
+      return localStorage.getItem('medconsult_study_fold_idle') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [openField, setOpenField] = useState(null)
   function pickSide(side) {
     setTemplateSide(side)
     try {
@@ -441,6 +465,15 @@ export default function StudiesTab() {
       /* ignore */
     }
   }
+  function pickFold(on) {
+    setFoldIdle(on)
+    if (on) setOpenField(null)
+    try {
+      localStorage.setItem('medconsult_study_fold_idle', on ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }
   const templateRef = useRef(null)
   const dragFrom = useRef(null)
   useEscapeToClose(() => setFormOpen(false), formOpen)
@@ -453,6 +486,8 @@ export default function StudiesTab() {
 
   function openNew() {
     setForm(blankForm())
+    setReorder(false)
+    setOpenField(null)
     setFormOpen(true)
   }
 
@@ -470,6 +505,8 @@ export default function StudiesTab() {
       dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
       templateEdited: merged.templateEdited === true,
     })
+    setReorder(false)
+    setOpenField(null)
     setFormOpen(true)
   }
 
@@ -537,10 +574,12 @@ export default function StudiesTab() {
   }
 
   function addField() {
+    setOpenField(form.fields.length)
     setForm({ ...form, fields: [...form.fields, blankField()] })
   }
 
   function addHeading() {
+    setOpenField(form.fields.length)
     setForm({ ...form, fields: [...form.fields, { ...blankField(), kind: 'heading' }] })
   }
 
@@ -984,11 +1023,26 @@ export default function StudiesTab() {
             </div>
             <form className="drug-form" onSubmit={save}>
               <div className="study-editor-scroll">
-              <div className="study-side-bar" role="group" aria-label="Где текст шаблона">
+              <div className="study-side-bar" role="group" aria-label="Окно шаблона">
                 <span>Текст шаблона</span>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>справа</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${reorder ? ' is-on' : ''}`}
+                  onClick={() => setReorder((v) => !v)}
+                >
+                  {reorder ? 'порядок вкл' : 'порядок'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${foldIdle ? ' is-on' : ''}`}
+                  title="Неактивные пункты сворачиваются в строку: название и краткое описание"
+                  onClick={() => pickFold(!foldIdle)}
+                >
+                  {foldIdle ? 'спойлер вкл' : 'спойлер'}
+                </button>
               </div>
               <div className="drug-form-row">
                 <input
@@ -1056,6 +1110,19 @@ export default function StudiesTab() {
                       </div>
                     )
                   }
+                  if (foldIdle && openField !== idx) {
+                    return (
+                      <button
+                        type="button"
+                        key={idx}
+                        className={`study-field-spoiler${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
+                        onClick={() => setOpenField(idx)}
+                      >
+                        <span className="study-field-spoiler-title">{(f.label || '').trim() || 'без названия'}</span>
+                        <span className="study-field-spoiler-meta">{fieldBrief(f)}</span>
+                      </button>
+                    )
+                  }
                   const others = form.fields
                     .map((x, i) => ({ i, key: fieldKeyOf(x), label: x.label || fieldKeyOf(x), kind: x.kind }))
                     .filter((x) => x.i !== idx && x.key && x.kind !== 'heading')
@@ -1098,7 +1165,14 @@ export default function StudiesTab() {
                         >
                           ⋮⋮
                         </span>
-                        <input placeholder={f.kind === 'heading' ? 'заголовок блока' : 'название'} value={f.label} onChange={(e) => updateField(idx, { label: e.target.value })} />
+                        <AutoResizeTextarea
+                          compact
+                          minRows={1}
+                          className="study-field-label"
+                          placeholder={f.kind === 'heading' ? 'заголовок блока' : 'название'}
+                          value={f.label}
+                          onChange={(e) => updateField(idx, { label: e.target.value })}
+                        />
                         {f.kind !== 'heading' && (
                           <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
                         )}
@@ -1121,6 +1195,9 @@ export default function StudiesTab() {
                           ))}
                         </select>
                         <button type="button" className="btn-secondary btn-small" onClick={() => duplicateField(idx)}>копия</button>
+                        {foldIdle && (
+                          <button type="button" className="btn-secondary btn-small" onClick={() => setOpenField(null)}>свернуть</button>
+                        )}
                         {f.kind !== 'heading' && (
                         <button type="button" className="btn-secondary btn-small" onClick={() => addChild(idx)} title="Пункт ниже, виден только при выбранном значении">подпункт</button>
                         )}
@@ -1454,18 +1531,10 @@ export default function StudiesTab() {
                 })}
                 <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>
                 <button type="button" className="btn-secondary btn-small" onClick={addHeading}>+ заголовок</button>
-                <button type="button" className="btn-secondary btn-small" onClick={() => setReorder((v) => !v)}>
-                  {reorder ? 'порядок включён' : 'порядок'}
-                </button>
               </div>
               </div>
 
               <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}`}>
-              <div className="study-template-side">
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>текст слева</button>
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>текст справа</button>
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
-              </div>
               <div className="study-date-format" role="group" aria-label="Формат даты">
                 <span>Дата</span>
                 <button
@@ -1504,6 +1573,7 @@ export default function StudiesTab() {
                   с названием
                 </button>
               </div>
+              <div className="study-template-chips-scroll">
               <div className="study-template-chips">
                 {AUTO_TAGS.map((tag) => (
                   <button
@@ -1549,14 +1619,17 @@ export default function StudiesTab() {
               <p className="settings-note-inline study-template-chips-hint">
                 {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется. Режим «с названием» пишет такой тег сам. {'{summary}'} — все заполненные, {'{lines}'} — с новой строки, {'{abnormal}'} — только вне нормы.
               </p>
+              </div>
 
               <div className="study-template-format">
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('**')} title="Полужирный">Ж</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('*')} title="Курсив">К</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n- ', '')} title="Пункт списка">список</button>
               </div>
-              <AutoResizeTextarea
-                textareaRef={templateRef}
+              <div className="study-template-text-scroll">
+              <textarea
+                ref={templateRef}
+                className="study-template-text"
                 placeholder="Chlamydia trachomatis - {chlamydia_trachomatis}"
                 value={form.template}
                 onChange={(e) => {
@@ -1564,6 +1637,7 @@ export default function StudiesTab() {
                   setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
                 }}
               />
+              </div>
               </div>
               </div>
 

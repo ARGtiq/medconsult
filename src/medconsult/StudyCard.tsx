@@ -342,8 +342,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, inst.fields))).map((f) => {
                   if (f.kind === "heading") {
                     return (
-                      <div key={f.key || f.label} className="col-span-2 px-0.5 pt-1 sm:col-span-3">
-                        <div className="text-[11px] font-semibold tracking-wide text-mute uppercase">{f.label}</div>
+                      <div key={f.key || f.label} className="col-span-2 mt-1.5 border-b border-teal/40 pb-0.5 sm:col-span-3">
+                        <div className="text-[13px] font-semibold tracking-wide text-ink">{f.label}</div>
                       </div>
                     );
                   }

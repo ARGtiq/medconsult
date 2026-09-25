@@ -73,9 +73,13 @@ export function composeBlocks(
   if (includeStd(session, "anamnesisVitae")) {
     push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
   }
-  if (includeStd(session, "status")) {
-    const status = [session.objective, (session.localStatus || []).join("; ")].filter((x) => x.trim()).join(" ");
-    push("status", "Объективный + локальный статус", status);
+  const showObj = includeStd(session, "objective") || (session.mode === "document" && includeStd(session, "status") && !hidden(session, "objective"));
+  const showLoc = includeStd(session, "status");
+  if (showObj || showLoc) {
+    const obj = showObj ? (session.objective || "").trim() : "";
+    const loc = showLoc ? (session.localStatus || []).join("; ").trim() : "";
+    const title = obj && loc ? "Объективный + локальный статус" : obj ? "Объективный статус" : "Локальный статус";
+    push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join(" "));
   }
 
   const studyParts = (session.studies || [])

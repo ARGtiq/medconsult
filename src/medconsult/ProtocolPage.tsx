@@ -92,7 +92,13 @@ export function ProtocolPage() {
   const work = workKindOf(session);
   const consult = session.mode === "consult" || session.mode === "consult_study";
   const documentMode = session.mode === "document";
-  const want = (id: string) => consult || (documentMode && (session.docStd || []).includes(id));
+  const want = (id: string) => {
+    if (consult) return true;
+    if (!documentMode) return false;
+    const std = session.docStd || [];
+    if (id === "objective") return std.includes("objective") || std.includes("status");
+    return std.includes(id);
+  };
   const showRecs = consult || want("recommendations");
   const hubMode = getGuidelineHubMode() === "modal" || settings.guidelineDisplay === "modal" ? "modal" : "block";
   const blocks = useMemo(
@@ -263,10 +269,13 @@ export function ProtocolPage() {
   );
 
   function setWork(kind: "primary" | "followup" | "study" | "document") {
-    if (kind === "primary") {
-      setSession({ visitKind: "primary", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
-    } else if (kind === "followup") {
-      setSession({ visitKind: "followup", mode: session.studies.length ? "consult_study" : "consult", templateId: undefined });
+    if (kind === "primary" || kind === "followup") {
+      setSession({
+        visitKind: kind,
+        mode: session.studies.length ? "consult_study" : "consult",
+        templateId: undefined,
+        hiddenBlocks: session.hiddenBlocks.filter((id) => id !== "objective"),
+      });
     } else if (kind === "study") {
       setSession({ mode: "study", templateId: undefined });
     } else {
@@ -388,7 +397,7 @@ export function ProtocolPage() {
         onRemove={() => toggleBlock("diagnosis")}
       >
         {session.diagnosisCode ? (
-          <div className="mb-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
+          <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
         ) : null}
         <input
           list="icd-list"
@@ -422,7 +431,7 @@ export function ProtocolPage() {
           ))}
         </datalist>
         {session.diagnosisTitle ? (
-          <div className="mb-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">Формулировка</div>
+          <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Формулировка</div>
         ) : null}
         <textarea
           value={session.diagnosisTitle}
@@ -662,6 +671,69 @@ export function ProtocolPage() {
           </Sec>
       )}
 
+      {want("objective") && (
+          <Sec
+            id="objective"
+            title="Объективный статус"
+            open={session.openSection === "objective"}
+            onOpen={() => setSession({ openSection: session.openSection === "objective" ? null : "objective" })}
+            onRemove={() => toggleBlock("objective")}
+            voice={(t) => setSession({ objective: session.objective ? `${session.objective} ${t}` : t })}
+          >
+            <div className="mb-2 flex flex-wrap gap-1">
+              {objectiveTemplates.map((tpl) => {
+                const on = session.objective.trim() === tpl.text.trim();
+                const code = session.diagnosisCode.trim().toUpperCase();
+                const prefix = code.split(".")[0];
+                const byIcd =
+                  !!code &&
+                  (tpl.codes || []).some((c) => {
+                    const u = c.toUpperCase();
+                    return u === code || u === prefix;
+                  });
+                return (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    title={tpl.text}
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      on ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+                    }`}
+                    onClick={() => setSession({ objective: tpl.text })}
+                  >
+                    {tpl.label}
+                    {byIcd ? " · мкб" : ""}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
+                onClick={() => {
+                  const text = session.objective.trim();
+                  const label = text.split(/[.!?\n]/)[0]?.trim().slice(0, 42) || "свой";
+                  const res = addObjectiveTemplate(label, text);
+                  store.setToast(
+                    res === "added"
+                      ? "Шаблон объективного статуса сохранён"
+                      : res === "exists"
+                        ? "Такой текст уже есть в шаблонах"
+                        : "Сначала напишите текст статуса",
+                  );
+                }}
+              >
+                + в шаблоны
+              </button>
+            </div>
+            <FitTextarea
+              value={session.objective}
+              onChange={(v) => setSession({ objective: v })}
+              placeholder="Объективный статус"
+              className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm outline-none"
+            />
+          </Sec>
+      )}
+
       {want("status") && (
           <Sec
             id="status"
@@ -670,65 +742,10 @@ export function ProtocolPage() {
             open={session.openSection === "status"}
             onOpen={() => setSession({ openSection: session.openSection === "status" ? null : "status" })}
             onRemove={() => toggleBlock("status")}
-            voice={(t) => setSession({ objective: session.objective ? `${session.objective} ${t}` : t })}
           >
-            <div className="mb-2">
-              <div className="mb-1 text-[10px] tracking-wide text-mute uppercase">объективный статус</div>
-              <div className="flex flex-wrap gap-1">
-                {objectiveTemplates.map((tpl) => {
-                  const on = session.objective.trim() === tpl.text.trim();
-                  const code = session.diagnosisCode.trim().toUpperCase();
-                  const prefix = code.split(".")[0];
-                  const byIcd =
-                    !!code &&
-                    (tpl.codes || []).some((c) => {
-                      const u = c.toUpperCase();
-                      return u === code || u === prefix;
-                    });
-                  return (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      title={tpl.text}
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        on ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
-                      }`}
-                      onClick={() => setSession({ objective: tpl.text })}
-                    >
-                      {tpl.label}
-                      {byIcd ? " · мкб" : ""}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
-                  onClick={() => {
-                    const text = session.objective.trim();
-                    const label = text.split(/[.!?\n]/)[0]?.trim().slice(0, 42) || "свой";
-                    const res = addObjectiveTemplate(label, text);
-                    store.setToast(
-                      res === "added"
-                        ? "Шаблон объективного статуса сохранён"
-                        : res === "exists"
-                          ? "Такой текст уже есть в шаблонах"
-                          : "Сначала напишите текст статуса",
-                    );
-                  }}
-                >
-                  + в шаблоны
-                </button>
-              </div>
-            </div>
-            <FitTextarea
-              value={session.objective}
-              onChange={(v) => setSession({ objective: v })}
-              placeholder="Объективный статус"
-              className="mb-2 rounded-md border border-line bg-paper px-2 py-1 text-sm outline-none"
-            />
             {packs.map((p) => (
               <div key={p.id} className="mb-1">
-                <div className="text-[10px] text-mute uppercase">{p.label} · по МКБ</div>
+                <div className="text-xs font-semibold text-ink">{p.label} · по МКБ</div>
                 <ToggleChips
                   texts={p.chips}
                   onToggle={toggleLocal}

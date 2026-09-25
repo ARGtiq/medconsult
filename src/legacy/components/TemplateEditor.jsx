@@ -310,7 +310,7 @@ function SectionEditor({ section, onChange, onDelete, onMoveUp, onMoveDown }) {
       {section.type === 'study_protocol' && (
         <p className="settings-note-inline">
           Список исследований общий для всех шаблонов с такой секцией — редактируется в
-          Справочник → Исследования, а не здесь.
+          Справочник → Шаблоны → исследования, а не здесь.
         </p>
       )}
       </>

@@ -5,7 +5,7 @@ import { useRef, useLayoutEffect } from 'react'
 // 123+), он просто работает без JS и без гонок с рендером/модалками.
 // JS-пересчёт оставлен как фоллбэк для браузеров без field-sizing (Safari/Firefox
 // на момент написания) — не мешает, если браузер уже сам всё разложил.
-export default function AutoResizeTextarea({ value, onChange, className = '', minRows = 2, textareaRef, ...rest }) {
+export default function AutoResizeTextarea({ value, onChange, className = '', minRows = 2, textareaRef, compact = false, ...rest }) {
   const ref = useRef(null)
 
   function resize() {
@@ -34,7 +34,7 @@ export default function AutoResizeTextarea({ value, onChange, className = '', mi
       onChange={onChange}
       onInput={resize}
       rows={minRows}
-      style={{ overflow: 'auto', resize: 'vertical' }}
+      style={compact ? { overflow: 'hidden', resize: 'none' } : { overflow: 'auto', resize: 'vertical' }}
       {...rest}
     />
   )

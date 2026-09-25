@@ -335,7 +335,7 @@ function QuestionList({
       {scale.items.map((it, i) => (
         <div key={it.key}>
           {itemKind(it) !== "heading" && it.group && it.group !== scale.items[i - 1]?.group ? (
-            <div className="mb-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{it.group}</div>
+            <div className="mb-1 text-xs font-semibold text-ink">{it.group}</div>
           ) : null}
           <ItemRow
             item={it}
@@ -414,7 +414,7 @@ function ItemRow({
   const kind = itemKind(item);
   const was = prevCaption(item, prev || "", verbose);
   if (kind === "heading") {
-    return <div className="pt-1 text-[10px] font-semibold tracking-wide text-mute uppercase">{item.label}</div>;
+    return <div className="mt-2 border-b border-teal/40 pb-0.5 text-[13px] font-semibold text-ink">{item.label}</div>;
   }
   if (kind === "text") {
     return (

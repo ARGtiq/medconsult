@@ -109,7 +109,8 @@ export const STD_DOC_BLOCKS = [
   { id: "complaints", title: "Жалобы" },
   { id: "anamnesis", title: "Анамнез заболевания" },
   { id: "anamnesisVitae", title: "Анамнез жизни" },
-  { id: "status", title: "Статус" },
+  { id: "objective", title: "Объективный статус" },
+  { id: "status", title: "Локальный статус" },
   { id: "diagnosis", title: "Диагноз" },
   { id: "recommendations", title: "Назначения" },
 ] as const;
@@ -131,7 +132,7 @@ export const SEED_VISIT_PACKS: VisitPack[] = [
     name: "Повторный осмотр",
     kind: "followup",
     codes: [],
-    stdBlocks: ["complaints", "anamnesis", "status", "diagnosis", "recommendations"],
+    stdBlocks: ["complaints", "anamnesis", "objective", "status", "diagnosis", "recommendations"],
     extraKinds: [],
     localPackIds: [],
   },
@@ -230,20 +231,59 @@ function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
   return { id, label, text, codes };
 }
 
+const OBJECTIVE_BLOCK_MIG = "medconsult_mig_objective_block";
+
+/** One-time: primary and follow-up packs gain the objective-status block. Later uncheck sticks. */
+function migrateObjectiveBlock(packs: VisitPack[]): { packs: VisitPack[]; changed: boolean } {
+  if (typeof window === "undefined") return { packs, changed: false };
+  let done = false;
+  try {
+    done = localStorage.getItem(OBJECTIVE_BLOCK_MIG) === "1";
+  } catch {
+    return { packs, changed: false };
+  }
+  if (done) return { packs, changed: false };
+  const next = packs.map((p) => {
+    if (p.kind !== "primary" && p.kind !== "followup") return p;
+    if (p.stdBlocks.includes("objective")) return p;
+    const at = p.stdBlocks.indexOf("status");
+    const stdBlocks = [...p.stdBlocks];
+    if (at >= 0) stdBlocks.splice(at, 0, "objective");
+    else stdBlocks.push("objective");
+    return { ...p, stdBlocks };
+  });
+  try {
+    localStorage.setItem(OBJECTIVE_BLOCK_MIG, "1");
+  } catch {
+    /* ignore */
+  }
+  const changed = next.some((p, i) => p !== packs[i]);
+  return { packs: next, changed };
+}
+
 function read(): TemplatesState {
   const seed = seedTemplates();
   if (typeof window === "undefined") return seed;
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return seed;
+    if (!raw) {
+      try {
+        localStorage.setItem(OBJECTIVE_BLOCK_MIG, "1");
+      } catch {
+        /* ignore */
+      }
+      return seed;
+    }
     const parsed = JSON.parse(raw) as Partial<TemplatesState>;
-    return {
+    const visitPacks = Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks;
+    const migrated = migrateObjectiveBlock(visitPacks);
+    const state: TemplatesState = {
       localPacks: Array.isArray(parsed.localPacks) && parsed.localPacks.length ? parsed.localPacks : seed.localPacks,
       chronic: Array.isArray(parsed.chronic) && parsed.chronic.length ? parsed.chronic : seed.chronic,
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
       complaints: mergeComplaints(parsed.complaints, seed.complaints),
-      visitPacks: Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks,
+      visitPacks: migrated.packs,
       questionnaires:
         Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
           ? mergeQuestionnaires(parsed.questionnaires, seed.questionnaires)
@@ -252,6 +292,14 @@ function read(): TemplatesState {
         ? (parsed.objective.map(normalizeObjective).filter(Boolean) as ObjectiveTemplate[])
         : seed.objective,
     };
+    if (migrated.changed) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch {
+        /* ignore */
+      }
+    }
+    return state;
   } catch {
     return seed;
   }

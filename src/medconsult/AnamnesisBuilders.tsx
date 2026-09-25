@@ -36,7 +36,7 @@ function ChipRow({
 }) {
   return (
     <div className="mt-1">
-      <div className="text-[10px] tracking-wide text-mute uppercase">{label}</div>
+      <div className="text-xs font-semibold text-ink">{label}</div>
       <div className="mt-1 flex flex-wrap gap-1">
         {options.map((o) => (
           <button
@@ -55,14 +55,16 @@ function ChipRow({
   );
 }
 
-function DoneBar({ sentence, onDone }: { sentence: string; onDone: () => void }) {
+function DoneBar({ sentence, onDone, preview = true }: { sentence: string; onDone: () => void; preview?: boolean }) {
   return (
     <div className="mt-2">
-      {sentence ? (
-        <p className="text-sm leading-relaxed whitespace-pre-line text-ink-soft">{sentence}</p>
-      ) : (
-        <p className="text-xs text-mute">Собери фразу чипами — потом станет обычным текстом.</p>
-      )}
+      {preview ? (
+        sentence ? (
+          <p className="text-sm leading-relaxed whitespace-pre-line text-ink-soft">{sentence}</p>
+        ) : (
+          <p className="text-xs text-mute">Собери фразу чипами — потом станет обычным текстом.</p>
+        )
+      ) : null}
       <button
         type="button"
         className={`mt-1.5 text-[11px] font-medium ${sentence ? "rounded-md bg-teal px-2 py-1 text-paper" : "text-teal"}`}
@@ -181,7 +183,7 @@ function VitaeSection({
 function BlockLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div className="mt-1.5">
-      <div className="text-[10px] tracking-wide text-mute uppercase">{label}</div>
+      <div className="text-xs font-semibold text-ink">{label}</div>
       {hint ? <div className="text-[10px] text-ink-soft">{hint}</div> : null}
     </div>
   );
@@ -191,7 +193,7 @@ function FromCard({ label, items }: { label: string; items?: string[] }) {
   const list = (items || []).map((x) => x.trim()).filter(Boolean);
   return (
     <div className="mt-1.5">
-      <div className="text-[10px] tracking-wide text-mute uppercase">{label} · из карточки</div>
+      <div className="text-xs font-semibold text-ink">{label} · из карточки</div>
       {list.length ? (
         <div className="mt-0.5 flex flex-wrap gap-1">
           {list.map((t) => (
@@ -681,7 +683,7 @@ export function AnamnesisVitae({
           </div>
         </div>
       )}
-      <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} />
+      <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} preview={false} />
     </div>
   );
 }

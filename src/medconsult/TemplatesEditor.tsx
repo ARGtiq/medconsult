@@ -16,6 +16,7 @@ import { emptyScale, itemKind, type ScaleDef, type ScaleItem, type ScaleItemKind
 import { searchIcd } from "./live";
 import { Typeahead } from "./Typeahead";
 import type { LocalPack, WorkKind } from "./types";
+import StudiesTab from "@/legacy/components/StudiesTab";
 
 function IcdCodesField({
   codes,
@@ -89,7 +90,7 @@ function parseOptions(raw: string): ScaleItem["options"] {
 }
 
 export function TemplatesEditor() {
-  const [layer, setLayer] = useState<"blocks" | "packs">("blocks");
+  const [layer, setLayer] = useState<"blocks" | "packs" | "studies">("blocks");
   const [tab, setTab] = useState<"objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires">("status");
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
@@ -124,6 +125,7 @@ export function TemplatesEditor() {
             resetTemplates();
             setData(seedTemplates());
           }}
+          hidden={layer === "studies"}
         >
           сбросить к заводским
         </button>
@@ -133,6 +135,7 @@ export function TemplatesEditor() {
           [
             ["blocks", "блоки"],
             ["packs", "наборы"],
+            ["studies", "исследования"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -217,6 +220,7 @@ export function TemplatesEditor() {
           onChange={(visitPacks) => persist({ visitPacks })}
         />
       )}
+      {layer === "studies" && <StudiesTab />}
     </section>
   );
 }
