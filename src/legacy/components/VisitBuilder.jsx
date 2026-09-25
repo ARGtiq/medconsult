@@ -533,7 +533,7 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     const current = sectionValues[section.id] || []
                     updateSection(section.id, checked ? [...current, study.key] : current.filter((k) => k !== study.key))
                     if (checked && sectionValues[textKey] === undefined) {
-                      updateSection(textKey, fillTemplate(study.template, visitDate, {}, study.dateFormat))
+                      updateSection(textKey, fillTemplate(study.template, visitDate, {}, study.dateFormat, study.fields))
                     }
                   }}
                   onTextChange={(textKey, text) => updateSection(textKey, text)}

@@ -947,6 +947,11 @@ export function fillStudyTemplate(
 
   let text = def.template.replaceAll("{date}", date);
   for (const f of def.fields) {
+    const named = `{+${f.key}}`;
+    if (!text.includes(named)) continue;
+    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit));
+  }
+  for (const f of def.fields) {
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
@@ -961,7 +966,7 @@ export function fillStudyTemplate(
   }
   for (const f of def.fields) {
     if (!f.showIf?.field || !fieldShown(f, fields) || omit.has(f.key)) continue;
-    if (def.template.includes(`{${f.key}}`)) continue;
+    if (def.template.includes(`{${f.key}}`) || def.template.includes(`{+${f.key}}`)) continue;
     const phrase = (fields[f.key] || "").trim();
     if (phrase) text = `${text} ${phrase}`;
   }
@@ -974,5 +979,24 @@ export function fillStudyTemplate(
     .replace(/^\s*[-*] \s*$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/\s+\./g, ".")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .join("\n")
     .trim();
+}
+
+/** `{+key}` → «название - значение». Hidden, omitted or empty field disappears with its name. */
+function namedFieldText(
+  f: StudyField,
+  fields: Record<string, string>,
+  prevFields: Record<string, string> | undefined,
+  omit: Set<string>,
+): string {
+  if (f.kind === "heading" || omit.has(f.key) || !fieldShown(f, fields)) return "";
+  const v = (fields[f.key] || "").trim();
+  if (!v) return "";
+  const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+  const unit = f.unit ? ` ${f.unit}` : "";
+  const shown = p && p !== v ? `${v}${unit} (${p}${unit})` : `${v}${unit}`;
+  return `${(f.label || f.key).trim()} - ${shown}`.trim();
 }

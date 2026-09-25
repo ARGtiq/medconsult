@@ -11,10 +11,30 @@ function formatDate(iso, format) {
   return `${d}.${m}.${y}`
 }
 
-export function fillTemplate(template, date, fieldValues, dateFormat) {
-  let text = template.replace('{date}', formatDate(date, dateFormat))
+export function fillTemplate(template, date, fieldValues, dateFormat, fields) {
+  let text = String(template || '').replaceAll('{date}', formatDate(date, dateFormat))
+  const list = Array.isArray(fields) ? fields : []
+  let named = false
+  for (const f of list) {
+    if (!f?.key) continue
+    const token = `{+${f.key}}`
+    if (!text.includes(token)) continue
+    named = true
+    const v = String(fieldValues?.[f.key] || '').trim()
+    if (!v || f.kind === 'heading') {
+      text = text.split(token).join('')
+      continue
+    }
+    const unit = f.unit ? ` ${f.unit}` : ''
+    text = text.split(token).join(`${String(f.label || f.key).trim()} - ${v}${unit}`)
+  }
   text = text.replace(/\{(\w+)\}/g, (_, key) => (fieldValues?.[key]?.trim() ? fieldValues[key].trim() : '__'))
+  if (!named) return text
   return text
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .join('\n')
+    .trim()
 }
 
 // Каждое отмеченное исследование можно заполнить двумя способами:
@@ -32,13 +52,13 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
   function updateField(fieldKey, value) {
     const next = { ...fieldValues, [fieldKey]: value }
     onFieldsChange(fieldsKey, next)
-    onTextChange(textKey, fillTemplate(study.template, visitDate, next, study.dateFormat))
+    onTextChange(textKey, fillTemplate(study.template, visitDate, next, study.dateFormat, study.fields))
   }
 
   function switchMode(next) {
     onModeChange(modeKey, next)
     if (next === 'text' && !sectionValues[textKey]) {
-      onTextChange(textKey, fillTemplate(study.template, visitDate, fieldValues, study.dateFormat))
+      onTextChange(textKey, fillTemplate(study.template, visitDate, fieldValues, study.dateFormat, study.fields))
     }
   }
 
@@ -108,7 +128,7 @@ function StudyItem({ study, isChecked, sectionValues, visitDate, textKey, fields
           ) : (
             <AutoResizeTextarea
               className="study-protocol-text"
-              value={sectionValues[textKey] ?? fillTemplate(study.template, visitDate, fieldValues, study.dateFormat)}
+              value={sectionValues[textKey] ?? fillTemplate(study.template, visitDate, fieldValues, study.dateFormat, study.fields)}
               onChange={(e) => onTextChange(textKey, e.target.value)}
             />
           )}

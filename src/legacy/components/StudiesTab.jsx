@@ -71,6 +71,65 @@ function blankForm() {
   }
 }
 
+function retargetToken(text, oldKey, newKey) {
+  if (!oldKey || !newKey || oldKey === newKey) return text || ''
+  return String(text || '').split(`{+${oldKey}}`).join(`{+${newKey}}`).split(`{${oldKey}}`).join(`{${newKey}}`)
+}
+
+/** New fields in «с названием» get `{+key}` so a hidden line takes the label with it. Untouched «Name - {tag}» lines still follow renames. */
+function adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, named, wasHeading) {
+  let text = template || ''
+  if (nextField?.kind === 'heading') {
+    const lines = [
+      autoFieldLine(oldLabel, oldKey),
+      autoFieldLine(oldLabel, nextKey),
+      autoFieldLine(nextField.label, nextKey),
+      oldKey ? `{+${oldKey}}` : '',
+      nextKey && nextKey !== oldKey ? `{+${nextKey}}` : '',
+    ]
+    for (const line of lines) {
+      if (!line) continue
+      const dropped = replaceWholeLine(text, line, '')
+      if (dropped != null) text = dropped
+    }
+    return text
+  }
+  const synced = syncFieldLine(text, oldLabel, oldKey, nextField.label, nextKey)
+  if (!named) {
+    text = synced
+    if (wasHeading) {
+      const line = autoFieldLine(nextField.label, nextKey)
+      if (line && nextKey && !text.includes(`{${nextKey}}`)) {
+        const trimmed = text.replace(/\s+$/, '')
+        text = trimmed ? `${trimmed}\n${line}` : line
+      }
+    }
+    return text
+  }
+  const auto = autoFieldLine(nextField.label, nextKey)
+  const oldAutos = [autoFieldLine(oldLabel, oldKey), autoFieldLine(oldLabel, nextKey)].filter(Boolean)
+  const hadExact = oldAutos.some((line) => text.split('\n').some((l) => l.trim() === line))
+  if (
+    auto &&
+    nextKey &&
+    !hadExact &&
+    synced.split('\n').some((l) => l.trim() === auto) &&
+    !text.split('\n').some((l) => l.trim() === auto)
+  ) {
+    text = synced
+      .split('\n')
+      .map((l) => (l.trim() === auto ? `{+${nextKey}}` : l))
+      .join('\n')
+  } else {
+    text = synced
+  }
+  if (wasHeading && nextKey && String(nextField.label || '').trim() && !text.includes(`{${nextKey}}`) && !text.includes(`{+${nextKey}}`)) {
+    const trimmed = text.replace(/\s+$/, '')
+    text = trimmed ? `${trimmed}\n{+${nextKey}}` : `{+${nextKey}}`
+  }
+  return text
+}
+
 function slugifyKey(label) {
   return (label || '').trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_') || `study_${Date.now()}`
 }
@@ -359,10 +418,25 @@ export default function StudiesTab() {
   const [overField, setOverField] = useState(null)
   const [dragKids, setDragKids] = useState([])
   const [listTab, setListTab] = useState('all')
+  const [namedTag, setNamedTag] = useState(() => {
+    try {
+      return localStorage.getItem('medconsult_study_named_tag') === '1'
+    } catch {
+      return false
+    }
+  })
   function pickSide(side) {
     setTemplateSide(side)
     try {
       localStorage.setItem('medconsult_study_template_side', side)
+    } catch {
+      /* ignore */
+    }
+  }
+  function pickNamed(on) {
+    setNamedTag(on)
+    try {
+      localStorage.setItem('medconsult_study_named_tag', on ? '1' : '0')
     } catch {
       /* ignore */
     }
@@ -418,14 +492,12 @@ export default function StudiesTab() {
         }
         if (oldKey !== auto) {
           if (oldKey && auto) {
-            template = template.split(`{${oldKey}}`).join(`{${auto}}`)
+            template = retargetToken(template, oldKey, auto)
             fields = fields.map((f, i) => {
               if (i === idx) return { ...f, key: auto }
               let next = f
               if (next.showIf?.field === oldKey) next = { ...next, showIf: { ...next.showIf, field: auto } }
-              if (next.formula && String(next.formula).includes(`{${oldKey}}`)) {
-                next = { ...next, formula: String(next.formula).split(`{${oldKey}}`).join(`{${auto}}`) }
-              }
+              if (next.formula) next = { ...next, formula: retargetToken(String(next.formula), oldKey, auto) }
               if (next.refOf === oldKey) next = { ...next, refOf: auto }
               return next
             })
@@ -436,14 +508,12 @@ export default function StudiesTab() {
       } else if (patch.key !== undefined && patch.label === undefined) {
         const manual = String(patch.key || '').replace(/[{}\s]/g, '')
         if (oldKey && manual && oldKey !== manual) {
-          template = template.split(`{${oldKey}}`).join(`{${manual}}`)
+          template = retargetToken(template, oldKey, manual)
           fields = fields.map((f, i) => {
             if (i === idx) return { ...f, key: manual }
             let next = f
             if (next.showIf?.field === oldKey) next = { ...next, showIf: { ...next.showIf, field: manual } }
-            if (next.formula && String(next.formula).includes(`{${oldKey}}`)) {
-              next = { ...next, formula: String(next.formula).split(`{${oldKey}}`).join(`{${manual}}`) }
-            }
+            if (next.formula) next = { ...next, formula: retargetToken(String(next.formula), oldKey, manual) }
             if (next.refOf === oldKey) next = { ...next, refOf: manual }
             return next
           })
@@ -451,24 +521,8 @@ export default function StudiesTab() {
       }
       const nextField = fields[idx]
       const nextKey = (nextField.key || '').trim()
-      const isHeading = nextField.kind === 'heading'
-      if (isHeading) {
-        for (const line of [autoFieldLine(oldLabel, oldKey), autoFieldLine(oldLabel, nextKey), autoFieldLine(nextField.label, nextKey)]) {
-          if (!line) continue
-          const dropped = replaceWholeLine(template, line, '')
-          if (dropped != null) template = dropped
-        }
-      } else {
-        template = syncFieldLine(template, oldLabel, oldKey, nextField.label, nextKey)
-        if (current.kind === 'heading') {
-          const line = autoFieldLine(nextField.label, nextKey)
-          if (line && !template.includes(`{${nextKey}}`)) {
-            const trimmed = template.replace(/\s+$/, '')
-            template = trimmed ? `${trimmed}\n${line}` : line
-          }
-        }
-      }
-      const tokenOnly = oldKey && nextKey ? (prev.template || '').split(`{${oldKey}}`).join(`{${nextKey}}`) : (prev.template || '')
+      template = adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, namedTag, current.kind === 'heading')
+      const tokenOnly = oldKey && nextKey ? retargetToken(prev.template || '', oldKey, nextKey) : (prev.template || '')
       const templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
       fields = fields.map((f, i) => {
         if (i !== idx) return f
@@ -493,8 +547,13 @@ export default function StudiesTab() {
   function removeField(idx) {
     setForm((prev) => {
       const f = prev.fields[idx]
-      const line = autoFieldLine(f?.label, f?.key)
-      const template = replaceWholeLine(prev.template || '', line, '') ?? (prev.template || '')
+      let template = prev.template || ''
+      const dropped = replaceWholeLine(template, autoFieldLine(f?.label, f?.key), '')
+      if (dropped != null) template = dropped
+      if (f?.key) {
+        const droppedNamed = replaceWholeLine(template, `{+${f.key}}`, '')
+        if (droppedNamed != null) template = droppedNamed
+      }
       const templateEdited = template !== (prev.template || '') ? true : !!prev.templateEdited
       return { ...prev, template, templateEdited, fields: prev.fields.filter((_, i) => i !== idx) }
     })
@@ -519,8 +578,11 @@ export default function StudiesTab() {
       const fields = [...prev.fields]
       fields.splice(idx + 1, 0, copy)
       let template = prev.template || ''
-      const line = src.kind === 'heading' ? '' : autoFieldLine(copy.label, key)
-      if (line && !template.includes(`{${key}}`)) {
+      const named = `{+${key}}`
+      const plain = `{${key}}`
+      const line = src.kind === 'heading' ? '' : namedTag ? named : autoFieldLine(copy.label, key)
+      const already = namedTag ? template.includes(named) || template.includes(plain) : template.includes(plain)
+      if (line && !already) {
         const trimmed = template.replace(/\s+$/, '')
         template = trimmed ? `${trimmed}\n${line}` : line
       }
@@ -1423,6 +1485,25 @@ export default function StudiesTab() {
                   25.09.26
                 </button>
               </div>
+              <div className="study-date-format" role="group" aria-label="Название в теге">
+                <span>Тег</span>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${namedTag ? '' : ' is-on'}`}
+                  onClick={() => pickNamed(false)}
+                  title="Чип вставляет только значение. Название остаётся текстом рядом"
+                >
+                  значение
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${namedTag ? ' is-on' : ''}`}
+                  onClick={() => pickNamed(true)}
+                  title="В тег входит название. Скрытый, пустой или условный пункт пропадает вместе с названием"
+                >
+                  с названием
+                </button>
+              </div>
               <div className="study-template-chips">
                 {AUTO_TAGS.map((tag) => (
                   <button
@@ -1440,9 +1521,10 @@ export default function StudiesTab() {
                 ))}
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
-                  const token = `{${key}}`
+                  const plain = `{${key}}`
+                  const named = `{+${key}}`
                   const line = autoFieldLine(f.label, key)
-                  const payload = line && !(form.template || '').includes(token) ? line : token
+                  const payload = namedTag ? named : line && !(form.template || '').includes(plain) ? line : plain
                   return (
                     <button
                       type="button"
@@ -1451,15 +1533,21 @@ export default function StudiesTab() {
                       draggable
                       onDragStart={(e) => onChipDragStart(e, payload)}
                       onClick={() => insertToken(payload)}
-                      title={payload === line ? 'Вставить название и тег' : 'Вставить тег в место курсора'}
+                      title={
+                        namedTag
+                          ? 'Вставить тег с названием. Если пункт скрыт или пустой, строка не появляется'
+                          : payload === line
+                            ? 'Вставить название и тег'
+                            : 'Вставить тег в место курсора'
+                      }
                     >
-                      {f.label} {token}
+                      {f.label} {namedTag ? named : plain}
                     </button>
                   )
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                {'{summary}'} собирает заполненные пункты. {'{lines}'} — то же, но каждый с новой строки как «название - значение». {'{abnormal}'} — только вне нормы. Строку «название - {'{тег}'}» можно править: чип вставляет тег в курсор, если строки ещё нет — всю строку.
+                {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется. Режим «с названием» пишет такой тег сам. {'{summary}'} — все заполненные, {'{lines}'} — с новой строки, {'{abnormal}'} — только вне нормы.
               </p>
 
               <div className="study-template-format">
