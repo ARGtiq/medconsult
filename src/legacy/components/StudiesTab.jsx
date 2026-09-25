@@ -385,22 +385,43 @@ export default function StudiesTab() {
   function updateField(idx, patch) {
     setForm((prev) => {
       let template = prev.template || ''
-      const fields = prev.fields.map((f, i) => {
-        if (i !== idx) return f
-        const merged = { ...f, ...patch }
-        if (patch.label !== undefined) {
-          const auto = slugifyFieldKey(patch.label)
-          const wasAuto = !f.key || f.key === slugifyFieldKey(f.label) || f.key === cyrSlug(f.label)
-          if (wasAuto) {
-            if (f.key && auto && f.key !== auto && template.includes(`{${f.key}}`)) {
-              template = template.split(`{${f.key}}`).join(`{${auto}}`)
-            }
-            merged.key = auto
+      const current = prev.fields[idx]
+      if (!current) return prev
+      let fields = prev.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f))
+      if (patch.label !== undefined && patch.key === undefined) {
+        const oldKey = (current.key || '').trim()
+        let auto = slugifyFieldKey(patch.label)
+        if (auto) {
+          const used = new Set(
+            fields.map((f, i) => (i === idx ? '' : (f.key || '').trim())).filter(Boolean),
+          )
+          let n = 2
+          while (used.has(auto)) auto = `${slugifyFieldKey(patch.label)}_${n++}`
+        }
+        if (oldKey !== auto) {
+          if (oldKey && auto) {
+            template = template.split(`{${oldKey}}`).join(`{${auto}}`)
+            fields = fields.map((f, i) => {
+              if (i === idx) return { ...f, key: auto }
+              let next = f
+              if (next.showIf?.field === oldKey) next = { ...next, showIf: { ...next.showIf, field: auto } }
+              if (next.formula && String(next.formula).includes(`{${oldKey}}`)) {
+                next = { ...next, formula: String(next.formula).split(`{${oldKey}}`).join(`{${auto}}`) }
+              }
+              if (next.refOf === oldKey) next = { ...next, refOf: auto }
+              return next
+            })
+          } else {
+            fields = fields.map((f, i) => (i === idx ? { ...f, key: auto } : f))
           }
         }
-        if (patch.kind === 'formula') merged.computed = true
-        else if (patch.kind && patch.kind !== 'formula') merged.computed = false
-        if (patch.kind === 'groups' && !(merged.optionGroups || []).length) merged.optionGroups = [[]]
+      }
+      fields = fields.map((f, i) => {
+        if (i !== idx) return f
+        const merged = f
+        if (patch.kind === 'formula') return { ...merged, computed: true }
+        if (patch.kind && patch.kind !== 'formula') return { ...merged, computed: false }
+        if (patch.kind === 'groups' && !(merged.optionGroups || []).length) return { ...merged, optionGroups: [[]] }
         return merged
       })
       return { ...prev, fields, template }
@@ -941,7 +962,7 @@ export default function StudiesTab() {
                           placeholder="тег"
                           value={f.key}
                           onChange={(e) => updateField(idx, { key: e.target.value.replace(/[{}\s]/g, '') })}
-                          title="Ключ в шаблоне, заполняется из названия"
+                          title="Тег в шаблоне. Меняется сразу, пока правишь название"
                         />
                         <select
                           className="study-field-kind"
@@ -1284,7 +1305,7 @@ export default function StudiesTab() {
               </div>
               </div>
 
-              <div className="study-template-pane">
+              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}`}>
               <div className="study-template-side">
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>текст слева</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>текст справа</button>
