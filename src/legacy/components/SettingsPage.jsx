@@ -36,7 +36,7 @@ export default function SettingsPage() {
       </div>
       <div className="general-settings-block">
         <h4>AI-провайдер</h4>
-        <p className="settings-note-inline">Выбор модели и ключ для проверки взаимодействий, аллергий, аналогов, подсказок диагноза.</p>
+        <p className="settings-note-inline">OpenRouter или Gemini напрямую через Google API. У каждого свой ключ и своя модель, список обновляется сам.</p>
         <AiSettings inline />
         <AiKeyBackup />
       </div>

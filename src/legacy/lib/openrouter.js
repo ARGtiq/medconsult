@@ -65,8 +65,10 @@ export function hasApiKey() {
 }
 
 export function getModel(provider = getProvider()) {
-  const saved = _ls().getItem(MODEL_KEYS[provider] || MODEL_KEYS.openrouter)
-  return (saved || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter).trim()
+  let saved = (_ls().getItem(MODEL_KEYS[provider] || MODEL_KEYS.openrouter) || '').trim()
+  if (!saved) saved = DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter
+  if (provider === 'google') saved = saved.replace(/^models\//, '').replace(/^google\//, '')
+  return saved
 }
 
 export function setModel(provider, value) {
@@ -88,14 +90,33 @@ export function getModelCatalog(provider = getProvider()) {
   return {
     at: row.at || 0,
     models: Array.isArray(row.models) ? row.models : [],
+    note: row.note || '',
   }
 }
 
-function writeCatalog(provider, models) {
+function writeCatalog(provider, models, note = '') {
   const all = readCatalog()
-  all[provider] = { at: Date.now(), models }
+  all[provider] = { at: Date.now(), models, note }
   _ls().setItem(CATALOG_KEY, JSON.stringify(all))
   return all[provider]
+}
+
+function versionOf(id) {
+  const m = String(id).match(/(\d+(?:\.\d+)?)/)
+  return m ? parseFloat(m[1]) : 0
+}
+
+function byFreshness(a, b) {
+  const d = versionOf(b.id) - versionOf(a.id)
+  if (d) return d
+  return a.name.localeCompare(b.name, 'ru')
+}
+
+function mergeModels(primary, extra) {
+  const map = new Map()
+  for (const m of extra) map.set(m.id, m)
+  for (const m of primary) map.set(m.id, m)
+  return [...map.values()].sort(byFreshness)
 }
 
 function slimModel(id, name) {
@@ -106,9 +127,55 @@ function slimModel(id, name) {
 }
 
 export async function refreshModels(provider = getProvider(), apiKey = getApiKey(provider)) {
-  const models = provider === 'google' ? await fetchGoogleModels(apiKey) : await fetchOpenRouterModels()
+  if (provider === 'google') return refreshGoogleCatalog(apiKey)
+  const models = await fetchOpenRouterModels()
   if (!models.length) throw new Error('Сервер вернул пустой список моделей')
   return writeCatalog(provider, models)
+}
+
+/** Gemini ids for the direct Google API. Official list if the key works, plus new ids from the public catalog. */
+async function refreshGoogleCatalog(apiKey) {
+  let official = []
+  let discovered = []
+  let note = ''
+  try {
+    discovered = await geminiFromOpenRouter()
+  } catch (e) {
+    note = e.message || 'Не удалось взять новые id Gemini'
+  }
+  if ((apiKey || '').trim()) {
+    try {
+      official = await fetchGoogleModels(apiKey.trim())
+      note = ''
+    } catch (e) {
+      note = e.message || 'Список Google API недоступен'
+    }
+  } else if (!discovered.length) {
+    throw new Error('Вставь ключ Google AI Studio — без него список Gemini не из чего собрать')
+  } else {
+    note = 'Ключ ещё не задан: запросы в Google API не уйдут. Список моделей уже есть.'
+  }
+  const models = mergeModels(official, discovered)
+  if (!models.length) throw new Error(note || 'Сервер вернул пустой список моделей')
+  return writeCatalog('google', models, official.length ? '' : note)
+}
+
+async function geminiFromOpenRouter() {
+  let models = getModelCatalog('openrouter').models
+  if (catalogIsStale('openrouter')) {
+    models = await fetchOpenRouterModels()
+    writeCatalog('openrouter', models)
+  }
+  const list = []
+  const seen = new Set()
+  for (const m of models) {
+    if (!m.id.startsWith('google/gemini-') && !m.id.startsWith('google/gemma-')) continue
+    const row = slimModel(m.id.slice('google/'.length), m.name.replace(/^Google:\s*/, ''))
+    if (!row || seen.has(row.id)) continue
+    seen.add(row.id)
+    list.push(row)
+  }
+  return list
 }
 
 async function fetchOpenRouterModels() {

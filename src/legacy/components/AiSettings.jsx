@@ -76,7 +76,6 @@ export default function AiSettings({ inline = false }) {
   useEffect(() => {
     if (!open && !inline) return
     if (!catalogIsStale(provider)) return
-    if (provider === 'google' && !(key || getApiKey('google')).trim()) return
     reloadModels(key || getApiKey(provider))
     // refresh once when the panel opens or the provider changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +136,7 @@ export default function AiSettings({ inline = false }) {
             pickModel(hit ? hit.id : typed)
           }
         }}
-        placeholder="поиск по названию или свой id"
+        placeholder={provider === 'google' ? 'поиск Gemini или свой id, напр. gemini-2.5-flash' : 'поиск по названию или свой id'}
       />
       {matches.length > 0 && (
         <div className="ai-model-list">
@@ -167,7 +166,7 @@ export default function AiSettings({ inline = false }) {
           {catalog.models.length ? `${catalog.models.length} · ${formatWhen(catalog.at)}` : 'список пуст'}
         </span>
       </div>
-      {refreshError && <div className="ai-diagnostic fail">{refreshError}</div>}
+      {catalog.note && !refreshError && <div className="ai-settings-hint">{catalog.note}</div>}
       <div className="ai-settings-actions">
         <button type="button" className="btn-secondary btn-small" onClick={save}>
           {savedFlag ? 'Сохранено ✓' : 'Сохранить'}
@@ -185,8 +184,11 @@ export default function AiSettings({ inline = false }) {
           )}
         </div>
       )}
+      {refreshError && <div className="ai-diagnostic fail">{refreshError}</div>}
       <div className="ai-settings-hint">
-        Ключ и выбранная модель хранятся только в этом браузере. Список моделей берётся у провайдера и обновляется сам раз в сутки, плюс кнопкой. Новый id можно вписать вручную, даже если его ещё нет в списке.
+        {provider === 'google'
+          ? 'Запросы идут напрямую в Gemini API Google (ключ AI Studio), не через OpenRouter. Модель у каждого провайдера своя. Список обновляется сам раз в сутки и кнопкой: из Google и из новых id Gemini. Свой id можно вписать, даже если его ещё нет в списке.'
+          : 'Ключ и выбранная модель хранятся только в этом браузере. Список OpenRouter обновляется сам раз в сутки и кнопкой. Свой id можно вписать, даже если его ещё нет в списке.'}
       </div>
     </div>
   )

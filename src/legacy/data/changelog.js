@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '0.62.0',
+    date: '2026-09-25',
+    items: [
+      'Gemini через Google API — отдельный ключ и модель. Список Gemini обновляется сам, без новой версии приложения',
+    ],
+  },
+  {
     version: '0.61.0',
     date: '2026-09-25',
     items: [
