@@ -136,7 +136,7 @@ export default function AiSettings({ inline = false }) {
             pickModel(hit ? hit.id : typed)
           }
         }}
-        placeholder={provider === 'google' ? 'поиск Gemini или свой id, напр. gemini-2.5-flash' : 'поиск по названию или свой id'}
+        placeholder={provider === 'google' ? 'поиск Gemini или свой id, напр. gemini-3.8-flash' : 'поиск по названию или свой id'}
       />
       {matches.length > 0 && (
         <div className="ai-model-list">

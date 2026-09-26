@@ -39,7 +39,7 @@ const CATALOG_TTL = 24 * 60 * 60 * 1000
 
 const DEFAULT_MODELS = {
   openrouter: 'google/gemini-2.5-flash',
-  google: 'gemini-2.5-flash',
+  google: 'gemini-3.8-flash',
 }
 
 export function getProvider() {
@@ -263,11 +263,12 @@ async function callOpenRouterProvider(systemPrompt, userPrompt) {
   return data?.choices?.[0]?.message?.content?.trim() || ''
 }
 
-async function callGoogleProvider(systemPrompt, userPrompt) {
+async function callGoogleProvider(systemPrompt, userPrompt, allowSwap = true) {
   const apiKey = getApiKey('google')
   if (!apiKey) throw new Error('Не задан ключ Google AI Studio — добавь его в настройках сверху')
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getModel('google'))}:generateContent?key=${apiKey}`
+  const model = getModel('google')
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -280,6 +281,11 @@ async function callGoogleProvider(systemPrompt, userPrompt) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    const next = allowSwap && res.status === 404 ? text.match(/use models\/([A-Za-z0-9._-]+)/)?.[1] : ''
+    if (next && next !== model) {
+      setModel('google', next)
+      return callGoogleProvider(systemPrompt, userPrompt, false)
+    }
     throw new Error(`Google AI ${res.status}: ${text.slice(0, 200)}`)
   }
 

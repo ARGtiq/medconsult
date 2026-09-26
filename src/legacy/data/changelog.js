@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '0.63.0',
+    date: '2026-09-26',
+    items: [
+      'Google API: модель по умолчанию gemini-3.8-flash. Если выбранная модель снята, подставляется та, которую называет ответ Google',
+    ],
+  },
+  {
     version: '0.62.0',
     date: '2026-09-25',
     items: [
