@@ -9,7 +9,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
-import { packsForCodeLive, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
+import { packsForCodeLive, protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -43,6 +43,15 @@ const SPLIT_DEFAULT = 38;
 
 function clampSplit(n: number) {
   return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, Math.round(n)));
+}
+
+function Slot({ order, children }: { order: number; children: ReactNode }) {
+  if (children == null || children === false) return null;
+  return (
+    <div className="flex flex-col gap-1.5" style={{ order }}>
+      {children}
+    </div>
+  );
 }
 
 export function ProtocolPage() {
@@ -334,6 +343,83 @@ export function ProtocolPage() {
     </button>
   );
 
+  const packOrder = session.templateId ? protocolBlockOrder(session.templateId, session.docStd) : null;
+  const slotOf = (id: string, fallback: number) => {
+    if (!packOrder) return fallback;
+    const i = packOrder.indexOf(id);
+    return i < 0 ? 500 + fallback : i * 10;
+  };
+  const studiesOrder = (() => {
+    if (!packOrder) return 65;
+    const pts = ["objective", "status"].map((id) => packOrder.indexOf(id)).filter((i) => i >= 0);
+    if (pts.length) return Math.max(...pts) * 10 + 5;
+    const rec = packOrder.indexOf("recommendations");
+    return rec >= 0 ? rec * 10 - 1 : 65;
+  })();
+  const tailOrder = packOrder ? Math.max(0, ...packOrder.map((_, i) => i * 10)) + 15 : 70;
+
+  const diagnosisBlock = (session.mode !== "document" || want("diagnosis")) ? (
+    <Sec
+      id="diagnosis"
+      title="Диагноз"
+      badge={session.diagnosisCode}
+      open={session.openSection === "diagnosis"}
+      onOpen={() => setSession({ openSection: session.openSection === "diagnosis" ? null : "diagnosis" })}
+      onRemove={() => toggleBlock("diagnosis")}
+    >
+      {session.diagnosisCode ? (
+        <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
+      ) : null}
+      <input
+        list="icd-list"
+        value={session.diagnosisCode}
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          const hit = icd.find((i) => i.code.toUpperCase() === raw.toUpperCase());
+          const prev = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
+          const title = session.diagnosisTitle.trim();
+          const keepCustom = !!title && title !== (prev?.title || "");
+          setSession({
+            diagnosisCode: hit ? hit.code : e.target.value,
+            diagnosisTitle: hit && !keepCustom ? hit.title : session.diagnosisTitle,
+          });
+        }}
+        className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        placeholder="Код МКБ"
+      />
+      {codeHit ? (
+        <p className="mt-1 mb-1 text-xs leading-snug text-ink-soft">
+          <span className="font-medium text-ink">{codeHit.code}</span> — {codeHit.title}
+        </p>
+      ) : (
+        <div className="mb-1" />
+      )}
+      <datalist id="icd-list">
+        {icd.slice(0, 400).map((i) => (
+          <option key={i.code} value={i.code}>
+            {i.title}
+          </option>
+        ))}
+      </datalist>
+      {session.diagnosisTitle ? (
+        <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Формулировка</div>
+      ) : null}
+      <textarea
+        value={session.diagnosisTitle}
+        onChange={(e) => setSession({ diagnosisTitle: e.target.value })}
+        className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        rows={2}
+        placeholder="Формулировка диагноза"
+      />
+      {session.diagnosisCode && hubMode === "block" && (
+        <div className="legacy-surface klinrek-slot mt-2 space-y-2">
+          {klinrekPanel("diagnosis")}
+          {klinrekPanel("sheet")}
+        </div>
+      )}
+    </Sec>
+  ) : null;
+
   const assembly = (
     <div className="flex flex-col gap-1.5 overflow-auto p-2.5 md:p-3">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -357,67 +443,7 @@ export function ProtocolPage() {
         </p>
       )}
 
-      {(session.mode !== "document" || want("diagnosis")) && (
-      <Sec
-        id="diagnosis"
-        title="Диагноз"
-        badge={session.diagnosisCode}
-        open={session.openSection === "diagnosis"}
-        onOpen={() => setSession({ openSection: session.openSection === "diagnosis" ? null : "diagnosis" })}
-        onRemove={() => toggleBlock("diagnosis")}
-      >
-        {session.diagnosisCode ? (
-          <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
-        ) : null}
-        <input
-          list="icd-list"
-          value={session.diagnosisCode}
-          onChange={(e) => {
-            const raw = e.target.value.trim();
-            const hit = icd.find((i) => i.code.toUpperCase() === raw.toUpperCase());
-            const prev = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
-            const title = session.diagnosisTitle.trim();
-            const keepCustom = !!title && title !== (prev?.title || "");
-            setSession({
-              diagnosisCode: hit ? hit.code : e.target.value,
-              diagnosisTitle: hit && !keepCustom ? hit.title : session.diagnosisTitle,
-            });
-          }}
-          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-          placeholder="Код МКБ"
-        />
-        {codeHit ? (
-          <p className="mt-1 mb-1 text-xs leading-snug text-ink-soft">
-            <span className="font-medium text-ink">{codeHit.code}</span> — {codeHit.title}
-          </p>
-        ) : (
-          <div className="mb-1" />
-        )}
-        <datalist id="icd-list">
-          {icd.slice(0, 400).map((i) => (
-            <option key={i.code} value={i.code}>
-              {i.title}
-            </option>
-          ))}
-        </datalist>
-        {session.diagnosisTitle ? (
-          <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Формулировка</div>
-        ) : null}
-        <textarea
-          value={session.diagnosisTitle}
-          onChange={(e) => setSession({ diagnosisTitle: e.target.value })}
-          className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm"
-          rows={2}
-          placeholder="Формулировка диагноза"
-        />
-        {session.diagnosisCode && hubMode === "block" && (
-          <div className="legacy-surface klinrek-slot mt-2 space-y-2">
-            {klinrekPanel("diagnosis")}
-            {klinrekPanel("sheet")}
-          </div>
-        )}
-      </Sec>
-      )}
+      {!settings.diagnosisAbovePreview && <Slot order={slotOf("diagnosis", 10)}>{diagnosisBlock}</Slot>}
 
       {hubMode === "modal" && guideline && !documentMode && (
         <>
@@ -467,6 +493,7 @@ export function ProtocolPage() {
         </>
       )}
 
+      <Slot order={slotOf("complaints", 20)}>
       {want("complaints") && (
           <Sec
             id="complaints"
@@ -561,7 +588,9 @@ export function ProtocolPage() {
             )}
           </Sec>
       )}
+      </Slot>
 
+      <Slot order={slotOf("anamnesis", 30)}>
       {want("anamnesis") && (
           <Sec
             id="anamnesis"
@@ -598,7 +627,9 @@ export function ProtocolPage() {
             />
           </Sec>
       )}
+      </Slot>
 
+      <Slot order={slotOf("anamnesisVitae", 40)}>
       {want("anamnesisVitae") && (
           <Sec
             id="anamnesisVitae"
@@ -666,7 +697,9 @@ export function ProtocolPage() {
             />
           </Sec>
       )}
+      </Slot>
 
+      <Slot order={slotOf("objective", 50)}>
       {want("objective") && (
           <Sec
             id="objective"
@@ -729,7 +762,9 @@ export function ProtocolPage() {
             />
           </Sec>
       )}
+      </Slot>
 
+      <Slot order={slotOf("status", 60)}>
       {want("status") && (
           <Sec
             id="status"
@@ -786,7 +821,9 @@ export function ProtocolPage() {
             <EditableChips items={session.localStatus} onChange={(next) => store.renameList("localStatus", next)} />
           </Sec>
       )}
+      </Slot>
 
+      <Slot order={studiesOrder}>
       {session.diagnosisCode && hubMode === "block" && !documentMode && (
         <div className="legacy-surface klinrek-slot">{klinrekPanel("studies")}</div>
       )}
@@ -797,7 +834,9 @@ export function ProtocolPage() {
         <StudyCard key={s.key} studyKey={s.key} />
       ))}
       <DeviationsSpoiler />
+      </Slot>
 
+      <Slot order={tailOrder}>
       {(session.extraBlocks || []).map((b) => (
         <Sec
           key={b.id}
@@ -817,7 +856,9 @@ export function ProtocolPage() {
           />
         </Sec>
       ))}
+      </Slot>
 
+      <Slot order={tailOrder + 5}>
       {session.mode === "document" && (
         <Sec
           id="notes"
@@ -836,7 +877,9 @@ export function ProtocolPage() {
           />
         </Sec>
       )}
+      </Slot>
 
+      <Slot order={slotOf("recommendations", 80)}>
       {(showRecs) && (
         <Sec
           id="recommendations"
@@ -896,11 +939,13 @@ export function ProtocolPage() {
           )}
         </Sec>
       )}
+      </Slot>
     </div>
   );
 
   const preview = (
     <div className="flex h-full flex-col gap-1.5 bg-preview p-2.5 md:p-3">
+      {settings.diagnosisAbovePreview && diagnosisBlock}
       <div className="flex flex-wrap items-center gap-1.5">
         <h3 className="min-w-0 flex-1 text-[10px] font-semibold tracking-wide text-ink-soft uppercase">В Медлок / Word</h3>
         <button

@@ -151,6 +151,8 @@ export type SettingsState = {
   blocksAsSpoiler: boolean;
   splitPct: number;
   studyDeviations: boolean;
+  /** Поле диагноза над колонкой «В Медлок», а не в сборке. */
+  diagnosisAbovePreview: boolean;
   openRouterKey: string;
   aiModel: string;
 };

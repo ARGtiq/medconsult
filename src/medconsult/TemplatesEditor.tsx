@@ -640,23 +640,59 @@ function VisitPacksEditor({
           </div>
           <div>
             <div className="text-[10px] tracking-wide text-mute uppercase">блоки протокола</div>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {STD_DOC_BLOCKS.map((b) => {
-                const on = current.stdBlocks.includes(b.id);
+            <p className="mt-0.5 text-[10px] text-ink-soft">Порядок здесь — порядок на протоколе, когда выбран этот набор.</p>
+            <div className="mt-1 space-y-1">
+              {current.stdBlocks.map((id, i) => {
+                const b = STD_DOC_BLOCKS.find((x) => x.id === id);
+                if (!b) return null;
                 return (
+                  <div key={id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="rounded border border-line px-1.5 text-xs text-ink-soft disabled:opacity-30"
+                      disabled={i === 0}
+                      onClick={() => {
+                        const stdBlocks = [...current.stdBlocks];
+                        [stdBlocks[i - 1], stdBlocks[i]] = [stdBlocks[i], stdBlocks[i - 1]];
+                        patch({ stdBlocks });
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-line px-1.5 text-xs text-ink-soft disabled:opacity-30"
+                      disabled={i === current.stdBlocks.length - 1}
+                      onClick={() => {
+                        const stdBlocks = [...current.stdBlocks];
+                        [stdBlocks[i + 1], stdBlocks[i]] = [stdBlocks[i], stdBlocks[i + 1]];
+                        patch({ stdBlocks });
+                      }}
+                    >
+                      ↓
+                    </button>
+                    <span className="min-w-0 flex-1 text-xs">{b.title}</span>
+                    <button type="button" className="text-xs text-danger" onClick={() => toggleArr("stdBlocks", id)}>
+                      убрать
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {STD_DOC_BLOCKS.some((b) => !current.stdBlocks.includes(b.id)) && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {STD_DOC_BLOCKS.filter((b) => !current.stdBlocks.includes(b.id)).map((b) => (
                   <button
                     key={b.id}
                     type="button"
                     onClick={() => toggleArr("stdBlocks", b.id)}
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
-                    }`}
+                    className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs text-teal"
                   >
-                    {b.title}
+                    + {b.title}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
           {docKinds.length > 0 && (
             <div>
@@ -1008,6 +1044,21 @@ function ObjectiveEditor({
               placeholder="название"
               className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
             />
+            <button
+              type="button"
+              className="text-[11px] font-medium text-teal"
+              onClick={() => {
+                const copy: ObjectiveTemplate = {
+                  ...item,
+                  id: `obj_${Date.now().toString(36)}`,
+                  label: `${item.label || "статус"} (копия)`,
+                  codes: [...(item.codes || [])],
+                };
+                onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
+              }}
+            >
+              копия
+            </button>
             <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
               ×
             </button>
@@ -1058,6 +1109,22 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
               onChange={(e) => patch(i, { label: e.target.value })}
               className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
             />
+            <button
+              type="button"
+              className="text-[11px] font-medium text-teal"
+              onClick={() => {
+                const copy: LocalPack = {
+                  ...p,
+                  id: `pack_${Date.now().toString(36)}`,
+                  label: `${p.label || "пакет"} (копия)`,
+                  codes: [...p.codes],
+                  chips: [...p.chips],
+                };
+                onChange([...packs.slice(0, i + 1), copy, ...packs.slice(i + 1)]);
+              }}
+            >
+              копия
+            </button>
             <button type="button" className="text-xs text-danger" onClick={() => onChange(packs.filter((_, j) => j !== i))}>
               ×
             </button>

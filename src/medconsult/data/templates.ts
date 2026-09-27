@@ -135,7 +135,25 @@ export const STD_DOC_BLOCKS = [
   { id: "recommendations", title: "Назначения" },
 ] as const;
 
+/** Порядок блоков на протоколе, если набор свой порядок не задал. */
+export const DEFAULT_BLOCK_ORDER = [
+  "diagnosis",
+  "complaints",
+  "anamnesis",
+  "anamnesisVitae",
+  "objective",
+  "status",
+  "recommendations",
+] as const;
+
 const ALL_STD = STD_DOC_BLOCKS.map((b) => b.id);
+
+export function protocolBlockOrder(templateId: string | undefined, docStd: string[] | undefined): string[] {
+  if (!templateId) return [...DEFAULT_BLOCK_ORDER];
+  const known = new Set<string>(DEFAULT_BLOCK_ORDER);
+  const custom = (docStd || []).filter((id) => known.has(id));
+  return custom.length ? custom : [...DEFAULT_BLOCK_ORDER];
+}
 
 export const SEED_VISIT_PACKS: VisitPack[] = [
   {
@@ -143,7 +161,7 @@ export const SEED_VISIT_PACKS: VisitPack[] = [
     name: "Первичный осмотр",
     kind: "primary",
     codes: [],
-    stdBlocks: [...ALL_STD],
+    stdBlocks: ["diagnosis", "complaints", "anamnesis", "anamnesisVitae", "objective", "status", "recommendations"],
     extraKinds: [],
     localPackIds: [],
   },
@@ -152,7 +170,7 @@ export const SEED_VISIT_PACKS: VisitPack[] = [
     name: "Повторный осмотр",
     kind: "followup",
     codes: [],
-    stdBlocks: ["complaints", "anamnesis", "objective", "status", "diagnosis", "recommendations"],
+    stdBlocks: ["diagnosis", "complaints", "anamnesis", "objective", "status", "recommendations"],
     extraKinds: [],
     localPackIds: [],
   },
@@ -314,6 +332,39 @@ function migrateObjectiveBlock(packs: VisitPack[]): { packs: VisitPack[]; change
   return { packs: next, changed };
 }
 
+const PACK_ORDER_MIG = "medconsult_mig_pack_order";
+const OLD_PRIMARY_ORDER = "complaints,anamnesis,anamnesisVitae,objective,status,diagnosis,recommendations";
+const OLD_FOLLOW_ORDER = "complaints,anamnesis,objective,status,diagnosis,recommendations";
+
+/** Старые наборы держали диагноз в конце списка. На протоколе он был первым — сохраняем это, пока пользователь сам не сдвинет. */
+function migratePackOrder(packs: VisitPack[]): { packs: VisitPack[]; changed: boolean } {
+  if (typeof window === "undefined") return { packs, changed: false };
+  let done = false;
+  try {
+    done = localStorage.getItem(PACK_ORDER_MIG) === "1";
+  } catch {
+    return { packs, changed: false };
+  }
+  if (done) return { packs, changed: false };
+  const next = packs.map((p) => {
+    const key = p.stdBlocks.join(",");
+    if (key === OLD_PRIMARY_ORDER) {
+      return { ...p, stdBlocks: ["diagnosis", "complaints", "anamnesis", "anamnesisVitae", "objective", "status", "recommendations"] };
+    }
+    if (key === OLD_FOLLOW_ORDER) {
+      return { ...p, stdBlocks: ["diagnosis", "complaints", "anamnesis", "objective", "status", "recommendations"] };
+    }
+    return p;
+  });
+  try {
+    localStorage.setItem(PACK_ORDER_MIG, "1");
+  } catch {
+    /* ignore */
+  }
+  const changed = next.some((p, i) => p !== packs[i]);
+  return { packs: next, changed };
+}
+
 function read(): TemplatesState {
   const seed = seedTemplates();
   if (typeof window === "undefined") return seed;
@@ -330,13 +381,14 @@ function read(): TemplatesState {
     const parsed = JSON.parse(raw) as Partial<TemplatesState>;
     const visitPacks = Array.isArray(parsed.visitPacks) ? parsed.visitPacks : seed.visitPacks;
     const migrated = migrateObjectiveBlock(visitPacks);
+    const ordered = migratePackOrder(migrated.packs);
     const state: TemplatesState = {
       localPacks: Array.isArray(parsed.localPacks) && parsed.localPacks.length ? parsed.localPacks : seed.localPacks,
       chronic: Array.isArray(parsed.chronic) && parsed.chronic.length ? parsed.chronic : seed.chronic,
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
       complaints: mergeComplaints(parsed.complaints, seed.complaints),
-      visitPacks: migrated.packs,
+      visitPacks: ordered.packs,
       questionnaires:
         Array.isArray(parsed.questionnaires) && parsed.questionnaires.length
           ? mergeQuestionnaires(parsed.questionnaires, seed.questionnaires)
@@ -348,7 +400,7 @@ function read(): TemplatesState {
         ? (parsed.globalTemplates.map(normalizeGlobal).filter(Boolean) as GlobalTemplate[])
         : [],
     };
-    if (migrated.changed) {
+    if (migrated.changed || ordered.changed) {
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
       } catch {

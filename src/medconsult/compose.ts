@@ -1,5 +1,6 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
 import { fillStudyTemplate, collectDeviations, formatDeviations } from "./data/studies";
+import { protocolBlockOrder } from "./data/templates";
 import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
 
@@ -53,50 +54,62 @@ export function composeBlocks(
     out.push({ id, n: 0, title, text: trimmed });
   };
 
-  if (includeStd(session, "complaints")) {
-    push("complaints", "Жалобы", (session.complaints || []).join(", "));
-  }
-  if (includeStd(session, "anamnesis")) {
-    push("anamnesis", "Анамнез заболевания", session.anamnesis);
-  }
-  if (includeStd(session, "anamnesisVitae")) {
-    push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
-  }
-  const showObj = includeStd(session, "objective") || (session.mode === "document" && includeStd(session, "status") && !hidden(session, "objective"));
-  const showLoc = includeStd(session, "status");
-  if (showObj || showLoc) {
+  const legacyOrder = ["complaints", "anamnesis", "anamnesisVitae", "objective", "status", "diagnosis", "recommendations"];
+  const order = session.templateId ? protocolBlockOrder(session.templateId, session.docStd) : legacyOrder;
+  let statusSent = false;
+  const emitStatus = () => {
+    if (statusSent) return;
+    statusSent = true;
+    const showObj = includeStd(session, "objective") || (session.mode === "document" && includeStd(session, "status") && !hidden(session, "objective"));
+    const showLoc = includeStd(session, "status");
+    if (!showObj && !showLoc) return;
     const obj = showObj ? (session.objective || "").trim() : "";
     const loc = showLoc ? (session.localStatus || []).join("; ").trim() : "";
     const title = obj && loc ? "Объективный + локальный статус" : obj ? "Объективный статус" : "Локальный статус";
     push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join(" "));
+  };
+  const emitStudies = () => {
+    const studyParts = (session.studies || [])
+      .map((entry) => {
+        const def = getStudyLive(entry.key);
+        if (entry.textMode && (entry.text || "").trim()) return entry.text.trim();
+        if (!def) return "";
+        return entry.instances
+          .map((inst, idx) =>
+            fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]),
+          )
+          .join(" ");
+      })
+      .filter(Boolean);
+    if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));
+    if (opts?.deviations) {
+      const dev = collectDeviations(session.studies || [], getStudyLive);
+      const text = formatDeviations(dev);
+      if (text) push("deviations", "Отклонения", `${text}.`);
+    }
+  };
+  let studiesSent = false;
+  for (const id of order) {
+    if (!studiesSent && id === "recommendations") {
+      emitStudies();
+      studiesSent = true;
+    }
+    if (id === "complaints" && includeStd(session, "complaints")) {
+      push("complaints", "Жалобы", (session.complaints || []).join(", "));
+    } else if (id === "anamnesis" && includeStd(session, "anamnesis")) {
+      push("anamnesis", "Анамнез заболевания", session.anamnesis);
+    } else if (id === "anamnesisVitae" && includeStd(session, "anamnesisVitae")) {
+      push("anamnesisVitae", "Предварительный анамнез жизни", session.anamnesisVitae);
+    } else if (id === "objective" || id === "status") {
+      emitStatus();
+    } else if (id === "diagnosis" && includeStd(session, "diagnosis")) {
+      const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
+      push("diagnosis", "Диагноз", dx);
+    } else if (id === "recommendations" && includeStd(session, "recommendations")) {
+      push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
+    }
   }
-
-  const studyParts = (session.studies || [])
-    .map((entry) => {
-      const def = getStudyLive(entry.key);
-      if (entry.textMode && (entry.text || "").trim()) return entry.text.trim();
-      if (!def) return "";
-      return entry.instances
-        .map((inst, idx) =>
-          fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]),
-        )
-        .join(" ");
-    })
-    .filter(Boolean);
-  if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));
-  if (opts?.deviations) {
-    const dev = collectDeviations(session.studies || [], getStudyLive);
-    const text = formatDeviations(dev);
-    if (text) push("deviations", "Отклонения", `${text}.`);
-  }
-
-  if (includeStd(session, "diagnosis")) {
-    const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
-    push("diagnosis", "Диагноз", dx);
-  }
-  if (includeStd(session, "recommendations")) {
-    push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
-  }
+  if (!studiesSent) emitStudies();
 
   if (session.mode === "document" || session.notes.trim()) {
     push("notes", session.mode === "document" ? "Текст документа" : "Примечания", session.notes);

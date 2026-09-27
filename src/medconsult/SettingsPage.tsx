@@ -73,6 +73,17 @@ export function SettingsPage() {
             <p className="mt-1 text-xs text-ink-soft">
               Спойлер со всеми значениями вне нормы. Выкл — не показывать ни на станке, ни в Медлок.
             </p>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.diagnosisAbovePreview === true}
+                onChange={(e) => setSettings({ diagnosisAbovePreview: e.target.checked })}
+              />
+              Диагноз над «В Медлок»
+            </label>
+            <p className="mt-1 text-xs text-ink-soft">
+              Поле кода и формулировки переезжает наверх правой колонки. В сборке его нет.
+            </p>
           </Card>
           <Card title="Сеанс станка">
             <p className="mt-2 text-xs text-ink-soft">
