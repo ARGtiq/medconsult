@@ -19,6 +19,7 @@ export function Typeahead({
   idleLabel,
   disabled,
   emptyHint,
+  inputClassName,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -29,6 +30,7 @@ export function Typeahead({
   idleLabel?: string;
   disabled?: boolean;
   emptyHint?: ReactNode;
+  inputClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -129,7 +131,7 @@ export function Typeahead({
         }}
         onKeyDown={onKey}
         placeholder={showIdle ? "" : placeholder}
-        className={`w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm ${showIdle ? "text-transparent caret-ink" : ""}`}
+        className={inputClassName || `w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm ${showIdle ? "text-transparent caret-ink" : ""}`}
         autoComplete="off"
         role="combobox"
         aria-expanded={showList}

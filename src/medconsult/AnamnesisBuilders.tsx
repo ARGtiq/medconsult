@@ -224,6 +224,89 @@ function VitaeField({ label, children }: { label: string; children: ReactNode })
   );
 }
 
+function ChipList({
+  label,
+  items,
+  onChange,
+  allergy,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (next: string[]) => void;
+  allergy?: boolean;
+  placeholder: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState("");
+  const open = items.length > 0 || adding;
+  const hits = useMemo(() => {
+    if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
+    if (allergy) return searchAllergy(q);
+    return searchDrugs(q)
+      .slice(0, 10)
+      .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
+  }, [allergy, q]);
+  const chip = (on: boolean) =>
+    `rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"}`;
+  return (
+    <div className="mt-1">
+      <div className="text-xs font-semibold text-ink">{label}</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <button
+          type="button"
+          className={chip(!open)}
+          onClick={() => {
+            setAdding(false);
+            if (items.length) onChange([]);
+          }}
+        >
+          отрицает
+        </button>
+        <button type="button" className={chip(open)} onClick={() => setAdding(true)}>
+          есть
+        </button>
+      </div>
+      {open ? (
+        <div className="mt-1">
+          {items.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {items.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  title="Нажми, чтобы убрать"
+                  className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
+                  onClick={() => onChange(items.filter((x) => x !== t))}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="mt-1">
+            <Typeahead
+              value={q}
+              onChange={setQ}
+              items={hits}
+              onPick={(it) => {
+                const name = it.name || it.label;
+                if (!items.includes(name)) onChange([...items, name]);
+              }}
+              onSubmitCustom={(raw) => {
+                if (!items.includes(raw)) onChange([...items, raw]);
+              }}
+              placeholder={placeholder}
+              emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
+              inputClassName="w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CardFill({
   label,
   items,
@@ -803,19 +886,19 @@ export function AnamnesisVitae({
       )}
       </VitaeSection>
       <VitaeSection id="allergy" omitted={omitted("allergy")} onOmit={setOmit}>
-      <CardFill
+      <ChipList
         label="аллергия"
         items={session.allergies || []}
         allergy
-        placeholder="аллерген или препарат"
+        placeholder="аллерген + Enter"
         onChange={(allergies) => setCard({ allergies })}
       />
       </VitaeSection>
       <VitaeSection id="meds" omitted={omitted("meds")} onOmit={setOmit}>
-      <CardFill
+      <ChipList
         label="принимает постоянно"
         items={session.currentMedications || []}
-        placeholder="препарат"
+        placeholder="препарат + Enter"
         onChange={(currentMedications) => setCard({ currentMedications })}
       />
       </VitaeSection>
