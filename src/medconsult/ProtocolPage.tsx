@@ -9,7 +9,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
-import { packsForCodeLive, protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
+import { protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -78,10 +78,21 @@ export function ProtocolPage() {
   const splitLive = useRef(SPLIT_DEFAULT);
   const patient = patients.find((p) => p.id === session.patientId);
   const guideline = compactGuideline(session.diagnosisCode);
-  const packs = useMemo(
-    () => packsForCodeLive(session.diagnosisCode),
-    [session.diagnosisCode, templates.localPacks],
-  );
+  const packs = useMemo(() => {
+    const code = session.diagnosisCode.trim().toUpperCase();
+    const prefix = code.split(".")[0];
+    const matches = (codes: string[]) => {
+      if (!code) return codes.length === 0;
+      return codes.some((raw) => {
+        const u = raw.trim().toUpperCase();
+        if (!u) return false;
+        return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
+      });
+    };
+    return [...(templates.localPacks || [])].sort(
+      (a, b) => Number(matches(b.codes)) - Number(matches(a.codes)) || a.label.localeCompare(b.label, "ru"),
+    );
+  }, [session.diagnosisCode, templates.localPacks]);
   const objectiveTemplates = useMemo(() => {
     const code = session.diagnosisCode.trim().toUpperCase();
     const prefix = code.split(".")[0];
@@ -774,9 +785,21 @@ export function ProtocolPage() {
             onOpen={() => setSession({ openSection: session.openSection === "status" ? null : "status" })}
             onRemove={() => toggleBlock("status")}
           >
-            {packs.map((p) => (
+            {packs.map((p) => {
+              const code = session.diagnosisCode.trim().toUpperCase();
+              const prefix = code.split(".")[0];
+              const byIcd =
+                !!code &&
+                p.codes.some((raw) => {
+                  const u = raw.trim().toUpperCase();
+                  return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
+                });
+              return (
               <div key={p.id} className="mb-1">
-                <div className="text-xs font-semibold text-ink">{p.label} · по МКБ</div>
+                <div className="text-xs font-semibold text-ink">
+                  {p.label}
+                  {byIcd ? " · по МКБ" : ""}
+                </div>
                 <ToggleChips
                   texts={p.chips}
                   onToggle={toggleLocal}
@@ -785,7 +808,11 @@ export function ProtocolPage() {
                   onRename={renameInserted("localStatus")}
                 />
               </div>
-            ))}
+              );
+            })}
+            {packs.length === 0 && (
+              <p className="text-xs text-mute">Шаблонов нет. Справочник → Блоки → локальный статус.</p>
+            )}
             <div className="mt-1.5 flex flex-wrap items-center gap-1">
               <button
                 type="button"
