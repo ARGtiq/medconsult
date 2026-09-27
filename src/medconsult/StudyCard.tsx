@@ -64,7 +64,7 @@ export function FitTextarea({
   );
 }
 
-function FieldControl({
+export function FieldControl({
   f,
   value,
   onChange,

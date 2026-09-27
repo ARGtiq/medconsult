@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   composeAnamnesis,
   composeVitae,
@@ -22,6 +22,16 @@ import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchDrugs } from "./live";
 import { useAppStore } from "./store";
 import { Typeahead } from "./Typeahead";
+import { FieldControl } from "./StudyCard";
+import {
+  fillVitaeTemplate,
+  templateDefaults,
+  vitaeDefaultKey,
+  vitaeDraftTouched,
+  vitaeTemplates,
+  visibleVitaeFields,
+  type VitaeTemplate,
+} from "./vitaeTemplates";
 
 function ChipRow({
   label,
@@ -418,6 +428,16 @@ export function AnamnesisDisease({
   );
 }
 
+function useVitaeTemplates() {
+  const [list, setList] = useState<VitaeTemplate[]>(() => vitaeTemplates());
+  useEffect(() => {
+    const sync = () => setList(vitaeTemplates());
+    window.addEventListener("medconsult-vitae-templates", sync);
+    return () => window.removeEventListener("medconsult-vitae-templates", sync);
+  }, []);
+  return list;
+}
+
 export function AnamnesisVitae({
   draft,
   text,
@@ -438,8 +458,76 @@ export function AnamnesisVitae({
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
-  const { session } = useAppStore();
+  const { session, setSession } = useAppStore();
+  const vitaeTpls = useVitaeTemplates();
   const ctx = { medications: session.currentMedications, allergies: session.allergies };
+  const defaultKey = vitaeDefaultKey();
+  const mode =
+    session.vitaeTemplateId === "chips"
+      ? "chips"
+      : session.vitaeTemplateId && vitaeTpls.some((t) => t.key === session.vitaeTemplateId)
+        ? session.vitaeTemplateId
+        : vitaeDraftTouched(d)
+          ? "chips"
+          : text.trim() && !session.vitaeTemplateId
+            ? "text"
+            : defaultKey;
+  const tpl = vitaeTpls.find((t) => t.key === mode);
+  const fields = tpl ? (session.vitaeTemplateId === tpl.key ? session.vitaeFields || templateDefaults(tpl) : templateDefaults(tpl)) : {};
+
+  function choose(id: string) {
+    if (id === "chips") {
+      setSession({ vitaeTemplateId: "chips", vitaeChipMode: true, anamnesisVitae: composeVitae(d, ctx) });
+      return;
+    }
+    const next = vitaeTpls.find((t) => t.key === id);
+    if (!next) return;
+    const nextFields = session.vitaeTemplateId === id ? session.vitaeFields || templateDefaults(next) : templateDefaults(next);
+    setSession({
+      vitaeTemplateId: id,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(next, nextFields, ctx),
+    });
+  }
+
+  function writeField(key: string, value: string) {
+    if (!tpl) return;
+    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), [key]: value };
+    setSession({
+      vitaeTemplateId: tpl.key,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
+    });
+  }
+
+  const picker = (
+    <div className="mb-2 flex flex-wrap gap-1">
+      <button
+        type="button"
+        onClick={() => choose("chips")}
+        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+          mode === "chips" ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+        }`}
+      >
+        чипы{defaultKey === "chips" ? " · умолч." : ""}
+      </button>
+      {vitaeTpls.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => choose(t.key)}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            mode === t.key ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+          }`}
+        >
+          {t.label}
+          {defaultKey === t.key ? " · умолч." : ""}
+        </button>
+      ))}
+    </div>
+  );
   const openDev = d.development === "features" || d.developmentItems.length > 0;
   const openOcc = d.occupation === "has" || d.occupationItems.length > 0;
   const openPast = d.pastIllness === "other" || d.pastItems.length > 0;
@@ -458,6 +546,7 @@ export function AnamnesisVitae({
   if (!chipMode) {
     return (
       <div>
+        {picker}
         <textarea
           value={text}
           onChange={(e) => onText(e.target.value)}
@@ -471,8 +560,33 @@ export function AnamnesisVitae({
     );
   }
 
+  if (tpl && mode !== "chips" && mode !== "text") {
+    const shown = visibleVitaeFields(tpl, fields);
+    return (
+      <div>
+        {picker}
+        {shown.map((f) =>
+          f.kind === "heading" ? (
+            <div key={f.key} className="mt-2 text-xs font-semibold text-ink">
+              {f.label}
+            </div>
+          ) : (
+            <div key={f.key} className="mt-1">
+              <div className="text-xs font-semibold text-ink">{f.label}</div>
+              <FieldControl f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
+            </div>
+          ),
+        )}
+        <FromCard label="аллергия" items={session.allergies} />
+        <FromCard label="принимает постоянно" items={session.currentMedications} />
+        <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
+      </div>
+    );
+  }
+
   return (
     <div>
+      {picker}
       <VitaeSection id="development" omitted={omitted("development")} onOmit={setOmit}>
       <ChipRow
         label="развитие"

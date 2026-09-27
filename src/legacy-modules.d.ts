@@ -55,12 +55,19 @@ declare module "@/legacy/lib/store" {
     getGuidelines: () => Record<string, unknown> | unknown[];
     getGuidelinesForCodes: (codes: string[]) => Record<string, unknown>[];
     getAllStudies: () => unknown[];
+    getVitaeTemplates: () => unknown[];
+    getVitaeDefault: () => string;
+    setVitaeDefault: (key: string) => string;
+    saveVitaeTemplate: (study: Record<string, unknown>) => unknown;
+    deleteVitaeTemplate: (key: string) => unknown;
     getComplaintSuggestions: (q?: string) => { text: string; count?: number }[];
     getDrugsForComplaints: (complaints: string[]) => { drug: string; weight: number }[];
     getDrugsForDiagnosisCodes: (codes: string[]) => { drug: string; weight: number }[];
     getDrugsForMkbCode: (code: string) => { name?: string; dosage?: string; frequency?: string; duration?: string; mkb10Codes?: string }[];
     exportAll: () => string;
     importAll: (raw: string) => void;
+    exportNamespace: (ns: string) => string;
+    importNamespace: (ns: string, json: string) => void;
     on: (event: string, cb: () => void) => () => void;
   };
 }

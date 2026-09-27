@@ -23,7 +23,6 @@ import {
   findComplaintVariant,
   suggestComplaints,
   liveIcdMerged,
-  searchAllergy,
   searchDrugs,
   findStudyByChip,
   getStudyLive,
@@ -31,6 +30,7 @@ import {
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
+import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { collectDeviations } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
@@ -304,18 +304,6 @@ export function ProtocolPage() {
     allergies: session.allergies || [],
   };
 
-  const setCard = (patch: { allergies?: string[]; currentMedications?: string[] }) => {
-    const allergies = patch.allergies ?? session.allergies ?? [];
-    const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
-    if (patient) store.updatePatient(patient.id, { allergies, currentMedications });
-    const d = session.vitaeDraft || emptyVitae();
-    store.setSession({
-      allergies,
-      currentMedications,
-      anamnesisVitae: composeVitae(d, { medications: currentMedications, allergies }),
-    });
-  };
-
   const splitPct = clampSplit(liveSplit ?? settings.splitPct ?? SPLIT_DEFAULT);
   splitLive.current = splitPct;
 
@@ -360,25 +348,6 @@ export function ProtocolPage() {
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>
           Повторить прошлый сеанс
         </button>
-      </div>
-
-      <div className="rounded-[10px] border border-warn-line bg-warn px-2.5 py-2 text-xs leading-relaxed">
-        <div className="mb-1 text-[10px] font-semibold tracking-wide uppercase">карточка · во все документы</div>
-        <GlobalField
-          label="Аллергии"
-          items={session.allergies || []}
-          onChange={(allergies) => setCard({ allergies })}
-          placeholder="аллерген или препарат + Enter"
-          drugs
-          allergy
-        />
-        <GlobalField
-          label="Принимает постоянно"
-          items={session.currentMedications || []}
-          onChange={(currentMedications) => setCard({ currentMedications })}
-          placeholder="препарат + Enter"
-          drugs
-        />
       </div>
 
       {documentMode && !(session.docStd || []).length && !(session.extraBlocks || []).length && !session.notes.trim() && (
@@ -637,14 +606,33 @@ export function ProtocolPage() {
             open={session.openSection === "anamnesisVitae"}
             onOpen={() => {
               if (session.openSection === "anamnesisVitae") {
-                const t = composeVitae(session.vitaeDraft || emptyVitae(), cardCtx);
+                const usingTpl = session.vitaeTemplateId && session.vitaeTemplateId !== "chips";
+                const tpl = usingTpl ? vitaeTemplates().find((t) => t.key === session.vitaeTemplateId) : undefined;
+                const t = tpl
+                  ? fillVitaeTemplate(tpl, session.vitaeFields || templateDefaults(tpl), cardCtx)
+                  : composeVitae(session.vitaeDraft || emptyVitae(), cardCtx);
                 setSession({
                   openSection: null,
                   vitaeChipMode: t ? false : session.vitaeChipMode,
                   anamnesisVitae: t || session.anamnesisVitae,
                 });
               } else {
-                setSession({ openSection: "anamnesisVitae" });
+                const patch: Partial<SessionState> = { openSection: "anamnesisVitae" };
+                if (!session.vitaeTemplateId && !vitaeDraftTouched(session.vitaeDraft) && !session.anamnesisVitae.trim()) {
+                  const key = vitaeDefaultKey();
+                  const tpl = key !== "chips" ? vitaeTemplates().find((t) => t.key === key) : undefined;
+                  if (tpl) {
+                    const fields = templateDefaults(tpl);
+                    patch.vitaeTemplateId = tpl.key;
+                    patch.vitaeFields = fields;
+                    patch.vitaeChipMode = true;
+                    patch.anamnesisVitae = fillVitaeTemplate(tpl, fields, cardCtx);
+                  } else {
+                    patch.vitaeTemplateId = "chips";
+                    patch.vitaeChipMode = true;
+                  }
+                }
+                setSession(patch);
               }
             }}
             onRemove={() => toggleBlock("anamnesisVitae")}
@@ -662,12 +650,19 @@ export function ProtocolPage() {
                 })
               }
               onText={(t) => setSession({ anamnesisVitae: t })}
-              onMode={(chipsMode) =>
+              onMode={(chipsMode) => {
+                const usingTpl = session.vitaeTemplateId && session.vitaeTemplateId !== "chips";
+                const tpl = usingTpl ? vitaeTemplates().find((t) => t.key === session.vitaeTemplateId) : undefined;
                 setSession({
                   vitaeChipMode: chipsMode,
-                  anamnesisVitae: composeVitae(session.vitaeDraft || emptyVitae(), cardCtx),
-                })
-              }
+                  anamnesisVitae:
+                    chipsMode && tpl
+                      ? fillVitaeTemplate(tpl, session.vitaeFields || templateDefaults(tpl), cardCtx)
+                      : chipsMode
+                        ? composeVitae(session.vitaeDraft || emptyVitae(), cardCtx)
+                        : session.anamnesisVitae,
+                });
+              }}
             />
           </Sec>
       )}
@@ -1114,71 +1109,6 @@ function ProtocolText({ text }: { text: string }) {
       className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
       dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
     />
-  );
-}
-
-function GlobalField({
-  label,
-  items,
-  onChange,
-  placeholder,
-  drugs,
-  allergy,
-}: {
-  label: string;
-  items: string[];
-  onChange: (next: string[]) => void;
-  placeholder: string;
-  drugs?: boolean;
-  allergy?: boolean;
-}) {
-  const [q, setQ] = useState("");
-  const hits = useMemo(() => {
-    if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
-    if (allergy) return searchAllergy(q);
-    if (drugs) {
-      return searchDrugs(q)
-        .slice(0, 10)
-        .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
-    }
-    return [];
-  }, [allergy, drugs, q]);
-  const suggest = drugs || allergy;
-  return (
-    <div className="mt-1">
-      <div className="text-[10px] font-semibold tracking-wide uppercase">{label}</div>
-      <EditableChips items={items} onChange={onChange} />
-      {suggest ? (
-        <Typeahead
-          value={q}
-          onChange={setQ}
-          items={hits}
-          onPick={(it) => {
-            const name = it.name || it.label;
-            if (!items.includes(name)) onChange([...items, name]);
-          }}
-          onSubmitCustom={(raw) => {
-            if (!items.includes(raw)) onChange([...items, raw]);
-          }}
-          placeholder={placeholder}
-          emptyHint={q.trim().length >= 2 ? "Enter — как есть. i — карточка, если в базе" : undefined}
-        />
-      ) : (
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && q.trim()) {
-              e.preventDefault();
-              if (!items.includes(q.trim())) onChange([...items, q.trim()]);
-              setQ("");
-            }
-          }}
-          placeholder={placeholder}
-          className="mt-1 w-full rounded-md border border-warn-line bg-surface px-2 py-1 text-xs"
-        />
-      )}
-    </div>
   );
 }
 

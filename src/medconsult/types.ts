@@ -75,6 +75,8 @@ export type ExtraBlock = {
 export type PatientGlobals = {
   vitaeDraft?: VitaeDraft;
   anamnesisVitae?: string;
+  vitaeTemplateId?: string;
+  vitaeFields?: Record<string, string>;
   extraLast?: Record<string, string>;
   studyLast?: Record<string, StudyInstance>;
   allergies?: string[];
@@ -123,6 +125,8 @@ export type SessionState = {
   anamnesisChipMode?: boolean;
   vitaeDraft?: VitaeDraft;
   vitaeChipMode?: boolean;
+  vitaeTemplateId?: string;
+  vitaeFields?: Record<string, string>;
   objective: string;
   localStatus: string[];
   localStatusAutoFor?: string;

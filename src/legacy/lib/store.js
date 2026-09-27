@@ -75,6 +75,8 @@ const NAMESPACES = {
     'diagnosisDrugLinks',
     'customStudies',
     'hiddenStudies',
+    'vitaeTemplates',
+    'vitaeDefaultKey',
     'treatmentSchemes',
   ],
   // рабочие заготовки, не жалко потерять
@@ -170,9 +172,9 @@ function defaultState() {
     // свои исследования (объединяются со встроенными из data/studyProtocols.js):
     // key -> { key, label, category, template, fields[], referenceNotes }
     customStudies: {},
-    // ключи предустановленных исследований, которые врач убрал из списка
-    // (сам seed не трогаем — можно вернуть одной кнопкой)
     hiddenStudies: [],
+    vitaeTemplates: {},
+    vitaeDefaultKey: '',
     // схемы лечения — самостоятельные, не привязаны к коду МКБ насильно:
     // id -> { name, category, tags[], phases: [{name, drugs:[{name,dose,duration}]}],
     //   nonDrugTherapy, redFlags, source, sourceYear, updatedAt }
@@ -475,6 +477,54 @@ function seedTemplates() {
       ],
     },
   ]
+}
+
+const VITAE_SEED = {
+  standard: {
+    key: 'standard',
+    label: 'стандарт',
+    isDefault: true,
+    category: 'vitae',
+    dateFormat: 'iso',
+    referenceNotes: '',
+    template: [
+      'Физическое и умственное развитие в детском и юношеском возрасте {development}.',
+      'Профессиональные вредности: {occupation}.',
+      'Вредные привычки: {smoke}, {alcohol}.',
+      'Перенесённые заболевания: {past}.',
+      'Принимаемые лекарства: {meds}.',
+      '{infections}',
+      'Наследственность: {heritage}.',
+      'Аллергические реакции: {allergy}.',
+      '{surgery}',
+      '{transfusion}',
+    ].join('\n'),
+    fields: [
+      { key: 'development', label: 'развитие', kind: 'text', defaultValue: 'без особенностей' },
+      { key: 'occupation', label: 'профвредности', kind: 'text', defaultValue: 'отрицает' },
+      { key: 'smoke', label: 'курение', kind: 'text', defaultValue: 'не курит' },
+      { key: 'alcohol', label: 'алкоголь', kind: 'text', defaultValue: 'алкоголь отрицает' },
+      { key: 'past', label: 'перенесённые заболевания', kind: 'text', defaultValue: 'простудные заболевания, детские инфекции' },
+      { key: 'infections', label: 'туберкулёз, гепатиты, вен. заб.', kind: 'text', defaultValue: 'Туберкулёз, вирусные гепатиты, венерические заболевания отрицает' },
+      { key: 'heritage', label: 'наследственность', kind: 'text', defaultValue: 'не отягощена' },
+      { key: 'surgery', label: 'операции', kind: 'text', defaultValue: 'Операций не было' },
+      { key: 'transfusion', label: 'гемотрансфузии', kind: 'text', defaultValue: 'Гемотрансфузии: отрицает' },
+    ],
+  },
+}
+
+function notifyVitae() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('medconsult-vitae-templates'))
+}
+
+function ensureVitaeTemplates() {
+  const state = readAll()
+  if (!state.vitaeTemplates || !Object.keys(state.vitaeTemplates).length) {
+    state.vitaeTemplates = JSON.parse(JSON.stringify(VITAE_SEED))
+    if (!state.vitaeDefaultKey) state.vitaeDefaultKey = 'standard'
+    writeAll(state)
+  }
+  return state
 }
 
 // Крошечный pub-sub — чтобы после сохранения визита/пациента можно было
@@ -845,6 +895,71 @@ export const store = {
     delete state.customStudies[key]
     writeAll(state)
     return state.customStudies
+  },
+
+  getVitaeTemplates() {
+    const state = ensureVitaeTemplates()
+    return Object.values(state.vitaeTemplates)
+  },
+
+  getVitaeDefault() {
+    const state = ensureVitaeTemplates()
+    if (state.vitaeDefaultKey === 'chips') return 'chips'
+    if (state.vitaeDefaultKey && state.vitaeTemplates[state.vitaeDefaultKey]) return state.vitaeDefaultKey
+    const flagged = Object.values(state.vitaeTemplates).find((s) => s.isDefault)
+    return flagged?.key || 'standard'
+  },
+
+  setVitaeDefault(key) {
+    const state = ensureVitaeTemplates()
+    state.vitaeDefaultKey = key || ''
+    if (key === 'chips') {
+      Object.keys(state.vitaeTemplates).forEach((k) => {
+        state.vitaeTemplates[k] = { ...state.vitaeTemplates[k], isDefault: false }
+      })
+    } else if (state.vitaeTemplates[key]) {
+      Object.keys(state.vitaeTemplates).forEach((k) => {
+        state.vitaeTemplates[k] = { ...state.vitaeTemplates[k], isDefault: k === key }
+      })
+    }
+    writeAll(state)
+    notifyVitae()
+    return state.vitaeDefaultKey
+  },
+
+  saveVitaeTemplate(study) {
+    const state = ensureVitaeTemplates()
+    const key = study.key || String(study.label || 'шаблон').trim().toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_')
+    if (study.isDefault) {
+      Object.keys(state.vitaeTemplates).forEach((k) => {
+        state.vitaeTemplates[k] = { ...state.vitaeTemplates[k], isDefault: false }
+      })
+      state.vitaeDefaultKey = key
+    } else if (state.vitaeDefaultKey === key) {
+      state.vitaeDefaultKey = ''
+    }
+    state.vitaeTemplates[key] = { ...study, key, category: 'vitae', isDefault: !!study.isDefault, updatedAt: Date.now() }
+    if (state.vitaeDefaultKey !== 'chips' && !Object.values(state.vitaeTemplates).some((s) => s.isDefault)) {
+      state.vitaeTemplates[key].isDefault = true
+      state.vitaeDefaultKey = key
+    }
+    writeAll(state)
+    notifyVitae()
+    return state.vitaeTemplates
+  },
+
+  deleteVitaeTemplate(key) {
+    const state = ensureVitaeTemplates()
+    delete state.vitaeTemplates[key]
+    if (state.vitaeDefaultKey === key) state.vitaeDefaultKey = ''
+    const left = Object.values(state.vitaeTemplates)
+    if (state.vitaeDefaultKey !== 'chips' && left.length && !left.some((s) => s.isDefault)) {
+      left[0].isDefault = true
+      state.vitaeDefaultKey = left[0].key
+    }
+    writeAll(state)
+    notifyVitae()
+    return state.vitaeTemplates
   },
 
   // --- схемы лечения (самостоятельные, не привязаны к коду МКБ) ---

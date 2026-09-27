@@ -5,6 +5,7 @@ import { STUDIES } from '../../medconsult/data/studies'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { applyMarkup } from '../lib/md'
+import { showToast } from '../lib/toast'
 import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
 
 const KIND_OPTIONS = [
@@ -417,9 +418,10 @@ function listedStudies() {
   return [...live, ...extra]
 }
 
-export default function StudiesTab() {
-  const [studies, setStudies] = useState(listedStudies)
-  const [hidden, setHidden] = useState(() => store.getHiddenStudies())
+export default function StudiesTab({ scope = 'studies' }) {
+  const vitae = scope === 'vitae'
+  const [studies, setStudies] = useState(() => (vitae ? store.getVitaeTemplates() : listedStudies()))
+  const [hidden, setHidden] = useState(() => (vitae ? [] : store.getHiddenStudies()))
   const [form, setForm] = useState(blankForm())
   const [formOpen, setFormOpen] = useState(false)
   const [validationError, setValidationError] = useState('')
@@ -490,12 +492,14 @@ export default function StudiesTab() {
   const builtinKeys = new Set([...PRESET_STUDIES.map((s) => s.key), ...STUDIES.map((s) => s.key)])
 
   function refresh() {
-    setStudies(listedStudies())
-    setHidden(store.getHiddenStudies())
+    setStudies(vitae ? store.getVitaeTemplates() : listedStudies())
+    setHidden(vitae ? [] : store.getHiddenStudies())
   }
 
   function openNew() {
-    setForm(blankForm())
+    const next = blankForm()
+    if (vitae) next.category = 'vitae'
+    setForm(next)
     setOpenField(null)
     setFormOpen(true)
   }
@@ -513,6 +517,7 @@ export default function StudiesTab() {
       hint: merged.hint,
       dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
       templateEdited: merged.templateEdited === true,
+      isDefault: !!merged.isDefault,
     })
     setOpenField(null)
     setFormOpen(true)
@@ -975,20 +980,16 @@ export default function StudiesTab() {
     setValidationError('')
     const key = form.key || slugifyKey(form.label)
     const fields = form.fields.map(serializeField).filter(Boolean)
-    store.saveCustomStudy({
-      ...form,
-      key,
-      fields,
-      sparse: form.sparse,
-      hint: form.hint,
-    })
+    const payload = { ...form, key, fields, sparse: form.sparse, hint: form.hint }
+    if (vitae) store.saveVitaeTemplate({ ...payload, category: 'vitae' })
+    else store.saveCustomStudy(payload)
     refresh()
     setFormOpen(false)
     setForm(blankForm())
   }
 
   function remove(study) {
-    const isPreset = builtinKeys.has(study.key)
+    const isPreset = !vitae && builtinKeys.has(study.key)
     if (isPreset) {
       store.hideStudy(study.key)
       refresh()
@@ -1002,13 +1003,15 @@ export default function StudiesTab() {
       })
       return
     }
-    store.deleteCustomStudy(study.key)
+    if (vitae) store.deleteVitaeTemplate(study.key)
+    else store.deleteCustomStudy(study.key)
     refresh()
     showToast(`«${study.label}» удалено`, {
       type: 'success',
       actionLabel: 'Отменить',
       onAction: () => {
-        store.saveCustomStudy(study)
+        if (vitae) store.saveVitaeTemplate(study)
+        else store.saveCustomStudy(study)
         refresh()
       },
     })
@@ -1024,7 +1027,8 @@ export default function StudiesTab() {
       label,
       fields: (base.fields || []).map((f) => ({ ...f, options: f.options ? [...f.options] : undefined })),
     }
-    store.saveCustomStudy(copy)
+    if (vitae) store.saveVitaeTemplate({ ...copy, category: 'vitae', isDefault: false })
+    else store.saveCustomStudy(copy)
     refresh()
     openEdit(copy)
   }
@@ -1039,22 +1043,27 @@ export default function StudiesTab() {
   return (
     <div className="settings-tab">
       <p className="settings-note-inline">
-        Список исследований и их шаблоны текста — общие для всех визитов с типом "Протокол исследований".
-        Своё исследование с тем же ключом, что встроенное, переопределяет его. Предустановленные можно скрыть
-        крестиком и вернуть из блока внизу. В шаблон само встаёт «название - {'{тег}'}»,
-        строку можно править. <code>{'{date}'}</code> — дата,
-        <code>{'{summary}'}</code> — заполненные пункты, <code>{'{abnormal}'}</code> — только вне нормы.
+        {vitae
+          ? 'Шаблоны предварительного анамнеза жизни. Один отмечен по умолчанию и открывается на приёме. Редактор тот же, что у исследований: пункты и текст с тегами. {allergy} и {meds} на приёме берутся из карточки пациента.'
+          : <>Список исследований и их шаблоны текста — общие для всех визитов с типом "Протокол исследований". Своё исследование с тем же ключом, что встроенное, переопределяет его. Предустановленные можно скрыть крестиком и вернуть из блока внизу. В шаблон само встаёт «название - {'{тег}'}», строку можно править. <code>{'{date}'}</code> — дата, <code>{'{summary}'}</code> — заполненные пункты, <code>{'{abnormal}'}</code> — только вне нормы.</>}
       </p>
 
+      <div className="flex flex-wrap gap-2">
       <button type="button" className="btn-primary" onClick={openNew}>
-        + Добавить исследование
+        {vitae ? '+ Добавить шаблон' : '+ Добавить исследование'}
       </button>
+      {vitae && (
+        <button type="button" className="btn-secondary" onClick={() => store.setVitaeDefault('chips')}>
+          чипы по умолчанию
+        </button>
+      )}
+      </div>
 
       {formOpen && (
         <div className="modal-overlay">
           <div className={`modal-box study-editor-modal${templateSide === 'below' ? '' : ' is-split'}`}>
             <div className="modal-header">
-              <h3>{form.key ? `Редактировать: ${form.label}` : 'Новое исследование'}</h3>
+              <h3>{form.key ? `Редактировать: ${form.label}` : vitae ? 'Новый шаблон анамнеза' : 'Новое исследование'}</h3>
               <button type="button" className="modal-close" onClick={() => setFormOpen(false)}>×</button>
             </div>
             <form className="drug-form" onSubmit={save}>
@@ -1077,13 +1086,23 @@ export default function StudiesTab() {
                 <input
                   autoFocus
                   className={validationError && !form.label.trim() ? 'input-error' : ''}
-                  placeholder="Название исследования"
+                  placeholder={vitae ? 'Название шаблона' : 'Название исследования'}
                   value={form.label}
                   onChange={(e) => {
                     const value = e.target.value
                     setForm((prev) => ({ ...prev, label: value }))
                   }}
                 />
+                {vitae ? (
+                  <label className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={!!form.isDefault}
+                      onChange={(e) => setForm((prev) => ({ ...prev, isDefault: e.target.checked }))}
+                    />
+                    по умолчанию
+                  </label>
+                ) : (
                 <select value={form.category} onChange={(e) => {
                   const value = e.target.value
                   setForm((prev) => ({ ...prev, category: value }))
@@ -1091,6 +1110,7 @@ export default function StudiesTab() {
                   <option value="instrumental">Инструментальное</option>
                   <option value="lab">Лабораторное</option>
                 </select>
+                )}
               </div>
               {validationError && <div className="ai-error">{validationError}</div>}
 
@@ -1613,6 +1633,23 @@ export default function StudiesTab() {
                     <span>{tag.hint}</span>
                   </button>
                 ))}
+                {vitae && [
+                  { token: '{allergy}', hint: 'аллергия из карточки' },
+                  { token: '{meds}', hint: 'постоянные препараты из карточки' },
+                ].map((tag) => (
+                  <button
+                    type="button"
+                    key={tag.token}
+                    className="study-template-chip is-auto"
+                    draggable
+                    onDragStart={(e) => onChipDragStart(e, tag.token)}
+                    onClick={() => insertToken(tag.token)}
+                    title={tag.hint}
+                  >
+                    <code>{tag.token}</code>
+                    <span>{tag.hint}</span>
+                  </button>
+                ))}
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
                   const plain = `{${key}}`
@@ -1702,6 +1739,7 @@ export default function StudiesTab() {
       )}
 
       <div className="drug-db-list">
+        {!vitae && (
         <div className="settings-tabs study-list-tabs" role="tablist" aria-label="Шаблоны исследований">
           {[
             ['all', 'Все'],
@@ -1729,8 +1767,10 @@ export default function StudiesTab() {
             )
           })}
         </div>
+        )}
         {studies
           .filter((s) => {
+            if (vitae) return true
             if (s.category === 'questionnaire') return listTab === 'all'
             if (listTab === 'lab') return s.category === 'lab'
             if (listTab === 'instrumental') return s.category !== 'lab'
@@ -1752,7 +1792,7 @@ export default function StudiesTab() {
                   <strong className="drug-db-card-name" onClick={() => openEdit(s)} title="Нажми, чтобы редактировать">
                     {s.label}
                   </strong>
-                  <span className="drug-db-group">{s.category === 'lab' ? 'лабораторное' : s.category === 'questionnaire' ? 'анкета' : 'инструментальное'}</span>
+                  <span className="drug-db-group">{vitae ? (s.isDefault ? 'по умолчанию' : 'шаблон') : s.category === 'lab' ? 'лабораторное' : s.category === 'questionnaire' ? 'анкета' : 'инструментальное'}</span>
                   <button type="button" className="btn-secondary btn-small" onClick={() => duplicate(s)}>копия</button>
                   <button type="button" className="remove-btn" onClick={() => remove(s)} title={builtinKeys.has(s.key) ? 'Скрыть предустановленное' : 'Удалить'}>×</button>
                 </div>
@@ -1768,7 +1808,7 @@ export default function StudiesTab() {
           })}
       </div>
 
-      {hidden.length > 0 && (
+      {!vitae && hidden.length > 0 && (
         <div className="drug-db-list">
           <h4>Скрытые предустановленные ({hidden.length})</h4>
           {hidden.map((key) => (

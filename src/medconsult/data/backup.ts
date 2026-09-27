@@ -250,6 +250,8 @@ const LEGACY_GROUPS: Record<string, string[]> = {
     "diagnosisDrugLinks",
     "customStudies",
     "hiddenStudies",
+    "vitaeTemplates",
+    "vitaeDefaultKey",
     "treatmentSchemes",
   ],
   workspace: ["templatePresets"],

@@ -6,6 +6,7 @@ import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
+import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
@@ -194,6 +195,8 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
     globals: {
       ...(prev.globals || {}),
       vitaeDraft: session.vitaeDraft || prev.globals?.vitaeDraft,
+      vitaeTemplateId: session.vitaeTemplateId ?? prev.globals?.vitaeTemplateId,
+      vitaeFields: session.vitaeFields || prev.globals?.vitaeFields,
       anamnesisVitae: session.anamnesisVitae || prev.globals?.anamnesisVitae,
       extraLast,
       studyLast,
@@ -213,17 +216,41 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   const vitaeText = patient.anamnesisVitae || patient.globals?.anamnesisVitae || "";
   const allergies = patient.allergies || [];
   const currentMedications = patient.currentMedications || [];
-  const composed = composeVitae(draft || emptyVitae(), {
-    medications: currentMedications,
-    allergies,
-  });
+  const card = { medications: currentMedications, allergies };
+  const storedId = patient.globals?.vitaeTemplateId;
+  const touched = vitaeDraftTouched(draft);
+  let templateId = storedId;
+  let vitaeFields = patient.globals?.vitaeFields;
+  let composed = "";
+  if (templateId && templateId !== "chips") {
+    const tpl = vitaeTemplates().find((t) => t.key === templateId);
+    if (tpl) composed = fillVitaeTemplate(tpl, vitaeFields || templateDefaults(tpl), card);
+  } else if (templateId === "chips" || touched) {
+    templateId = "chips";
+    composed = composeVitae(draft || emptyVitae(), card);
+  } else if (vitaeText.trim()) {
+    composed = vitaeText;
+  } else {
+    const key = vitaeDefaultKey();
+    const tpl = key !== "chips" ? vitaeTemplates().find((t) => t.key === key) : undefined;
+    if (tpl) {
+      templateId = tpl.key;
+      vitaeFields = templateDefaults(tpl);
+      composed = fillVitaeTemplate(tpl, vitaeFields, card);
+    } else {
+      templateId = "chips";
+      composed = composeVitae(draft || emptyVitae(), card);
+    }
+  }
   return {
     ...session,
     allergies,
     currentMedications,
     anamnesisVitae: composed || vitaeText,
     vitaeDraft: draft,
-    vitaeChipMode: vitaeText ? false : true,
+    vitaeTemplateId: templateId,
+    vitaeFields,
+    vitaeChipMode: !!(templateId && templateId !== ""),
   };
 }
 
@@ -380,6 +407,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
     const vitaeTouched =
       "vitaeDraft" in patch ||
+      "vitaeTemplateId" in patch ||
+      "vitaeFields" in patch ||
       "anamnesisVitae" in patch ||
       "extraBlocks" in patch ||
       "studies" in patch ||
@@ -866,7 +895,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       openSection: tpl.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
       ...(complaints.length ? { complaints } : {}),
       ...(tpl.anamnesis.trim() ? { anamnesis: tpl.anamnesis, anamnesisChipMode: false } : {}),
-      ...(tpl.anamnesisVitae.trim() ? { anamnesisVitae: tpl.anamnesisVitae, vitaeChipMode: false } : {}),
+      ...(tpl.anamnesisVitae.trim()
+        ? { anamnesisVitae: tpl.anamnesisVitae, vitaeChipMode: false, vitaeTemplateId: "" }
+        : {}),
       ...(tpl.objective.trim() ? { objective: tpl.objective } : {}),
       ...(localStatus.length ? { localStatus } : {}),
       ...(tpl.diagnosisCode.trim() ? { diagnosisCode: tpl.diagnosisCode.trim() } : {}),

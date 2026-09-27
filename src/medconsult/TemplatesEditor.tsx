@@ -20,7 +20,7 @@ import type { LocalPack, WorkKind } from "./types";
 import StudiesTab from "@/legacy/components/StudiesTab";
 import { useAppStore } from "./store";
 
-type BlockTab = "objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires" | "studies";
+type BlockTab = "objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires" | "studies" | "vitae";
 
 function IcdCodesField({
   codes,
@@ -135,7 +135,7 @@ export function TemplatesEditor({
             resetTemplates();
             setData(seedTemplates());
           }}
-          hidden={layer === "global" || (layer === "blocks" && tab === "studies")}
+          hidden={layer === "global" || (layer === "blocks" && (tab === "studies" || tab === "vitae"))}
         >
           сбросить к заводским
         </button>
@@ -153,6 +153,7 @@ export function TemplatesEditor({
                 ["complaints", "жалобы"],
                 ["chronic", "перенесённые"],
                 ["surgery", "операции"],
+                ["vitae", "анамнез жизни"],
                 ["questionnaires", "анкеты"],
                 ["docs", "виды блоков"],
                 ["studies", "исследования"],
@@ -202,6 +203,7 @@ export function TemplatesEditor({
           )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
           {tab === "studies" && <StudiesTab />}
+          {tab === "vitae" && <StudiesTab scope="vitae" />}
         </>
       )}
       {layer === "packs" && (
