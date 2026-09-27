@@ -19,10 +19,11 @@ import {
 } from "./anamnesisChips";
 import { useTemplates, type VitaePreset } from "./data/templates";
 import { InfoDot, drugMarked } from "./DrugInfo";
-import { searchDrugs } from "./live";
+import { searchAllergy, searchDrugs } from "./live";
 import { useAppStore } from "./store";
 import { Typeahead } from "./Typeahead";
 import { FieldControl } from "./StudyCard";
+import { EditableChips } from "./EditableChip";
 import {
   fillVitaeTemplate,
   templateDefaults,
@@ -211,29 +212,54 @@ function BlockLabel({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-function FromCard({ label, items }: { label: string; items?: string[] }) {
-  const list = (items || []).map((x) => x.trim()).filter(Boolean);
+function VitaeField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="mt-1.5">
-      <div className="text-xs font-semibold text-ink">{label} · из карточки</div>
-      {list.length ? (
-        <div className="mt-0.5 flex flex-wrap gap-1">
-          {list.map((t) => (
-            <span
-              key={t}
-              className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs ${
-                drugMarked(t) ? "bg-teal-soft font-medium text-teal ring-1 ring-teal/70" : "border border-line bg-paper"
-              }`}
-            >
-              {t}
-              <InfoDot query={t} />
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className="text-xs text-ink-soft">отрицает</div>
-      )}
+    <div className="mt-1.5 rounded-md border border-line bg-paper px-2 py-1">
+      <div className="text-xs leading-none font-medium text-ink-soft">{label}</div>
+      <div className="mt-1 text-sm leading-snug text-ink">{children}</div>
     </div>
+  );
+}
+
+function CardFill({
+  label,
+  items,
+  onChange,
+  allergy,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (next: string[]) => void;
+  allergy?: boolean;
+  placeholder: string;
+}) {
+  const [q, setQ] = useState("");
+  const hits = useMemo(() => {
+    if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
+    if (allergy) return searchAllergy(q);
+    return searchDrugs(q)
+      .slice(0, 10)
+      .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
+  }, [allergy, q]);
+  return (
+    <VitaeField label={label}>
+      <EditableChips items={items} onChange={onChange} />
+      <Typeahead
+        value={q}
+        onChange={setQ}
+        items={hits}
+        onPick={(it) => {
+          const name = it.name || it.label;
+          if (!items.includes(name)) onChange([...items, name]);
+        }}
+        onSubmitCustom={(raw) => {
+          if (!items.includes(raw)) onChange([...items, raw]);
+        }}
+        placeholder={placeholder}
+        emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
+      />
+    </VitaeField>
   );
 }
 
@@ -502,6 +528,36 @@ export function AnamnesisVitae({
     });
   }
 
+  function setCard(patch: { allergies?: string[]; currentMedications?: string[] }) {
+    const allergies = patch.allergies ?? session.allergies ?? [];
+    const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
+    const nextCtx = { allergies, medications: currentMedications };
+    const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
+    setSession({
+      allergies,
+      currentMedications,
+      anamnesisVitae: usingTpl ? fillVitaeTemplate(tpl, session.vitaeFields || fields, nextCtx) : composeVitae(d, nextCtx),
+    });
+  }
+
+  const cardFields = (
+    <>
+      <CardFill
+        label="аллергия"
+        items={session.allergies || []}
+        allergy
+        placeholder="аллерген или препарат"
+        onChange={(allergies) => setCard({ allergies })}
+      />
+      <CardFill
+        label="принимает постоянно"
+        items={session.currentMedications || []}
+        placeholder="препарат"
+        onChange={(currentMedications) => setCard({ currentMedications })}
+      />
+    </>
+  );
+
   const picker = (
     <div className="mb-2 flex flex-wrap gap-1">
       <button
@@ -567,18 +623,16 @@ export function AnamnesisVitae({
         {picker}
         {shown.map((f) =>
           f.kind === "heading" ? (
-            <div key={f.key} className="mt-2 text-xs font-semibold text-ink">
+            <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
               {f.label}
             </div>
           ) : (
-            <div key={f.key} className="mt-1">
-              <div className="text-xs font-semibold text-ink">{f.label}</div>
-              <FieldControl f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
-            </div>
+            <VitaeField key={f.key} label={f.label}>
+              <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
+            </VitaeField>
           ),
         )}
-        <FromCard label="аллергия" items={session.allergies} />
-        <FromCard label="принимает постоянно" items={session.currentMedications} />
+        {cardFields}
         <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
       </div>
     );
@@ -739,10 +793,21 @@ export function AnamnesisVitae({
       )}
       </VitaeSection>
       <VitaeSection id="allergy" omitted={omitted("allergy")} onOmit={setOmit}>
-      <FromCard label="аллергия" items={session.allergies} />
+      <CardFill
+        label="аллергия"
+        items={session.allergies || []}
+        allergy
+        placeholder="аллерген или препарат"
+        onChange={(allergies) => setCard({ allergies })}
+      />
       </VitaeSection>
       <VitaeSection id="meds" omitted={omitted("meds")} onOmit={setOmit}>
-      <FromCard label="принимает постоянно" items={session.currentMedications} />
+      <CardFill
+        label="принимает постоянно"
+        items={session.currentMedications || []}
+        placeholder="препарат"
+        onChange={(currentMedications) => setCard({ currentMedications })}
+      />
       </VitaeSection>
       <VitaeSection id="surgery" omitted={omitted("surgery")} onOmit={setOmit}>
       <ChipRow

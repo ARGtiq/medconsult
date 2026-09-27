@@ -68,10 +68,12 @@ export function FieldControl({
   f,
   value,
   onChange,
+  boxed = false,
 }: {
   f: StudyField;
   value: string;
   onChange: (v: string) => void;
+  boxed?: boolean;
 }) {
   if (f.computed) {
     return (
@@ -148,8 +150,13 @@ export function FieldControl({
     <FitTextarea
       value={value}
       onChange={onChange}
+      placeholder={boxed ? "вписать" : undefined}
       inputMode={f.kind === "number" || f.unit ? "decimal" : "text"}
-      className="bg-transparent text-sm leading-snug font-semibold outline-none"
+      className={
+        boxed
+          ? "bg-transparent text-sm leading-snug font-normal text-ink outline-none placeholder:font-normal placeholder:text-mute"
+          : "bg-transparent text-sm leading-snug font-semibold outline-none"
+      }
     />
   );
 }
