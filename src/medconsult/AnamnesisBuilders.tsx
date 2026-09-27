@@ -39,12 +39,15 @@ function ChipRow({
   options,
   value,
   onChange,
+  fallback = "",
 }: {
   label: string;
   options: { id: string; text: string }[];
   value: string;
   onChange: (id: string) => void;
+  fallback?: string;
 }) {
+  const shown = value || fallback;
   return (
     <div className="mt-1">
       <div className="text-xs font-semibold text-ink">{label}</div>
@@ -53,9 +56,9 @@ function ChipRow({
           <button
             key={o.id}
             type="button"
-            onClick={() => onChange(value === o.id ? "" : o.id)}
+            onClick={() => onChange(shown === o.id ? "" : o.id)}
             className={`rounded-full px-2 py-0.5 text-xs ${
-              value === o.id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              shown === o.id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
             }`}
           >
             {o.text}
@@ -645,6 +648,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="развитие"
         value={d.development}
+        fallback="normal"
         onChange={(id) =>
           patch({
             development: id as VitaeDraft["development"],
@@ -670,6 +674,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="профвредности"
         value={d.occupation}
+        fallback="denies"
         onChange={(id) =>
           patch({
             occupation: id as VitaeDraft["occupation"],
@@ -695,6 +700,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="курение"
         value={d.smoke}
+        fallback="no"
         onChange={(id) => patch({ smoke: id as VitaeDraft["smoke"] })}
         options={[
           { id: "no", text: "не курит" },
@@ -712,6 +718,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="алкоголь"
         value={d.alcohol}
+        fallback="no"
         onChange={(id) => patch({ alcohol: id as VitaeDraft["alcohol"] })}
         options={[
           { id: "no", text: "отрицает" },
@@ -723,6 +730,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="перенесённые заболевания"
         value={d.pastIllness}
+        fallback="typical"
         onChange={(id) =>
           patch({
             pastIllness: id as VitaeDraft["pastIllness"],
@@ -746,6 +754,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="туберкулёз, гепатиты, вен. заб."
         value={d.infections}
+        fallback="denies"
         onChange={(id) =>
           patch({
             infections: id as VitaeDraft["infections"],
@@ -771,6 +780,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="наследственность"
         value={d.heritage}
+        fallback="clear"
         onChange={(id) =>
           patch({
             heritage: id as VitaeDraft["heritage"],
@@ -813,6 +823,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="операции"
         value={d.surgery}
+        fallback="none"
         onChange={(id) =>
           patch({
             surgery: id as VitaeDraft["surgery"],
@@ -836,6 +847,7 @@ export function AnamnesisVitae({
       <ChipRow
         label="гемотрансфузии"
         value={d.transfusion}
+        fallback="denies"
         onChange={(id) =>
           patch({
             transfusion: id as VitaeDraft["transfusion"],
