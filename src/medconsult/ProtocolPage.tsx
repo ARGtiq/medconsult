@@ -9,7 +9,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, ToggleChips, type OptionMenuState } from "./EditableChip";
-import { protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
+import { addLocalOption, localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -35,7 +35,7 @@ import { collectDeviations } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
-import type { SessionState } from "./types";
+import type { LocalItem, LocalPack, LocalPick, SessionState } from "./types";
 
 const SPLIT_MIN = 22;
 const SPLIT_MAX = 70;
@@ -50,6 +50,133 @@ function Slot({ order, children }: { order: number; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5" style={{ order }}>
       {children}
+    </div>
+  );
+}
+
+function LocalOptionRow({
+  item,
+  value,
+  onChange,
+  onAddOption,
+}: {
+  item: LocalItem;
+  value: string;
+  onChange: (v: string) => void;
+  onAddOption: (v: string) => void;
+}) {
+  const [edit, setEdit] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [custom, setCustom] = useState("");
+  const options = item.options.length ? item.options : [];
+  const selected = value.trim();
+  const known = options.some((o) => o.toLowerCase() === selected.toLowerCase());
+
+  function commitEdit() {
+    const next = draft.trim();
+    if (next) onChange(next);
+    setEdit(false);
+  }
+
+  return (
+    <div className="mt-1">
+      <div className="text-xs font-semibold text-ink">{item.label}</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {options.map((o) => {
+          const on = selected.toLowerCase() === o.toLowerCase();
+          if (on && edit) {
+            return (
+              <input
+                key={o}
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitEdit();
+                  }
+                  if (e.key === "Escape") setEdit(false);
+                }}
+                className="min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+              />
+            );
+          }
+          return (
+            <button
+              key={o}
+              type="button"
+              title={on ? "Нажми — править текст" : "Выбрать"}
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+              onClick={() => {
+                if (on) {
+                  setDraft(selected);
+                  setEdit(true);
+                } else onChange(o);
+              }}
+            >
+              {on ? selected : o}
+            </button>
+          );
+        })}
+        {!options.length &&
+          (edit ? (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitEdit();
+                }
+                if (e.key === "Escape") setEdit(false);
+              }}
+              className="min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+            />
+          ) : (
+            <button
+              type="button"
+              className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
+              onClick={() => {
+                setDraft(selected || item.label);
+                setEdit(true);
+              }}
+            >
+              {selected || item.label}
+            </button>
+          ))}
+        {!!options.length && selected && !known && !edit && (
+          <button
+            type="button"
+            className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
+            onClick={() => {
+              setDraft(selected);
+              setEdit(true);
+            }}
+          >
+            {selected}
+          </button>
+        )}
+      </div>
+      <input
+        value={custom}
+        onChange={(e) => setCustom(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          const raw = custom.trim();
+          if (!raw) return;
+          e.preventDefault();
+          onAddOption(raw);
+          setCustom("");
+        }}
+        placeholder="свой вариант + Enter"
+        className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+      />
     </div>
   );
 }
@@ -72,8 +199,6 @@ export function ProtocolPage() {
   const complaintTa = useRef<HTMLDivElement>(null);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
-  const [localPick, setLocalPick] = useState(false);
-  const [localPicked, setLocalPicked] = useState<string[]>([]);
   const [liveSplit, setLiveSplit] = useState<number | null>(null);
   const splitWrap = useRef<HTMLDivElement>(null);
   const splitDragging = useRef(false);
@@ -313,6 +438,42 @@ export function ProtocolPage() {
     store.addLocalPhrase(t);
     setLocalQ("");
     setLocalAdd(false);
+  };
+
+  const localFree = () => {
+    const generated = new Set(localStatusLines(session.localPicks || [], templates.localPacks, []));
+    return session.localStatus.filter((x) => !generated.has(x));
+  };
+
+  const writeLocal = (active: string[], picks: LocalPick[], free: string[]) => {
+    setSession({
+      activeLocalPacks: active,
+      localPicks: picks,
+      localStatus: localStatusLines(picks, templates.localPacks, free),
+    });
+  };
+
+  const toggleLocalPack = (pack: LocalPack) => {
+    const active = session.activeLocalPacks || [];
+    const free = localFree();
+    if (active.includes(pack.id)) {
+      writeLocal(
+        active.filter((id) => id !== pack.id),
+        (session.localPicks || []).filter((p) => p.packId !== pack.id),
+        free,
+      );
+      return;
+    }
+    const picks = [
+      ...(session.localPicks || []).filter((p) => p.packId !== pack.id),
+      ...localItems(pack).map((it) => ({ packId: pack.id, itemId: it.id, value: it.options[0] || it.label })),
+    ];
+    writeLocal([...active, pack.id], picks, free);
+  };
+
+  const setLocalPickValue = (packId: string, itemId: string, value: string) => {
+    const picks = (session.localPicks || []).map((p) => (p.packId === packId && p.itemId === itemId ? { ...p, value } : p));
+    writeLocal(session.activeLocalPacks || [], picks, localFree());
   };
 
   const cardCtx = {
@@ -781,19 +942,32 @@ export function ProtocolPage() {
             onOpen={() => setSession({ openSection: session.openSection === "status" ? null : "status" })}
             onRemove={() => toggleBlock("status")}
           >
-            <div className="flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-                  localPick ? "bg-teal text-paper" : "border border-dashed border-teal/50 text-teal"
-                }`}
-                onClick={() => {
-                  setLocalPick((v) => !v);
-                  setLocalPicked([]);
-                }}
-              >
-                <Plus className="size-3" /> шаблон
-              </button>
+            <div className="flex flex-wrap gap-1">
+              {packs.map((p) => {
+                const code = session.diagnosisCode.trim().toUpperCase();
+                const prefix = code.split(".")[0];
+                const byIcd =
+                  !!code &&
+                  p.codes.some((raw) => {
+                    const u = raw.trim().toUpperCase();
+                    return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
+                  });
+                const on = (session.activeLocalPacks || []).includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={on ? "Убрать шаблон" : "Вставить шаблон"}
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      on ? "bg-teal text-paper" : "border border-line bg-paper"
+                    }`}
+                    onClick={() => toggleLocalPack(p)}
+                  >
+                    {p.label}
+                    {byIcd ? " · мкб" : ""}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 className="inline-flex items-center gap-1 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs font-bold text-teal"
@@ -803,66 +977,33 @@ export function ProtocolPage() {
                 свой
               </button>
             </div>
-            {localPick && (
-              <div className="mt-1.5">
-                {packs.length === 0 ? (
-                  <p className="text-xs text-mute">Шаблонов нет. Справочник → Блоки → локальный статус.</p>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap gap-1">
-                      {packs.map((p) => {
-                        const code = session.diagnosisCode.trim().toUpperCase();
-                        const prefix = code.split(".")[0];
-                        const byIcd =
-                          !!code &&
-                          p.codes.some((raw) => {
-                            const u = raw.trim().toUpperCase();
-                            return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
-                          });
-                        const on = localPicked.includes(p.id);
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            title={p.chips.join(" · ")}
-                            className={`rounded-full px-2 py-0.5 text-xs ${
-                              on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
-                            }`}
-                            onClick={() =>
-                              setLocalPicked((cur) => (cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]))
-                            }
-                          >
-                            {p.label}
-                            {byIcd ? " · мкб" : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      className="mt-1.5 rounded-md bg-teal px-2.5 py-1 text-xs font-bold text-paper disabled:opacity-40"
-                      disabled={localPicked.length === 0}
-                      onClick={() => {
-                        const chosen = packs.filter((p) => localPicked.includes(p.id));
-                        const next = [...session.localStatus];
-                        chosen.forEach((p) => {
-                          p.chips.forEach((c) => {
-                            const t = c.trim();
-                            if (t && !next.includes(t)) next.push(t);
-                          });
-                        });
-                        setSession({ localStatus: next });
-                        setLocalPicked([]);
-                        setLocalPick(false);
-                        store.setToast(chosen.length === 1 ? `Шаблон: ${chosen[0].label}` : `Шаблоны: ${chosen.length}`);
-                      }}
-                    >
-                      добавить{localPicked.length ? ` ${localPicked.length}` : ""}
-                    </button>
-                  </>
-                )}
-              </div>
+            {packs.length === 0 && (
+              <p className="mt-1 text-xs text-mute">Шаблонов нет. Справочник → Блоки → локальный статус.</p>
             )}
+            {(session.activeLocalPacks || []).map((id) => {
+              const pack = packs.find((p) => p.id === id);
+              if (!pack) return null;
+              return (
+                <div key={id} className="mt-2 rounded-md border border-line/70 bg-paper px-2 py-1.5">
+                  <div className="text-[10px] font-semibold tracking-wide text-mute uppercase">{pack.label}</div>
+                  {localItems(pack).map((it) => {
+                    const pick = (session.localPicks || []).find((x) => x.packId === id && x.itemId === it.id);
+                    return (
+                      <LocalOptionRow
+                        key={it.id}
+                        item={it}
+                        value={pick?.value || ""}
+                        onChange={(v) => setLocalPickValue(id, it.id, v)}
+                        onAddOption={(v) => {
+                          addLocalOption(id, it.id, v);
+                          setLocalPickValue(id, it.id, v);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
             {localAdd && (
               <div className="mt-1.5 flex gap-1">
                 <input
@@ -884,8 +1025,15 @@ export function ProtocolPage() {
                 </button>
               </div>
             )}
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
-            <EditableChips items={session.localStatus} onChange={(next) => store.renameList("localStatus", next)} />
+            {localFree().length > 0 && (
+              <>
+                <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">свои фразы · клик — править</div>
+                <EditableChips
+                  items={localFree()}
+                  onChange={(next) => writeLocal(session.activeLocalPacks || [], session.localPicks || [], next)}
+                />
+              </>
+            )}
           </Sec>
       )}
       </Slot>

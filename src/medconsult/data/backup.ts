@@ -19,13 +19,13 @@ export const BACKUP_SECTIONS: BackupSection[] = [
   {
     id: "patients",
     label: "Пациенты и визиты",
-    hint: "Карточки и история приёмов станка",
+    hint: "Карточки: дата рождения, заметка, аллергии, история приёмов",
     keys: ["medconsult_v2_patients", "medconsult_v2_visits"],
   },
   {
     id: "templates",
     label: "Шаблоны приёма",
-    hint: "Блоки, чипы, наборы документов",
+    hint: "Блоки, локальный статус с вариантами, наборы, шаблоны",
     keys: ["medconsult_v2_templates"],
   },
   {

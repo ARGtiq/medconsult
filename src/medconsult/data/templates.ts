@@ -1,5 +1,5 @@
 import { COMPLAINTS, LOCAL_PACKS } from "./catalog";
-import type { LocalPack, WorkKind } from "../types";
+import type { LocalItem, LocalPack, LocalPick, WorkKind } from "../types";
 import { useEffect, useState } from "react";
 import { cloneScales, QUESTION_SCALES, type ScaleDef } from "./questionnaires";
 
@@ -204,7 +204,11 @@ export const SEED_OBJECTIVE: ObjectiveTemplate[] = [
 ];
 
 export const seedTemplates = (): TemplatesState => ({
-  localPacks: LOCAL_PACKS.map((p) => ({ ...p, chips: [...p.chips] })),
+  localPacks: LOCAL_PACKS.map((p) => ({
+    ...p,
+    chips: [...p.chips],
+    items: p.items?.map((it) => ({ ...it, options: [...it.options] })),
+  })),
   chronic: SEED_CHRONIC.map((x) => ({ ...x })),
   surgeries: SEED_SURGERIES.map((x) => ({ ...x })),
   docKinds: SEED_DOC_KINDS.map((x) => ({ ...x })),
@@ -383,7 +387,9 @@ function read(): TemplatesState {
     const migrated = migrateObjectiveBlock(visitPacks);
     const ordered = migratePackOrder(migrated.packs);
     const state: TemplatesState = {
-      localPacks: Array.isArray(parsed.localPacks) && parsed.localPacks.length ? parsed.localPacks : seed.localPacks,
+      localPacks: (Array.isArray(parsed.localPacks) && parsed.localPacks.length ? parsed.localPacks : seed.localPacks).map(
+        normalizeLocalPack,
+      ),
       chronic: Array.isArray(parsed.chronic) && parsed.chronic.length ? parsed.chronic : seed.chronic,
       surgeries: Array.isArray(parsed.surgeries) && parsed.surgeries.length ? parsed.surgeries : seed.surgeries,
       docKinds: Array.isArray(parsed.docKinds) && parsed.docKinds.length ? parsed.docKinds : seed.docKinds,
@@ -427,8 +433,90 @@ export function saveTemplates(patch: Partial<TemplatesState>) {
   write({ ...read(), ...patch });
 }
 
+export function localItems(pack: { id: string; chips?: string[]; items?: LocalItem[] }): LocalItem[] {
+  if (pack.items?.length) return pack.items;
+  return (pack.chips || [])
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((c, i) => ({ id: `${pack.id}_c${i}`, label: c, options: [] as string[] }));
+}
+
+export function localLine(item: LocalItem, value: string): string {
+  const v = value.trim();
+  const label = item.label.trim();
+  if (!v) return "";
+  if (!item.options.length) return v;
+  if (v.toLowerCase() === label.toLowerCase()) return label;
+  if (v.toLowerCase().startsWith(`${label.toLowerCase()} `)) return v;
+  return `${label} ${v}`;
+}
+
+export function localStatusLines(picks: LocalPick[], packs: LocalPack[], free: string[]): string[] {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  for (const pick of picks) {
+    const pack = packs.find((p) => p.id === pick.packId);
+    if (!pack) continue;
+    const item = localItems(pack).find((it) => it.id === pick.itemId);
+    if (!item) continue;
+    const line = localLine(item, pick.value);
+    if (!line || seen.has(line)) continue;
+    seen.add(line);
+    lines.push(line);
+  }
+  for (const raw of free) {
+    const t = raw.trim();
+    if (t && !seen.has(t)) {
+      seen.add(t);
+      lines.push(t);
+    }
+  }
+  return lines;
+}
+
+const KIDNEY_ITEMS: LocalItem[] = [
+  {
+    id: "tap",
+    label: "поколачивание",
+    options: ["отрицательно с обеих сторон", "положительно справа", "положительно слева"],
+  },
+  {
+    id: "ureter",
+    label: "мочеточниковые точки",
+    options: ["безболезненны", "болезненны справа", "болезненны слева"],
+  },
+];
+
+export function normalizeLocalPack(p: LocalPack): LocalPack {
+  if (p.items?.length) return p;
+  if (
+    p.id === "kidney" &&
+    p.chips.join("|") === "поколачивание отрицательно с обеих сторон|мочеточниковые точки безболезненны"
+  ) {
+    return { ...p, items: KIDNEY_ITEMS.map((it) => ({ ...it, options: [...it.options] })) };
+  }
+  return { ...p, items: localItems(p) };
+}
+
+export function addLocalOption(packId: string, itemId: string, option: string) {
+  const text = option.trim();
+  if (!text) return;
+  const t = read();
+  const packs = (t.localPacks || []).map(normalizeLocalPack);
+  const next = packs.map((p) => {
+    if (p.id !== packId) return p;
+    const items = localItems(p).map((it) =>
+      it.id === itemId && !it.options.some((o) => o.toLowerCase() === text.toLowerCase())
+        ? { ...it, options: [...it.options, text] }
+        : it,
+    );
+    return { ...p, items };
+  });
+  write({ ...t, localPacks: next });
+}
+
 export function getLocalPacks(): LocalPack[] {
-  return read().localPacks;
+  return read().localPacks.map(normalizeLocalPack);
 }
 
 export function getChronicPresets(): VitaePreset[] {

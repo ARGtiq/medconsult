@@ -27,7 +27,7 @@ export function Typeahead({
   onPick: (item: TypeaheadItem) => void;
   onSubmitCustom?: (raw: string) => void;
   placeholder?: string;
-  idleLabel?: string;
+  idleLabel?: ReactNode;
   disabled?: boolean;
   emptyHint?: ReactNode;
   inputClassName?: string;

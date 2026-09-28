@@ -16,7 +16,7 @@ import {
 import { emptyScale, itemKind, type ScaleDef, type ScaleItem, type ScaleItemKind, type ScaleVerdict } from "./data/questionnaires";
 import { searchIcd } from "./live";
 import { Typeahead } from "./Typeahead";
-import type { LocalPack, WorkKind } from "./types";
+import type { LocalItem, LocalPack, WorkKind } from "./types";
 import StudiesTab from "@/legacy/components/StudiesTab";
 import { useAppStore } from "./store";
 
@@ -1099,53 +1099,137 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
   function patch(i: number, p: Partial<LocalPack>) {
     onChange(packs.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
+  function itemsOf(p: LocalPack): LocalItem[] {
+    if (p.items?.length) return p.items;
+    return (p.chips || []).filter(Boolean).map((c, n) => ({ id: `${p.id}_c${n}`, label: c, options: [] }));
+  }
+  function setItems(i: number, items: LocalItem[]) {
+    const chips = items
+      .map((it) => (it.options[0] ? `${it.label} ${it.options[0]}` : it.label))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    patch(i, { items, chips });
+  }
   return (
     <div className="space-y-2">
-      {packs.map((p, i) => (
-        <div key={p.id} className="rounded-lg border border-line bg-paper p-2">
-          <div className="flex gap-2">
-            <input
-              value={p.label}
-              onChange={(e) => patch(i, { label: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
-            />
-            <button
-              type="button"
-              className="text-[11px] font-medium text-teal"
-              onClick={() => {
-                const copy: LocalPack = {
-                  ...p,
-                  id: `pack_${Date.now().toString(36)}`,
-                  label: `${p.label || "пакет"} (копия)`,
-                  codes: [...p.codes],
-                  chips: [...p.chips],
-                };
-                onChange([...packs.slice(0, i + 1), copy, ...packs.slice(i + 1)]);
-              }}
-            >
-              копия
-            </button>
-            <button type="button" className="text-xs text-danger" onClick={() => onChange(packs.filter((_, j) => j !== i))}>
-              ×
-            </button>
+      <p className="text-xs text-ink-soft">
+        Пункт — название, под ним варианты. На протоколе клик по шаблону вставляет пункты, повторный клик убирает.
+        Свой вариант и правка чипа — уже на приёме.
+      </p>
+      {packs.map((p, i) => {
+        const items = itemsOf(p);
+        return (
+          <div key={p.id} className="rounded-lg border border-line bg-paper p-2">
+            <div className="flex gap-2">
+              <input
+                value={p.label}
+                onChange={(e) => patch(i, { label: e.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                className="text-[11px] font-medium text-teal"
+                onClick={() => {
+                  const copyItems = items.map((it) => ({ ...it, id: `${it.id}_c`, options: [...it.options] }));
+                  const copy: LocalPack = {
+                    ...p,
+                    id: `pack_${Date.now().toString(36)}`,
+                    label: `${p.label || "пакет"} (копия)`,
+                    codes: [...p.codes],
+                    chips: [...p.chips],
+                    items: copyItems,
+                  };
+                  onChange([...packs.slice(0, i + 1), copy, ...packs.slice(i + 1)]);
+                }}
+              >
+                копия
+              </button>
+              <button type="button" className="text-xs text-danger" onClick={() => onChange(packs.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </div>
+            <div className="mt-1">
+              <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+              <IcdCodesField codes={p.codes} onChange={(codes) => patch(i, { codes })} />
+            </div>
+            <div className="mt-2 space-y-2">
+              {items.map((it, ii) => (
+                <div key={it.id} className="rounded-md border border-line/70 bg-surface px-2 py-1.5">
+                  <div className="flex gap-1">
+                    <input
+                      value={it.label}
+                      onChange={(e) => setItems(i, items.map((x, j) => (j === ii ? { ...x, label: e.target.value } : x)))}
+                      placeholder="пункт, напр. поколачивание"
+                      className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                    />
+                    <button
+                      type="button"
+                      className="text-xs text-danger"
+                      onClick={() => setItems(i, items.filter((_, j) => j !== ii))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {it.options.map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        title="Убрать вариант"
+                        className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
+                        onClick={() =>
+                          setItems(
+                            i,
+                            items.map((x, j) => (j === ii ? { ...x, options: x.options.filter((opt) => opt !== o) } : x)),
+                          )
+                        }
+                      >
+                        {o} ×
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    placeholder="вариант + Enter"
+                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      const raw = e.currentTarget.value.trim();
+                      if (!raw) return;
+                      e.preventDefault();
+                      if (it.options.some((o) => o.toLowerCase() === raw.toLowerCase())) return;
+                      setItems(i, items.map((x, j) => (j === ii ? { ...x, options: [...x.options, raw] } : x)));
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                className="text-xs font-medium text-teal"
+                onClick={() =>
+                  setItems(i, [...items, { id: `it_${Date.now().toString(36)}`, label: "пункт", options: [] }])
+                }
+              >
+                + пункт
+              </button>
+            </div>
           </div>
-          <div className="mt-1">
-            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
-            <IcdCodesField codes={p.codes} onChange={(codes) => patch(i, { codes })} />
-          </div>
-          <textarea
-            value={p.chips.join("\n")}
-            onChange={(e) => patch(i, { chips: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
-            rows={3}
-            className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs"
-          />
-        </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         className="text-xs font-medium text-teal"
         onClick={() =>
-          onChange([...packs, { id: `pack_${Date.now()}`, label: "новый пакет", codes: [], chips: ["фраза"] }])
+          onChange([
+            ...packs,
+            {
+              id: `pack_${Date.now()}`,
+              label: "новый пакет",
+              codes: [],
+              chips: [],
+              items: [{ id: `it_${Date.now().toString(36)}`, label: "пункт", options: ["вариант"] }],
+            },
+          ])
         }
       >
         + пакет статуса

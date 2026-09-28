@@ -4,7 +4,7 @@ import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
@@ -113,6 +113,7 @@ export function adaptPatient(p: Record<string, unknown>): Patient {
     age: String(p.age || calcAge(p.dob as string) || ""),
     name: name || `${p.lastName || ""} ${p.firstName || ""}`.trim(),
     dob: p.dob as string | undefined,
+    note: typeof p.note === "string" ? p.note : undefined,
     allergies: Array.isArray(p.allergies)
       ? (p.allergies as string[])
       : Array.isArray(globals?.allergies)
@@ -154,6 +155,7 @@ function writePatient(p: Patient) {
       id: p.id,
       name: p.name,
       dob: p.dob || "",
+      note: p.note || "",
       allergies: p.allergies || [],
       currentMedications: p.currentMedications || [],
       anamnesisVitae: p.anamnesisVitae || "",
@@ -822,15 +824,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
       visitKind = pack.kind;
       mode = session.studies.length ? "consult_study" : "consult";
     }
+    let activeLocalPacks = [...(session.activeLocalPacks || [])];
+    let localPicks = [...(session.localPicks || [])];
     let localStatus = [...session.localStatus];
     if (pack.localPackIds.length) {
-      getLocalPacks()
-        .filter((p) => pack.localPackIds.includes(p.id))
-        .forEach((p) => {
-          p.chips.forEach((c) => {
-            if (!localStatus.includes(c)) localStatus.push(c);
-          });
-        });
+      const locals = getLocalPacks();
+      const generated = new Set(localStatusLines(session.localPicks || [], locals, []));
+      const free = session.localStatus.filter((x) => !generated.has(x));
+      for (const id of pack.localPackIds) {
+        const lp = locals.find((p) => p.id === id);
+        if (!lp) continue;
+        if (!activeLocalPacks.includes(id)) activeLocalPacks.push(id);
+        localPicks = localPicks.filter((x) => x.packId !== id);
+        for (const it of localItems(lp)) {
+          localPicks.push({ packId: id, itemId: it.id, value: it.options[0] || it.label });
+        }
+      }
+      localStatus = localStatusLines(localPicks, locals, free);
     }
     get().setSession({
       templateId: pack.id,
@@ -841,6 +851,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       extraBlocks,
       hiddenBlocks: hidden,
       localStatus,
+      activeLocalPacks,
+      localPicks,
       openSection: pack.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
     });
     get().setToast(`Набор: ${pack.name}`);

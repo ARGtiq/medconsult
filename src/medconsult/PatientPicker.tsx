@@ -5,9 +5,18 @@ import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { formatPatient, useAppStore } from "./store";
 import type { Patient } from "./types";
 
+function dobBits(dob?: string) {
+  if (!dob) return { pretty: "", forms: [] as string[] };
+  const m = dob.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return { pretty: dob, forms: [dob] };
+  const [, y, mo, d] = m;
+  const pretty = `${d}.${mo}.${y}`;
+  return { pretty, forms: [dob, y, pretty, `${d}.${mo}.${y.slice(2)}`] };
+}
+
 function haystack(p: Patient) {
-  const year = (p.dob || "").slice(0, 4);
-  return [p.lastName, p.firstName, p.name, p.dob, p.age, year].filter(Boolean).join(" ").toLowerCase();
+  const bits = dobBits(p.dob);
+  return [p.lastName, p.firstName, p.name, p.age, p.note, ...bits.forms].filter(Boolean).join(" ").toLowerCase();
 }
 
 export function PatientPicker() {
@@ -28,7 +37,7 @@ export function PatientPicker() {
     const list = s ? patients.filter((p) => haystack(p).includes(s)) : patients;
     const mapped = list.slice(0, 12).map((p) => ({
       id: p.id,
-      label: `${formatPatient(p)}${p.age ? `, ${p.age}` : ""}${p.dob ? ` · ${(p.dob || "").slice(0, 4)}` : ""}`,
+      label: `${formatPatient(p)}${p.age ? `, ${p.age}` : ""}${dobBits(p.dob).pretty ? ` (${dobBits(p.dob).pretty})` : ""}`,
     }));
     const none = { id: "__none__", label: "без пациента" };
     if (!s || "без пациента".includes(s) || "без".startsWith(s) || s.startsWith("без")) return [none, ...mapped];
@@ -78,11 +87,19 @@ export function PatientPicker() {
             setQ("");
           }}
           idleLabel={
-            selected
-              ? `${formatPatient(selected)}${selected.age ? `, ${selected.age}` : ""}${selected.dob ? ` · ${(selected.dob || "").slice(0, 4)}` : ""}`
-              : "без пациента"
+            selected ? (
+              <>
+                {formatPatient(selected)}
+                {selected.age ? `, ${selected.age}` : ""}
+                {dobBits(selected.dob).pretty ? (
+                  <span className="text-[11px] font-normal text-mute"> ({dobBits(selected.dob).pretty})</span>
+                ) : null}
+              </>
+            ) : (
+              "без пациента"
+            )
           }
-          placeholder="Пациент: фамилия, имя — или без карточки"
+          placeholder="Фамилия или дата рождения"
           emptyHint={q.trim() ? "Никого не нашлось. «+» — завести карточку. Или выбери «без пациента»" : "без пациента — черновик без карточки"}
         />
       </div>

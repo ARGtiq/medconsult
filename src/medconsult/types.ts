@@ -90,6 +90,7 @@ export type Patient = {
   age: string;
   name?: string;
   dob?: string;
+  note?: string;
   allergies?: string[];
   currentMedications?: string[];
   anamnesisVitae?: string;
@@ -130,6 +131,8 @@ export type SessionState = {
   objective: string;
   localStatus: string[];
   localStatusAutoFor?: string;
+  activeLocalPacks?: string[];
+  localPicks?: LocalPick[];
   studies: StudyEntry[];
   recommendations: string[];
   notes: string;
@@ -163,11 +166,24 @@ export type ComplaintChip = {
   category: string;
 };
 
+export type LocalItem = {
+  id: string;
+  label: string;
+  options: string[];
+};
+
+export type LocalPick = {
+  packId: string;
+  itemId: string;
+  value: string;
+};
+
 export type LocalPack = {
   id: string;
   codes: string[];
   label: string;
   chips: string[];
+  items?: LocalItem[];
 };
 
 export type Guideline = {

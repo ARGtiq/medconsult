@@ -10,10 +10,28 @@ function isKnownGroupLabel(text) {
   return [...builtinLabels, ...customLabels].includes(norm)
 }
 
-function formatDate(iso) {
+function dobPretty(iso) {
   if (!iso) return ''
-  const [y, m, d] = iso.split('-')
+  const [y, m, d] = String(iso).split('-')
+  if (!y || !m || !d) return String(iso)
   return `${d}.${m}.${y}`
+}
+
+function matchesPatient(p, query) {
+  const s = query.trim().toLowerCase()
+  if (!s) return true
+  const pretty = dobPretty(p.dob).toLowerCase()
+  const year = String(p.dob || '').slice(0, 4)
+  const short = pretty.length >= 10 ? `${pretty.slice(0, 6)}${pretty.slice(8)}` : ''
+  return [p.name, p.dob, pretty, year, short, p.note]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(s)
+}
+
+function formatDate(iso) {
+  return dobPretty(iso)
 }
 
 function calcAge(dob) {
@@ -45,7 +63,7 @@ export default function PatientsPage({ onLoadVisit }) {
   const [mode, setMode] = useState('patients') // 'patients' | 'visitSearch'
   const [visitQuery, setVisitQuery] = useState('')
 
-  const filtered = patients.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const filtered = patients.filter((p) => matchesPatient(p, query))
   const selected = patients.find((p) => p.id === selectedId) || null
   const visitResults = mode === 'visitSearch' ? store.searchVisits(visitQuery) : []
 
@@ -154,7 +172,7 @@ export default function PatientsPage({ onLoadVisit }) {
           <input
             type="text"
             className="patients-search"
-            placeholder="Поиск по имени…"
+            placeholder="Поиск по имени или дате рождения"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -166,7 +184,10 @@ export default function PatientsPage({ onLoadVisit }) {
                 className={p.id === selectedId ? 'patients-list-item active' : 'patients-list-item'}
                 onClick={() => setSelectedId(p.id)}
               >
-                {p.name}
+                <span>{p.name}</span>
+                {p.dob ? (
+                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#8b909a' }}>({dobPretty(p.dob)})</span>
+                ) : null}
               </button>
             ))}
             {filtered.length === 0 && patients.length > 0 && <p className="empty-hint">По этому запросу никого не нашлось.</p>}
@@ -186,7 +207,12 @@ export default function PatientsPage({ onLoadVisit }) {
           {selected && (
             <>
               <div className="patients-detail-header">
-                <h3>{selected.name}</h3>
+                <h3>
+                  {selected.name}
+                  {selected.dob ? (
+                    <span style={{ marginLeft: 6, fontSize: 13, fontWeight: 400, color: '#8b909a' }}>({dobPretty(selected.dob)})</span>
+                  ) : null}
+                </h3>
                 {selected.dob && <span className="patients-age-badge">{formatDate(selected.dob)} · {calcAge(selected.dob)} лет</span>}
                 <button type="button" className="btn-secondary btn-danger btn-small" onClick={() => removePatient(selected.id, selected.name)}>
                   Удалить пациента
@@ -250,6 +276,16 @@ export default function PatientsPage({ onLoadVisit }) {
                     {(selected.currentMedications || []).join(', ') || 'лекарств не принимает (клик, чтобы указать)'}
                   </span>
                 )}
+              </div>
+
+              <div className="patients-field-row">
+                <label>Заметка</label>
+                <textarea
+                  rows={3}
+                  value={selected.note || ''}
+                  onChange={(e) => updatePatient({ note: e.target.value })}
+                  placeholder="зачем сдавал мазок, особенности…"
+                />
               </div>
 
               <h4>История визитов ({store.getVisitsForPatient(selected.id).length})</h4>
