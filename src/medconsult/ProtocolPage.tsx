@@ -56,7 +56,7 @@ function Slot({ order, children }: { order: number; children: ReactNode }) {
 
 export function ProtocolPage() {
   const store = useAppStore();
-  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, toggleLocal, addRecommendation, applyComplaintOption, addStudy } =
+  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, addRecommendation, applyComplaintOption, addStudy } =
     store;
   const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
@@ -72,6 +72,8 @@ export function ProtocolPage() {
   const complaintTa = useRef<HTMLDivElement>(null);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
+  const [localPick, setLocalPick] = useState(false);
+  const [localPicked, setLocalPicked] = useState<string[]>([]);
   const [liveSplit, setLiveSplit] = useState<number | null>(null);
   const splitWrap = useRef<HTMLDivElement>(null);
   const splitDragging = useRef(false);
@@ -156,12 +158,6 @@ export function ProtocolPage() {
       window.removeEventListener("medconsult-copy-block", copyBlock);
     };
   }, [blocks, header, patient, session, store]);
-
-  useEffect(() => {
-    if (!session.diagnosisCode) return;
-    if (session.localStatusAutoFor === session.diagnosisCode) return;
-    store.applyLocalFromIcd(session.diagnosisCode);
-  }, [session.diagnosisCode, session.localStatusAutoFor, store]);
 
   const showAi = (section: string) => {
     if (settings.aiButton === "off") return false;
@@ -780,49 +776,93 @@ export function ProtocolPage() {
           <Sec
             id="status"
             title="Локальный статус"
-            badge={packs[0] ? `пакет ${packs[0].label}` : undefined}
+            badge={session.localStatus.length ? String(session.localStatus.length) : undefined}
             open={session.openSection === "status"}
             onOpen={() => setSession({ openSection: session.openSection === "status" ? null : "status" })}
             onRemove={() => toggleBlock("status")}
           >
-            {packs.map((p) => {
-              const code = session.diagnosisCode.trim().toUpperCase();
-              const prefix = code.split(".")[0];
-              const byIcd =
-                !!code &&
-                p.codes.some((raw) => {
-                  const u = raw.trim().toUpperCase();
-                  return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
-                });
-              return (
-              <div key={p.id} className="mb-1">
-                <div className="text-xs font-semibold text-ink">
-                  {p.label}
-                  {byIcd ? " · по МКБ" : ""}
-                </div>
-                <ToggleChips
-                  texts={p.chips}
-                  onToggle={toggleLocal}
-                  selected={session.localStatus}
-                  dashed
-                  onRename={renameInserted("localStatus")}
-                />
-              </div>
-              );
-            })}
-            {packs.length === 0 && (
-              <p className="text-xs text-mute">Шаблонов нет. Справочник → Блоки → локальный статус.</p>
-            )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                  localPick ? "bg-teal text-paper" : "border border-dashed border-teal/50 text-teal"
+                }`}
+                onClick={() => {
+                  setLocalPick((v) => !v);
+                  setLocalPicked([]);
+                }}
+              >
+                <Plus className="size-3" /> шаблон
+              </button>
               <button
                 type="button"
                 className="inline-flex items-center gap-1 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs font-bold text-teal"
                 onClick={() => setLocalAdd(true)}
-                title="Добавить свой шаблон в блок"
+                title="Своя фраза — в текст и в шаблоны"
               >
-                <Plus className="size-3" /> свой шаблон
+                свой
               </button>
             </div>
+            {localPick && (
+              <div className="mt-1.5">
+                {packs.length === 0 ? (
+                  <p className="text-xs text-mute">Шаблонов нет. Справочник → Блоки → локальный статус.</p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1">
+                      {packs.map((p) => {
+                        const code = session.diagnosisCode.trim().toUpperCase();
+                        const prefix = code.split(".")[0];
+                        const byIcd =
+                          !!code &&
+                          p.codes.some((raw) => {
+                            const u = raw.trim().toUpperCase();
+                            return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
+                          });
+                        const on = localPicked.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            title={p.chips.join(" · ")}
+                            className={`rounded-full px-2 py-0.5 text-xs ${
+                              on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+                            }`}
+                            onClick={() =>
+                              setLocalPicked((cur) => (cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]))
+                            }
+                          >
+                            {p.label}
+                            {byIcd ? " · мкб" : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-1.5 rounded-md bg-teal px-2.5 py-1 text-xs font-bold text-paper disabled:opacity-40"
+                      disabled={localPicked.length === 0}
+                      onClick={() => {
+                        const chosen = packs.filter((p) => localPicked.includes(p.id));
+                        const next = [...session.localStatus];
+                        chosen.forEach((p) => {
+                          p.chips.forEach((c) => {
+                            const t = c.trim();
+                            if (t && !next.includes(t)) next.push(t);
+                          });
+                        });
+                        setSession({ localStatus: next });
+                        setLocalPicked([]);
+                        setLocalPick(false);
+                        store.setToast(chosen.length === 1 ? `Шаблон: ${chosen[0].label}` : `Шаблоны: ${chosen.length}`);
+                      }}
+                    >
+                      добавить{localPicked.length ? ` ${localPicked.length}` : ""}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {localAdd && (
               <div className="mt-1.5 flex gap-1">
                 <input
