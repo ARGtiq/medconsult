@@ -297,7 +297,13 @@ function serializeField(f) {
   const preset = (f.defaultValue || '').trim()
   if (preset) out.defaultValue = preset
   if (f.showHeading === false) out.showHeading = false
-  const phrase = (f.phrase || '').trim()
+  const before = (f.before || '').trim()
+  const after = (f.after || '').trim()
+  if (before) out.before = before
+  if (after) out.after = after
+  const phrase = before || after
+    ? [before, '{value}', after].filter(Boolean).join(' ')
+    : (f.phrase || '').trim()
   if (phrase) out.phrase = phrase
   if (f.showIf?.field) {
     const values = (f.showIf.values || []).map((s) => String(s).trim()).filter(Boolean)
@@ -435,51 +441,35 @@ function splitTemplate(template) {
   return parts
 }
 
-function TemplateMark({ template, fields, onAsk, onTag }) {
-  const parts = splitTemplate(template || '')
-  return (
-    <div
-      className="study-template-mark"
-      onMouseDown={() => onAsk(null)}
-    >
-      {parts.map((part, i) =>
-        part.type === 'tag' ? (
-          <button
-            type="button"
-            key={`${part.start}-${part.key}`}
-            className="study-inline-tag"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => onTag(part.key)}
-          >
-            <code>{part.raw}</code>
-            {(() => {
-              const f = fields.find((x) => (x.key || '') === part.key)
-              return f?.phrase ? <span className="study-inline-phrase">{f.phrase}</span> : null
-            })()}
-          </button>
-        ) : (
-          <span
-            key={`${part.start}-t-${i}`}
-            className="study-mark-text"
-            onMouseUp={(e) => {
-              const text = window.getSelection()?.toString() || ''
-              const picked = text.replace(/\s+/g, ' ').trim()
-              if (!picked || !part.text.includes(picked)) return
-              const rect = window.getSelection()?.getRangeAt(0)?.getBoundingClientRect()
-              onAsk({
-                text: picked,
-                start: part.start + part.text.indexOf(picked),
-                x: Math.max(8, (rect?.left || e.clientX) - 8),
-                y: (rect?.bottom || e.clientY) + 6,
-              })
-            }}
-          >
-            {part.text}
-          </span>
-        ),
-      )}
-    </div>
-  )
+function sidesOf(f) {
+  let before = f?.before || ''
+  let after = f?.after || ''
+  if (!before && !after && f?.phrase && String(f.phrase).includes('{value}')) {
+    const [a, b = ''] = String(f.phrase).split('{value}')
+    before = a.trim()
+    after = b.trim()
+  }
+  return { before, after }
+}
+
+function tagTip(f) {
+  const { before, after } = sidesOf(f)
+  const bits = []
+  if (before) bits.push(`перед: ${before}`)
+  if (after) bits.push(`после: ${after}`)
+  if (!bits.length && f?.phrase) bits.push(f.phrase)
+  if (f?.unit) bits.push(f.unit)
+  return bits.join(' · ') || 'клик — править пункт'
+}
+
+function tagsInTemplate(template, fields) {
+  const keys = []
+  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  let m
+  while ((m = re.exec(template || ''))) {
+    if (!keys.includes(m[1])) keys.push(m[1])
+  }
+  return keys.map((key) => (fields || []).find((x) => (x.key || '') === key) || { key, label: key, kind: 'text' })
 }
 
 export default function StudiesTab({ scope = 'studies' }) {
@@ -1794,42 +1784,77 @@ export default function StudiesTab({ scope = 'studies' }) {
                     : undefined
                 }
               >
+              {markMode && (
+                <div className="study-tag-strip">
+                  {tagsInTemplate(form.template, form.fields).map((f) => (
+                    <button
+                      type="button"
+                      key={f.key}
+                      className="study-tag-chip"
+                      onClick={() => {
+                        const sides = sidesOf(f)
+                        setTagEdit({
+                          isNew: false,
+                          prevKey: f.key,
+                          key: f.key,
+                          label: f.label || f.key,
+                          phrase: f.phrase || '',
+                          before: sides.before,
+                          after: sides.after,
+                          kind: f.kind || 'text',
+                          options: [...(f.options || [])],
+                          optionGroups: (f.optionGroups || []).map((g) => [...g]),
+                          unit: f.unit || '',
+                          normal: f.normal || '',
+                          defaultValue: f.defaultValue || '',
+                          showHeading: f.showHeading !== false,
+                        })
+                      }}
+                    >
+                      {f.label || f.key}
+                      <span className="study-tag-tip">{tagTip(f)}</span>
+                    </button>
+                  ))}
+                  {tagsInTemplate(form.template, form.fields).length === 0 && (
+                    <span className="settings-note-inline">Выдели слово в тексте — появится «добавить тег».</span>
+                  )}
+                </div>
+              )}
               <textarea
                 ref={templateRef}
                 className="study-template-text"
                 placeholder="Chlamydia trachomatis - {chlamydia_trachomatis}"
                 value={form.template}
-                hidden={markMode}
+                onMouseUp={(e) => {
+                  if (!markMode) return
+                  const el = e.currentTarget
+                  const a = el.selectionStart ?? 0
+                  const b = el.selectionEnd ?? 0
+                  if (b <= a) {
+                    setSelAsk(null)
+                    return
+                  }
+                  const raw = el.value.slice(a, b)
+                  const text = raw.replace(/\s+/g, ' ').trim()
+                  if (!text || text.includes('{') || text.includes('}')) {
+                    setSelAsk(null)
+                    return
+                  }
+                  const rect = el.getBoundingClientRect()
+                  setSelAsk({
+                    text,
+                    start: a,
+                    end: b,
+                    x: Math.max(8, rect.left + 12),
+                    y: Math.min(window.innerHeight - 36, rect.top + 8),
+                  })
+                }}
                 onChange={(e) => {
                   const value = e.target.value
                   setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
                 }}
               />
-              {markMode && (
-                <TemplateMark
-                  template={form.template || ''}
-                  fields={form.fields}
-                  onAsk={(ask) => setSelAsk(ask)}
-                  onTag={(key) => {
-                    const f = form.fields.find((x) => fieldKeyOf(x) === key) || { key, label: key, kind: 'text', phrase: '' }
-                    setTagEdit({
-                      isNew: false,
-                      prevKey: f.key,
-                      key: f.key,
-                      label: f.label || key,
-                      phrase: f.phrase || '',
-                      kind: f.kind || 'text',
-                      options: [...(f.options || [])],
-                      optionGroups: (f.optionGroups || []).map((g) => [...g]),
-                      unit: f.unit || '',
-                      normal: f.normal || '',
-                      defaultValue: f.defaultValue || '',
-                      showHeading: f.showHeading !== false,
-                    })
-                  }}
-                />
-              )}
-              {selAsk && (
+              {markMode && selAsk && (
                 <button
                   type="button"
                   className="study-tag-pop"
@@ -1842,17 +1867,20 @@ export default function StudiesTab({ scope = 'studies' }) {
                     setTagEdit({
                       isNew: true,
                       start: selAsk.start,
+                      end: selAsk.end,
                       selected,
                       key,
                       label: selected.slice(0, 48),
-                      phrase: `${selected} {value}`,
+                      before: selected,
+                      after: '',
+                      phrase: '',
                       kind: 'text',
                       options: [],
                       optionGroups: [],
                       unit: '',
                       normal: '',
                       defaultValue: '',
-                      showHeading: true,
+                      showHeading: false,
                     })
                     setSelAsk(null)
                   }}
@@ -1895,8 +1923,11 @@ export default function StudiesTab({ scope = 'studies' }) {
                           <option key={k.value} value={k.value}>{k.label}</option>
                         ))}
                       </select>
-                      <textarea rows={4} value={tagEdit.phrase || ''} onChange={(e) => setTagEdit({ ...tagEdit, phrase: e.target.value })} placeholder="фраза в протоколе. {value} — то, что введут на приёме" />
-                      <p className="settings-note-inline">В шаблоне остаётся только {'{тег}'}. Эта фраза серым рядом с ним и подставляется в протокол вместо тега.</p>
+                      <input value={tagEdit.before || ''} onChange={(e) => setTagEdit({ ...tagEdit, before: e.target.value })} placeholder="текст перед значением" />
+                      <input value={tagEdit.after || ''} onChange={(e) => setTagEdit({ ...tagEdit, after: e.target.value })} placeholder="текст после значения" />
+                      <p className="settings-note-inline">
+                        В протоколе: {(tagEdit.before || '').trim() || '…'} значение {(tagEdit.after || '').trim()}. В шаблоне остаётся только {'{тег}'}.
+                      </p>
                       <input value={tagEdit.defaultValue || ''} onChange={(e) => setTagEdit({ ...tagEdit, defaultValue: e.target.value })} placeholder="значение по умолчанию" />
                       <input value={tagEdit.normal || ''} onChange={(e) => setTagEdit({ ...tagEdit, normal: e.target.value })} placeholder="норма / референс" />
                       {(tagEdit.kind === 'select' || tagEdit.kind === 'multi') && (
@@ -1970,12 +2001,16 @@ export default function StudiesTab({ scope = 'studies' }) {
                               const key = (edit.key || slugifyFieldKey(edit.label) || '').replace(/[{}\s]/g, '') || `t_${Date.now().toString(36)}`
                               const fields = prev.fields.map((f) => ({ ...f }))
                               const idx = fields.findIndex((f) => f.key === key || (edit.prevKey && f.key === edit.prevKey))
+                              const before = (edit.before || '').trim()
+                              const after = (edit.after || '').trim()
                               const next = {
                                 ...(idx >= 0 ? fields[idx] : {}),
                                 key,
                                 label: (edit.label || key).trim(),
                                 kind: edit.kind || 'text',
-                                phrase: (edit.phrase || '').trim(),
+                                before,
+                                after,
+                                phrase: before || after ? [before, '{value}', after].filter(Boolean).join(' ') : '',
                                 unit: (edit.unit || '').trim(),
                                 normal: (edit.normal || '').trim(),
                                 defaultValue: (edit.defaultValue || '').trim(),
@@ -1987,11 +2022,13 @@ export default function StudiesTab({ scope = 'studies' }) {
                               if (!next.normal) delete next.normal
                               if (!next.defaultValue) delete next.defaultValue
                               if (!next.phrase) delete next.phrase
+                              if (!next.before) delete next.before
+                              if (!next.after) delete next.after
                               if (idx >= 0) fields[idx] = next
                               else fields.push(next)
                               let template = prev.template || ''
-                              if (edit.isNew && edit.selected && Number.isFinite(edit.start)) {
-                                template = `${template.slice(0, edit.start)}{${key}}${template.slice(edit.start + String(edit.selected).length)}`
+                              if (edit.isNew && Number.isFinite(edit.start) && Number.isFinite(edit.end)) {
+                                template = `${template.slice(0, edit.start)}{${key}}${template.slice(edit.end)}`
                               } else if (edit.prevKey && edit.prevKey !== key) {
                                 template = template.split(`{${edit.prevKey}}`).join(`{${key}}`).split(`{+${edit.prevKey}}`).join(`{+${key}}`)
                               }

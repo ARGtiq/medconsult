@@ -897,6 +897,14 @@ export function formatDeviations(list: Deviation[]) {
     .join(". ");
 }
 
+function fieldShownText(f: StudyField, value: string) {
+  const before = (f.before || "").trim();
+  const after = (f.after || "").trim();
+  if (before || after) return [before, value, after].filter(Boolean).join(" ");
+  if (f.phrase) return f.phrase.replaceAll("{value}", value);
+  return value;
+}
+
 function filledFieldBit(
   f: StudyField,
   fields: Record<string, string>,
@@ -908,7 +916,7 @@ function filledFieldBit(
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
   const value = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
-  const shown = f.phrase ? f.phrase.replaceAll("{value}", value) : value;
+  const shown = fieldShownText(f, value);
   return { label: f.showHeading === false ? "" : f.label, shown };
 }
 
@@ -996,7 +1004,7 @@ export function fillStudyTemplate(
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
       const unit = f.unit ? ` ${f.unit}` : "";
       const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
-      const text = f.phrase ? f.phrase.replaceAll("{value}", shown) : shown;
+      const text = fieldShownText(f, shown);
       const label = f.showHeading === false ? "" : f.label;
       bits.push(`${label} ${text}`.trim());
     }
@@ -1018,9 +1026,7 @@ export function fillStudyTemplate(
     const replacement =
       f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
         ? ""
-        : f.phrase
-          ? f.phrase.replaceAll("{value}", valueBit)
-          : valueBit;
+        : fieldShownText(f, valueBit);
     text = text.replaceAll(`{${f.key}}`, replacement);
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {
@@ -1064,7 +1070,7 @@ function namedFieldText(
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
   const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
-  if (f.phrase) return f.phrase.replaceAll("{value}", shown);
+  if (f.before || f.after || f.phrase) return fieldShownText(f, shown);
   if (f.showHeading === false) return shown;
   return `${(f.label || f.key).trim()} - ${shown}`.trim();
 }

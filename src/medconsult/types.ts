@@ -32,6 +32,10 @@ export type StudyField = {
   showHeading?: boolean;
   /** Фраза тега. `{value}` — введённое значение. */
   phrase?: string;
+  /** Текст перед введённым значением в протоколе. */
+  before?: string;
+  /** Текст после введённого значения в протоколе. */
+  after?: string;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
   refMin?: number;

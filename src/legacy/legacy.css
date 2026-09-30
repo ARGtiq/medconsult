@@ -3567,6 +3567,42 @@
   color: #8b909a;
   font-weight: 400;
 }
+.legacy-surface .study-tag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.legacy-surface .study-tag-chip {
+  position: relative;
+  border: 1px solid var(--teal);
+  background: transparent;
+  color: var(--teal);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.legacy-surface .study-tag-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 6;
+  width: max-content;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #243038;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+}
+.legacy-surface .study-tag-chip:hover .study-tag-tip {
+  display: block;
+}
 .legacy-surface .study-tag-pop {
   position: fixed;
   z-index: 95;
