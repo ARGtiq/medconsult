@@ -10,6 +10,7 @@ export type VitaePreset = {
   label: string;
   needsDate?: boolean;
   emptyDateText?: string;
+  about?: string;
 };
 
 export type DocKind = {

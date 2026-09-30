@@ -71,6 +71,9 @@ function groupOf(name: string): { key: string; def: GroupDef } | null {
   const n = norm(name);
   const all = groups();
   for (const [key, def] of Object.entries(all)) {
+    if (norm(def.label || "") === n) return { key, def };
+  }
+  for (const [key, def] of Object.entries(all)) {
     if (def.drugs.some((d) => closeMatch(d, n))) return { key, def };
   }
   for (const [key, def] of Object.entries(all)) {

@@ -178,6 +178,7 @@ export function TemplatesEditor({
               items={data.surgeries}
               onChange={(surgeries) => persist({ surgeries })}
               hint="Свои операции с приёма тоже попадают сюда."
+              describe
             />
           )}
           {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
@@ -212,6 +213,7 @@ export function TemplatesEditor({
                   items={data.surgeries}
                   onChange={(surgeries) => persist({ surgeries })}
                   hint="Свои операции с приёма тоже попадают сюда."
+                  describe
                 />
               </div>
             </div>
@@ -1494,10 +1496,12 @@ function PresetEditor({
   items,
   onChange,
   hint,
+  describe,
 }: {
   items: VitaePreset[];
   onChange: (p: VitaePreset[]) => void;
   hint: string;
+  describe?: boolean;
 }) {
   function patch(i: number, p: Partial<VitaePreset>) {
     onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
@@ -1507,7 +1511,8 @@ function PresetEditor({
       <p className="mb-2 text-xs text-ink-soft">{hint}</p>
       <div className="space-y-1">
         {items.map((it, i) => (
-          <div key={it.id} className="flex flex-wrap items-center gap-1">
+          <div key={it.id} className="rounded-md border border-line/70 bg-paper px-2 py-1">
+            <div className="flex flex-wrap items-center gap-1">
             <input
               value={it.label}
               onChange={(e) => patch(i, { label: e.target.value })}
@@ -1541,6 +1546,16 @@ function PresetEditor({
             <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
               ×
             </button>
+            </div>
+            {describe && (
+              <textarea
+                value={it.about || ""}
+                onChange={(e) => patch(i, { about: e.target.value })}
+                rows={2}
+                placeholder="описание. Если заполнено, на приёме у операции появится i"
+                className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs"
+              />
+            )}
           </div>
         ))}
       </div>

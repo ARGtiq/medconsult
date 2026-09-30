@@ -14,6 +14,8 @@ export type VitaeItem = {
   id: string;
   label: string;
   date?: string;
+  note?: string;
+  noteOn?: boolean;
 };
 
 export type InfectionPreset = VitaePreset & { group: "tb" | "hep" | "sti" };
@@ -123,6 +125,8 @@ export type VitaeDraft = {
   disability: "" | "no" | "yes";
   disabilityGroup: string;
   disabilityCause: string;
+  disabilityNote: string;
+  disabilityNoteOn: boolean;
   omit: string[];
 };
 
@@ -197,6 +201,8 @@ export const emptyVitae = (): VitaeDraft => ({
   disability: "",
   disabilityGroup: "",
   disabilityCause: "",
+  disabilityNote: "",
+  disabilityNoteOn: false,
   omit: [],
 });
 
@@ -266,9 +272,11 @@ export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
 
 function formatVitaeItem(it: VitaeItem, emptyDateText?: string) {
   const date = (it.date || "").trim();
-  if (date) return `${it.label} (${date})`;
-  if (emptyDateText) return `${it.label} ${emptyDateText}`.trim();
-  return it.label;
+  let base = it.label;
+  if (date) base = `${it.label} (${date})`;
+  else if (emptyDateText) base = `${it.label} ${emptyDateText}`.trim();
+  const note = it.noteOn ? (it.note || "").trim() : "";
+  return note ? `${base}: ${note}` : base;
 }
 
 function namedItems(items: VitaeItem[], presets: VitaePreset[]) {
@@ -339,10 +347,14 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
     d.employment === "off"
       ? `Не работает${workReason ? ` (${workReason})` : ""}`
       : workBits.join(", ");
-  const disability =
+  const disabilityBase =
     d.disability === "yes"
       ? `Инвалидность: ${d.disabilityGroup || "группа не указана"} группа, ${d.disabilityCause || "общее заболевание"}`
       : "Инвалидности нет";
+  const disability =
+    d.disability === "yes" && d.disabilityNoteOn && d.disabilityNote.trim()
+      ? `${disabilityBase}: ${d.disabilityNote.trim()}`
+      : disabilityBase;
 
   const pastExtra = [
     ...namedItems(d.pastItems, chronicPresets),

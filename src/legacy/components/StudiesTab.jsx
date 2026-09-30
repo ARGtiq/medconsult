@@ -1663,6 +1663,13 @@ export default function StudiesTab({ scope = 'studies' }) {
               </div>
 
               <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}`}>
+              {templateMax && (
+                <div className="study-date-format">
+                  <button type="button" className="btn-primary btn-small" onClick={() => setTemplateMax(false)}>
+                    закрыть и вернуться
+                  </button>
+                </div>
+              )}
               <div className="study-date-format" role="group" aria-label="Формат даты">
                 <span>Дата</span>
                 <button
@@ -1812,7 +1819,12 @@ export default function StudiesTab({ scope = 'studies' }) {
                       label: f.label || key,
                       phrase: f.phrase || '',
                       kind: f.kind || 'text',
-                      options: (f.options || []).join(', '),
+                      options: [...(f.options || [])],
+                      optionGroups: (f.optionGroups || []).map((g) => [...g]),
+                      unit: f.unit || '',
+                      normal: f.normal || '',
+                      defaultValue: f.defaultValue || '',
+                      showHeading: f.showHeading !== false,
                     })
                   }}
                 />
@@ -1835,7 +1847,12 @@ export default function StudiesTab({ scope = 'studies' }) {
                       label: selected.slice(0, 48),
                       phrase: `${selected} {value}`,
                       kind: 'text',
-                      options: '',
+                      options: [],
+                      optionGroups: [],
+                      unit: '',
+                      normal: '',
+                      defaultValue: '',
+                      showHeading: true,
                     })
                     setSelAsk(null)
                   }}
@@ -1858,58 +1875,134 @@ export default function StudiesTab({ scope = 'studies' }) {
 
               {tagEdit && (
                 <div className="study-tag-modal">
-                  <div className="study-tag-modal-card" onMouseDown={(e) => e.stopPropagation()}>
+                  <div className="study-tag-modal-card modal-box" onMouseDown={(e) => e.stopPropagation()}>
                     <div className="modal-header">
-                      <h3>{tagEdit.isNew ? 'Новый тег' : 'Тег'}</h3>
+                      <h3>{tagEdit.isNew ? 'Новый тег' : `Тег: ${tagEdit.label || tagEdit.key}`}</h3>
                       <button type="button" className="modal-close" onClick={() => setTagEdit(null)}>×</button>
                     </div>
-                    <input value={tagEdit.label} onChange={(e) => setTagEdit({ ...tagEdit, label: e.target.value })} placeholder="название пункта" />
-                    <input value={tagEdit.key} onChange={(e) => setTagEdit({ ...tagEdit, key: e.target.value.replace(/[{}\s]/g, '') })} placeholder="тег" />
-                    <textarea rows={3} value={tagEdit.phrase} onChange={(e) => setTagEdit({ ...tagEdit, phrase: e.target.value })} placeholder="фраза в протоколе. {value} — ответ на приёме" />
-                    <p className="settings-note-inline">В тексте шаблона остаётся только тег. Фраза показана серым и уходит в протокол.</p>
-                    <select value={tagEdit.kind || 'text'} onChange={(e) => setTagEdit({ ...tagEdit, kind: e.target.value })}>
-                      {KIND_OPTIONS.filter((k) => k.value !== 'heading').map((k) => (
-                        <option key={k.value} value={k.value}>{k.label}</option>
-                      ))}
-                    </select>
-                    {(tagEdit.kind === 'select' || tagEdit.kind === 'multi') && (
-                      <input value={tagEdit.options || ''} onChange={(e) => setTagEdit({ ...tagEdit, options: e.target.value })} placeholder="варианты через запятую" />
-                    )}
-                    <div className="drug-form-actions">
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => {
-                          const edit = tagEdit
-                          setForm((prev) => {
-                            const key = (edit.key || slugifyFieldKey(edit.label) || '').replace(/[{}\s]/g, '') || `t_${Date.now().toString(36)}`
-                            const fields = prev.fields.map((f) => ({ ...f }))
-                            const idx = fields.findIndex((f) => f.key === key || (edit.prevKey && f.key === edit.prevKey))
-                            const next = {
-                              ...(idx >= 0 ? fields[idx] : {}),
-                              key,
-                              label: (edit.label || key).trim(),
-                              kind: edit.kind || 'text',
-                              phrase: edit.phrase || '',
-                            }
-                            if (edit.kind === 'select' || edit.kind === 'multi') {
-                              next.options = String(edit.options || '').split(',').map((s) => s.trim()).filter(Boolean)
-                            }
-                            if (idx >= 0) fields[idx] = next
-                            else fields.push(next)
-                            let template = prev.template || ''
-                            if (edit.isNew && edit.selected && Number.isFinite(edit.start)) {
-                              template = `${template.slice(0, edit.start)}{${key}}${template.slice(edit.start + String(edit.selected).length)}`
-                            } else if (edit.prevKey && edit.prevKey !== key) {
-                              template = template.split(`{${edit.prevKey}}`).join(`{${key}}`).split(`{+${edit.prevKey}}`).join(`{+${key}}`)
-                            }
-                            return { ...prev, fields, template, templateEdited: true }
-                          })
-                          setTagEdit(null)
-                        }}
-                      >
-                        Готово
-                      </button>
+                    <div className="drug-form" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+                      <div className="drug-form-row">
+                        <input value={tagEdit.label} onChange={(e) => setTagEdit({ ...tagEdit, label: e.target.value })} placeholder="название пункта" />
+                        <input value={tagEdit.unit || ''} onChange={(e) => setTagEdit({ ...tagEdit, unit: e.target.value })} placeholder="ед. изм." />
+                        <input value={tagEdit.key} onChange={(e) => setTagEdit({ ...tagEdit, key: e.target.value.replace(/[{}\s]/g, '') })} placeholder="тег" />
+                      </div>
+                      <label className="study-field-check">
+                        <input type="checkbox" checked={tagEdit.showHeading !== false} onChange={(e) => setTagEdit({ ...tagEdit, showHeading: e.target.checked })} />
+                        показывать заголовок пункта в тексте
+                      </label>
+                      <select value={tagEdit.kind || 'text'} onChange={(e) => setTagEdit({ ...tagEdit, kind: e.target.value })}>
+                        {KIND_OPTIONS.filter((k) => k.value !== 'heading').map((k) => (
+                          <option key={k.value} value={k.value}>{k.label}</option>
+                        ))}
+                      </select>
+                      <textarea rows={4} value={tagEdit.phrase || ''} onChange={(e) => setTagEdit({ ...tagEdit, phrase: e.target.value })} placeholder="фраза в протоколе. {value} — то, что введут на приёме" />
+                      <p className="settings-note-inline">В шаблоне остаётся только {'{тег}'}. Эта фраза серым рядом с ним и подставляется в протокол вместо тега.</p>
+                      <input value={tagEdit.defaultValue || ''} onChange={(e) => setTagEdit({ ...tagEdit, defaultValue: e.target.value })} placeholder="значение по умолчанию" />
+                      <input value={tagEdit.normal || ''} onChange={(e) => setTagEdit({ ...tagEdit, normal: e.target.value })} placeholder="норма / референс" />
+                      {(tagEdit.kind === 'select' || tagEdit.kind === 'multi') && (
+                        <div className="study-field-options">
+                          {(tagEdit.options || []).map((opt, oi) => (
+                            <button
+                              type="button"
+                              key={`${opt}-${oi}`}
+                              className="study-field-opt is-ref"
+                              onClick={() => setTagEdit({ ...tagEdit, options: tagEdit.options.filter((_, j) => j !== oi) })}
+                            >
+                              {opt} ×
+                            </button>
+                          ))}
+                          <input
+                            placeholder="вариант + Enter"
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return
+                              const raw = e.currentTarget.value.trim()
+                              if (!raw) return
+                              e.preventDefault()
+                              setTagEdit({ ...tagEdit, options: [...(tagEdit.options || []), raw] })
+                              e.currentTarget.value = ''
+                            }}
+                          />
+                        </div>
+                      )}
+                      {tagEdit.kind === 'groups' && (
+                        <div>
+                          {(tagEdit.optionGroups || []).map((group, gi) => (
+                            <div key={gi} className="study-field-options">
+                              {group.map((opt, oi) => (
+                                <button
+                                  type="button"
+                                  key={`${opt}-${oi}`}
+                                  className="study-field-opt is-ref"
+                                  onClick={() => {
+                                    const optionGroups = tagEdit.optionGroups.map((g, j) => (j === gi ? g.filter((_, k) => k !== oi) : g)).filter((g) => g.length)
+                                    setTagEdit({ ...tagEdit, optionGroups })
+                                  }}
+                                >
+                                  {opt} ×
+                                </button>
+                              ))}
+                              <input
+                                placeholder="вариант группы + Enter"
+                                onKeyDown={(e) => {
+                                  if (e.key !== 'Enter') return
+                                  const raw = e.currentTarget.value.trim()
+                                  if (!raw) return
+                                  e.preventDefault()
+                                  const optionGroups = (tagEdit.optionGroups || []).map((g, j) => (j === gi ? [...g, raw] : g))
+                                  setTagEdit({ ...tagEdit, optionGroups })
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                            </div>
+                          ))}
+                          <button type="button" className="btn-secondary btn-small" onClick={() => setTagEdit({ ...tagEdit, optionGroups: [...(tagEdit.optionGroups || []), ['вариант']] })}>
+                            + группа вариантов
+                          </button>
+                        </div>
+                      )}
+                      <div className="drug-form-actions">
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => {
+                            const edit = tagEdit
+                            setForm((prev) => {
+                              const key = (edit.key || slugifyFieldKey(edit.label) || '').replace(/[{}\s]/g, '') || `t_${Date.now().toString(36)}`
+                              const fields = prev.fields.map((f) => ({ ...f }))
+                              const idx = fields.findIndex((f) => f.key === key || (edit.prevKey && f.key === edit.prevKey))
+                              const next = {
+                                ...(idx >= 0 ? fields[idx] : {}),
+                                key,
+                                label: (edit.label || key).trim(),
+                                kind: edit.kind || 'text',
+                                phrase: (edit.phrase || '').trim(),
+                                unit: (edit.unit || '').trim(),
+                                normal: (edit.normal || '').trim(),
+                                defaultValue: (edit.defaultValue || '').trim(),
+                                showHeading: edit.showHeading === false ? false : undefined,
+                              }
+                              if (edit.kind === 'select' || edit.kind === 'multi') next.options = (edit.options || []).map((s) => String(s).trim()).filter(Boolean)
+                              if (edit.kind === 'groups') next.optionGroups = (edit.optionGroups || []).map((g) => g.map((s) => String(s).trim()).filter(Boolean)).filter((g) => g.length)
+                              if (!next.unit) delete next.unit
+                              if (!next.normal) delete next.normal
+                              if (!next.defaultValue) delete next.defaultValue
+                              if (!next.phrase) delete next.phrase
+                              if (idx >= 0) fields[idx] = next
+                              else fields.push(next)
+                              let template = prev.template || ''
+                              if (edit.isNew && edit.selected && Number.isFinite(edit.start)) {
+                                template = `${template.slice(0, edit.start)}{${key}}${template.slice(edit.start + String(edit.selected).length)}`
+                              } else if (edit.prevKey && edit.prevKey !== key) {
+                                template = template.split(`{${edit.prevKey}}`).join(`{${key}}`).split(`{+${edit.prevKey}}`).join(`{+${key}}`)
+                              }
+                              return { ...prev, fields, template, templateEdited: true }
+                            })
+                            setTagEdit(null)
+                          }}
+                        >
+                          Готово
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

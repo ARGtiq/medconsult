@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { store as legacy } from "@/legacy/lib/store";
+import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import {
   composeAnamnesis,
   composeVitae,
@@ -99,6 +100,39 @@ function drugNameOnly(raw: string) {
   return cut.trim() || t;
 }
 
+function groupKnown(name: string) {
+  const n = name.trim().toLowerCase();
+  if (!n) return false;
+  for (const g of Object.values(DRUG_GROUPS) as { label?: string }[]) {
+    if ((g.label || "").trim().toLowerCase() === n) return true;
+  }
+  try {
+    return Object.values(legacy.getCustomGroups() || {}).some(
+      (g) => String((g as { label?: string }).label || "").trim().toLowerCase() === n,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function ensureGroup(name: string) {
+  const label = name.trim();
+  if (!label || groupKnown(label)) return;
+  try {
+    legacy.saveCustomGroup("", { label, drugs: [] });
+  } catch {
+    /* */
+  }
+}
+
+function rememberAllergyItem(name: string, hint?: string) {
+  if (hint === "группа" || groupKnown(name)) {
+    ensureGroup(name);
+    return;
+  }
+  rememberDrug(name);
+}
+
 function rememberDrug(raw: string) {
   const name = drugNameOnly(raw);
   if (!name) return;
@@ -107,6 +141,48 @@ function rememberDrug(raw: string) {
   } catch {
     /* */
   }
+}
+
+function AboutDot({ title, text }: { title: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const hoverOn = useAppStore((s) => s.settings.infoOnHover);
+  const [hover, setHover] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="inline-flex size-4 items-center justify-center rounded-full bg-teal text-[10px] font-bold text-paper"
+        title="описание"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        i
+      </button>
+      {hoverOn && hover && (
+        <span className="max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-[11px] shadow">{text}</span>
+      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/30 p-3 sm:items-center" onClick={() => setOpen(false)}>
+            <div className="w-full max-w-md rounded-xl border border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="font-medium">{title}</div>
+                <button type="button" className="text-sm text-mute" onClick={() => setOpen(false)}>
+                  закрыть
+                </button>
+              </div>
+              <div className="text-sm leading-relaxed">{text}</div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 }
 
 function DiseaseDot({ name }: { name: string }) {
@@ -234,6 +310,7 @@ function PresetPicker({
                 {p.label}
               </button>
               {disease ? <DiseaseDot name={p.label} /> : null}
+              {p.about?.trim() ? <AboutDot title={p.label} text={p.about} /> : null}
             </span>
           );
         })}
@@ -241,17 +318,40 @@ function PresetPicker({
       {selected.map((s) => {
         const preset = presets.find((p) => p.id === s.id);
         const showDate = yearAlways || preset?.needsDate || Boolean(s.date);
-        if (!showDate) return null;
+        if (!showDate && !yearAlways) return null;
         return (
-          <label key={s.id} className="mt-1 flex items-center gap-2 text-xs">
-            <span className="text-ink-soft">{s.label}</span>
-            <input
-              value={s.date || ""}
-              onChange={(e) => setDate(s.id, e.target.value)}
-              placeholder={yearAlways ? "год" : preset?.emptyDateText ? `пусто = ${preset.emptyDateText}` : "год или дата, можно пусто"}
-              className="w-44 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
-            />
-          </label>
+          <div key={s.id} className="mt-1">
+            {showDate && (
+              <label className="flex items-center gap-2 text-xs">
+                <span className="text-ink-soft">{s.label}</span>
+                <input
+                  value={s.date || ""}
+                  onChange={(e) => setDate(s.id, e.target.value)}
+                  placeholder={yearAlways ? "год" : preset?.emptyDateText ? `пусто = ${preset.emptyDateText}` : "год или дата, можно пусто"}
+                  className="w-44 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
+                />
+              </label>
+            )}
+            {yearAlways && (
+              <div className={`mt-0.5 ${s.noteOn ? "" : "opacity-50"}`}>
+                <button
+                  type="button"
+                  className="text-[11px] text-teal"
+                  onClick={() => onChange(selected.map((x) => (x.id === s.id ? { ...x, noteOn: !x.noteOn } : x)))}
+                >
+                  + примечание
+                </button>
+                {s.noteOn && (
+                  <input
+                    value={s.note || ""}
+                    onChange={(e) => onChange(selected.map((x) => (x.id === s.id ? { ...x, note: e.target.value } : x)))}
+                    placeholder="примечание к операции"
+                    className="mt-0.5 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+                  />
+                )}
+              </div>
+            )}
+          </div>
         );
       })}
       <div className="mt-1 flex gap-1">
@@ -384,15 +484,12 @@ function ChipList({
           {items.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {items.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  title="Нажми, чтобы убрать"
-                  className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal"
-                  onClick={() => onChange(items.filter((x) => x !== t))}
-                >
-                  {t}
-                </button>
+                <span key={t} className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-xs font-medium text-teal">
+                  <button type="button" title="Нажми, чтобы убрать" onClick={() => onChange(items.filter((x) => x !== t))}>
+                    {t}
+                  </button>
+                  <InfoDot query={t} />
+                </span>
               ))}
             </div>
           ) : null}
@@ -403,10 +500,15 @@ function ChipList({
               items={hits}
               onPick={(it) => {
                 const name = it.name || it.label;
+                if (allergy && it.hint === "группа") ensureGroup(name);
                 if (!items.includes(name)) onChange([...items, name]);
+                if (allergy && it.hint !== "группа") rememberDrug(name);
               }}
               onSubmitCustom={(raw) => {
+                const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase());
+                if (allergy && (hit?.hint === "группа" || (!hit && !groupKnown(raw)))) ensureGroup(raw);
                 if (!items.includes(raw)) onChange([...items, raw]);
+                if (allergy && hit && hit.hint !== "группа") rememberDrug(raw);
               }}
               placeholder={placeholder}
               emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
@@ -449,10 +551,15 @@ function CardFill({
         items={hits}
         onPick={(it) => {
           const name = it.name || it.label;
+          if (allergy && it.hint === "группа") ensureGroup(name);
           if (!items.includes(name)) onChange([...items, name]);
+          if (allergy && it.hint !== "группа") rememberDrug(name);
         }}
         onSubmitCustom={(raw) => {
+          const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase());
+          if (allergy && (hit?.hint === "группа" || (!hit && !groupKnown(raw)))) ensureGroup(raw);
           if (!items.includes(raw)) onChange([...items, raw]);
+          if (allergy && hit && hit.hint !== "группа") rememberDrug(raw);
         }}
         placeholder={placeholder}
         emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
@@ -729,7 +836,10 @@ export function AnamnesisVitae({
   function setCard(patch: { allergies?: string[]; currentMedications?: string[] }) {
     const allergies = patch.allergies ?? session.allergies ?? [];
     const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
-    allergies.forEach(rememberDrug);
+    allergies.forEach((name) => {
+      if (groupKnown(name)) ensureGroup(name);
+      else rememberDrug(name);
+    });
     currentMedications.forEach(rememberDrug);
     const nextCtx = { allergies, medications: currentMedications };
     const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
@@ -1024,6 +1134,19 @@ export function AnamnesisVitae({
                 { id: "военная травма", text: "военная травма" },
               ]}
             />
+            <div className={`mt-1 ${d.disabilityNoteOn ? "" : "opacity-50"}`}>
+              <button type="button" className="text-[11px] text-teal" onClick={() => patch({ disabilityNoteOn: !d.disabilityNoteOn })}>
+                + примечание
+              </button>
+              {d.disabilityNoteOn && (
+                <input
+                  value={d.disabilityNote}
+                  onChange={(e) => patch({ disabilityNote: e.target.value })}
+                  placeholder="например заболевание"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              )}
+            </div>
           </>
         )}
       </VitaeSection>

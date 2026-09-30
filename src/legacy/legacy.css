@@ -3590,7 +3590,8 @@
   padding: 16px;
 }
 .legacy-surface .study-tag-modal-card {
-  width: min(440px, 100%);
+  width: min(760px, 100%);
+  max-height: min(86vh, 900px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3598,6 +3599,7 @@
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
+  overflow: auto;
 }
 .legacy-surface .study-field-check {
   display: inline-flex;
