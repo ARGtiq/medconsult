@@ -2,6 +2,7 @@ import { Copy, Plus, Printer, Eraser } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
+import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/openrouter";
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
@@ -1193,12 +1194,21 @@ export function ProtocolPage() {
           {session.diagnosisCode && hubMode === "block" && (
             <div className="legacy-surface klinrek-slot mt-2">{klinrekPanel("recs")}</div>
           )}
-          <div className="legacy-surface mt-2">
+          <div className="legacy-surface mt-2 flex flex-wrap items-start gap-2">
             <TreatmentSchemeSearch
               diagnosisText={diagnosisText}
               onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
                 phaseDrugs.forEach(insertDrug);
                 store.setToast("Фаза схемы добавлена");
+              }}
+            />
+            <RecPackSearch
+              diagnosisText={diagnosisText}
+              onApply={(lines: string[]) => {
+                lines.forEach((line) => {
+                  if (line && !session.recommendations.includes(line)) addRecommendation(line);
+                });
+                store.setToast("Пакет рекомендаций добавлен");
               }}
             />
           </div>

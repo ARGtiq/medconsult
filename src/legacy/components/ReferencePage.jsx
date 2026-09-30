@@ -4,13 +4,46 @@ import DrugsTab from './DrugsTab'
 import DrugGroupsTab from './DrugGroupsTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import TreatmentSchemesTab from './TreatmentSchemesTab'
+import RecPacksTab from './RecPacksTab'
 import Mkb10Page from './Mkb10Page'
 import { DiseasesPage } from '../../medconsult/DiseasesPage'
 
 function startTab(initialTab) {
   if (initialTab === 'studies' || initialTab === 'templates') return 'blocks'
-  if (initialTab === 'groups') return 'drugs'
+  if (initialTab === 'guidelines' || initialTab === 'schemes' || initialTab === 'drugs' || initialTab === 'groups') {
+    return 'appointments'
+  }
   return initialTab || 'mkb'
+}
+
+function AppointmentsHub({ initialTab, initialItemId }) {
+  const [sub, setSub] = useState(
+    initialTab === 'schemes' ? 'schemes' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
+  )
+  return (
+    <div>
+      <div className="settings-tabs">
+        <button type="button" className={sub === 'guidelines' ? 'active' : ''} onClick={() => setSub('guidelines')}>
+          Клинреки
+        </button>
+        <button type="button" className={sub === 'schemes' ? 'active' : ''} onClick={() => setSub('schemes')}>
+          Схемы лечения
+        </button>
+        <button type="button" className={sub === 'drugs' ? 'active' : ''} onClick={() => setSub('drugs')}>
+          Лекарства
+        </button>
+        <button type="button" className={sub === 'packs' ? 'active' : ''} onClick={() => setSub('packs')}>
+          Пакеты рекомендаций
+        </button>
+      </div>
+      {sub === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
+      {sub === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
+      {sub === 'drugs' && (
+        <DrugsHub initialSub={initialTab === 'groups' ? 'groups' : 'drugs'} initialItemId={initialTab === 'drugs' ? initialItemId : null} />
+      )}
+      {sub === 'packs' && <RecPacksTab />}
+    </div>
+  )
 }
 
 function DrugsHub({ initialSub, initialItemId }) {
@@ -38,8 +71,8 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
     <div className="guidelines-page">
       <h2 className="guidelines-title">Справочник</h2>
       <p className="settings-note-inline">
-        МКБ-10, блоки, наборы, глобальные шаблоны, клинреки, схемы, лекарства, печать.
-        Исследования — внутри «Блоки».
+        МКБ-10, болезни, блоки, наборы, глобальные шаблоны, назначения, печать.
+        В «Назначениях» — клинреки, схемы лечения, лекарства и пакеты рекомендаций.
       </p>
       <div className="settings-tabs">
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
@@ -57,14 +90,8 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
         <button type="button" className={tab === 'global' ? 'active' : ''} onClick={() => setTab('global')}>
           Глобальные
         </button>
-        <button type="button" className={tab === 'guidelines' ? 'active' : ''} onClick={() => setTab('guidelines')}>
-          Клинреки
-        </button>
-        <button type="button" className={tab === 'schemes' ? 'active' : ''} onClick={() => setTab('schemes')}>
-          Схемы лечения
-        </button>
-        <button type="button" className={tab === 'drugs' ? 'active' : ''} onClick={() => setTab('drugs')}>
-          Лекарства
+        <button type="button" className={tab === 'appointments' ? 'active' : ''} onClick={() => setTab('appointments')}>
+          Назначения
         </button>
         <button type="button" className={tab === 'print' ? 'active' : ''} onClick={() => setTab('print')}>
           Печать
@@ -75,11 +102,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
-      {tab === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
-      {tab === 'drugs' && (
-        <DrugsHub initialSub={initialTab === 'groups' ? 'groups' : 'drugs'} initialItemId={initialTab === 'drugs' ? initialItemId : null} />
-      )}
-      {tab === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
+      {tab === 'appointments' && <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} />}
       {tab === 'print' && <PrintTemplatesTab />}
     </div>
   )

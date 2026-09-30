@@ -78,6 +78,7 @@ const NAMESPACES = {
     'vitaeTemplates',
     'vitaeDefaultKey',
     'treatmentSchemes',
+    'recommendationPacks',
   ],
   // рабочие заготовки, не жалко потерять
   workspace: ['templatePresets'],
@@ -179,6 +180,8 @@ function defaultState() {
     // id -> { name, category, tags[], phases: [{name, drugs:[{name,dose,duration}]}],
     //   nonDrugTherapy, redFlags, source, sourceYear, updatedAt }
     treatmentSchemes: {},
+    // пакеты рекомендаций: id -> { name, mkb10Codes[], items[], updatedAt }
+    recommendationPacks: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
     // сохранённые визиты (черновики/готовые протоколы)
@@ -1032,6 +1035,47 @@ export const store = {
     const norm = code.trim().toUpperCase()
     return Object.values(readAll().treatmentSchemes || {}).filter((s) =>
       (s.mkb10Codes || []).some((c) => c.trim().toUpperCase() === norm)
+    )
+  },
+
+  getRecommendationPacks() {
+    return Object.values(readAll().recommendationPacks || {})
+  },
+
+  saveRecommendationPack(pack) {
+    const state = readAll()
+    state.recommendationPacks = state.recommendationPacks || {}
+    const id = pack.id || crypto.randomUUID()
+    const items = (pack.items || []).map((s) => String(s).trim()).filter(Boolean)
+    const mkb10Codes = (pack.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
+    state.recommendationPacks[id] = {
+      ...pack,
+      id,
+      name: String(pack.name || '').trim(),
+      items,
+      mkb10Codes,
+      updatedAt: Date.now(),
+    }
+    writeAll(state)
+    return state.recommendationPacks
+  },
+
+  deleteRecommendationPack(id) {
+    const state = readAll()
+    state.recommendationPacks = state.recommendationPacks || {}
+    delete state.recommendationPacks[id]
+    writeAll(state)
+    return state.recommendationPacks
+  },
+
+  searchRecommendationPacks(query) {
+    const q = query.trim().toLowerCase()
+    if (!q) return this.getRecommendationPacks()
+    return this.getRecommendationPacks().filter(
+      (p) =>
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)) ||
+        (p.items || []).some((t) => t.toLowerCase().includes(q)),
     )
   },
 
