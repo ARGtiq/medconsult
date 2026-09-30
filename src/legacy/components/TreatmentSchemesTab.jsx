@@ -82,6 +82,47 @@ function presetForm(s) {
   }
 }
 
+function SchemeStudyDrugs({ codesText, onAdd }) {
+  const codes = codesText.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+  if (!codes.length) return null
+  const guidelines = Object.values(store.getGuidelines() || {}).filter((g) => {
+    const raw = g.mkb10Codes || g.codes || ''
+    const list = Array.isArray(raw) ? raw : String(raw).split(',')
+    return list.some((c) => {
+      const u = String(c).trim().toUpperCase()
+      return codes.includes(u) || codes.some((code) => code.startsWith(u + '.') || u.startsWith(code.split('.')[0]))
+    })
+  })
+  const wanted = new Set()
+  guidelines.forEach((g) => {
+    ;(g.investigations || []).forEach((name) => wanted.add(String(name).trim().toLowerCase()))
+  })
+  const studies = (store.getAllStudies() || []).filter((s) => wanted.has(String(s.label || '').trim().toLowerCase()))
+  const keys = new Set(studies.map((s) => s.key))
+  const drugs = Object.values(store.getDrugInfoAll() || {}).filter((d) =>
+    (d.studyTriggers || []).some((t) => (t.studyKeys || []).some((k) => keys.has(k))),
+  )
+  if (!drugs.length) {
+    return (
+      <p className="settings-note-inline">
+        По исследованиям этой болезни препаратов с зависимостью пока нет. Привязка задаётся в карточке лекарства.
+      </p>
+    )
+  }
+  return (
+    <div className="drug-trigger-block">
+      <div className="scenarios-block-label">Препараты по исследованиям болезни</div>
+      <div className="guideline-complaint-suggestions">
+        {drugs.map((d) => (
+          <button type="button" key={d.name} className="suggestion-pill suggestion-pill-guideline" onClick={() => onAdd(d.name)}>
+            + {d.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function TreatmentSchemesTab({ initialItemId }) {
   const [schemes, setSchemes] = useState(store.getTreatmentSchemes())
   const [form, setForm] = useState(() => {
@@ -247,6 +288,21 @@ export default function TreatmentSchemesTab({ initialItemId }) {
                 placeholder="Коды МКБ-10 через запятую (необязательно — для подсветки совпадения на приёме)"
                 value={form.mkb10CodesText}
                 onChange={(v) => setForm({ ...form, mkb10CodesText: v })}
+              />
+              <SchemeStudyDrugs
+                codesText={form.mkb10CodesText}
+                onAdd={(name) => {
+                  const drug = { name, dosage: '', frequency: '', duration: '' }
+                  if (form.hasSubtypes) {
+                    const subtypes = form.subtypes.map((sub, i) =>
+                      i === 0 ? { ...sub, phases: (sub.phases || [blankScenario()]).map((p, pi) => (pi === 0 ? { ...p, drugs: [...(p.drugs || []), drug] } : p)) } : sub,
+                    )
+                    setForm({ ...form, subtypes })
+                  } else {
+                    const phases = form.phases.map((p, i) => (i === 0 ? { ...p, drugs: [...(p.drugs || []), drug] } : p))
+                    setForm({ ...form, phases })
+                  }
+                }}
               />
 
               <label className="hub-mode-toggle-inline">

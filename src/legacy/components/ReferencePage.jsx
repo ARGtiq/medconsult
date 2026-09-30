@@ -5,6 +5,7 @@ import DrugGroupsTab from './DrugGroupsTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import TreatmentSchemesTab from './TreatmentSchemesTab'
 import Mkb10Page from './Mkb10Page'
+import { DiseasesPage } from '../../medconsult/DiseasesPage'
 
 function startTab(initialTab) {
   if (initialTab === 'studies' || initialTab === 'templates') return 'blocks'
@@ -44,6 +45,9 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
           МКБ-10
         </button>
+        <button type="button" className={tab === 'diseases' ? 'active' : ''} onClick={() => setTab('diseases')}>
+          Болезни
+        </button>
         <button type="button" className={tab === 'blocks' ? 'active' : ''} onClick={() => setTab('blocks')}>
           Блоки
         </button>
@@ -67,6 +71,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
         </button>
       </div>
       {tab === 'mkb' && <Mkb10Page />}
+      {tab === 'diseases' && <DiseasesPage />}
       {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}

@@ -105,6 +105,11 @@ export function Typeahead({
       }
       return;
     }
+    if (e.key === "Tab" && open && items[idx]) {
+      e.preventDefault();
+      pick(items[idx]);
+      return;
+    }
     if (e.key === "Escape") setOpen(false);
   }
 

@@ -62,7 +62,7 @@ export const BACKUP_SECTIONS: BackupSection[] = [
     id: "mkb",
     label: "МКБ",
     hint: "Свои коды и заметки к диагнозам",
-    keys: ["medconsult_mkb10_custom", "medconsult_mkb10_notes"],
+    keys: ["medconsult_mkb10_custom", "medconsult_mkb10_notes", "medconsult_diseases"],
   },
   {
     id: "drafts",

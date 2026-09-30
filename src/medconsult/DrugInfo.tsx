@@ -1,25 +1,37 @@
 import { Info, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { lookupDrug, type DrugCardInfo } from "./drugLookup";
 import { useAppStore } from "./store";
 
 export function InfoDot({ query, className = "" }: { query: string; className?: string }) {
-  if (!lookupDrug(query)) return null;
+  const hoverOn = useAppStore((s) => s.settings.infoOnHover);
+  const [hover, setHover] = useState(false);
+  const info = lookupDrug(query);
+  if (!info) return null;
   return (
-    <button
-      type="button"
-      title="карточка препарата"
-      aria-label={`о препарате ${query}`}
-      className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-teal text-paper ${className}`}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={(e) => {
-        e.stopPropagation();
-        useAppStore.getState().openDrugInfo(query);
-      }}
-    >
-      <Info className="size-2.5" strokeWidth={2.5} />
-    </button>
+    <span className="relative inline-flex" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <button
+        type="button"
+        title="карточка препарата"
+        aria-label={`о препарате ${query}`}
+        className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-teal text-paper ${className}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation();
+          useAppStore.getState().openDrugInfo(query);
+        }}
+      >
+        <Info className="size-2.5" strokeWidth={2.5} />
+      </button>
+      {hoverOn && hover && (
+        <span className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-md border border-line bg-surface p-2 text-left text-[11px] leading-snug text-ink shadow">
+          <span className="font-medium">{info.name || query}</span>
+          {info.dosage ? <span className="mt-0.5 block text-ink-soft">{info.dosage}</span> : null}
+          {info.note ? <span className="mt-0.5 block">{info.note}</span> : null}
+        </span>
+      )}
+    </span>
   );
 }
 

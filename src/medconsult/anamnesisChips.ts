@@ -340,8 +340,8 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
   if (d.surgery === "has" || d.surgeryItems.length) {
     const named = namedItems(d.surgeryItems, surgeryPresets);
     const extra = d.surgeryText.trim();
-    const all = [...named, extra].filter(Boolean).join(", ");
-    surgery = all ? `Операции: ${all}` : "Операции в анамнезе";
+    const all = [...named, extra].filter(Boolean);
+    surgery = all.length ? `Операции:\n${all.join("\n")}` : "Операции в анамнезе";
   }
 
   const tfNamed = namedItems(d.transfusionItems, TRANSFUSION_PRESETS);

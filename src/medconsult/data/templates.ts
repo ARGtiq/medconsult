@@ -441,14 +441,20 @@ export function localItems(pack: { id: string; chips?: string[]; items?: LocalIt
     .map((c, i) => ({ id: `${pack.id}_c${i}`, label: c, options: [] as string[] }));
 }
 
-export function localLine(item: LocalItem, value: string): string {
+export function localLine(item: LocalItem, value: string, subs?: string[]): string {
   const v = value.trim();
   const label = item.label.trim();
-  if (!v) return "";
-  if (!item.options.length) return v;
-  if (v.toLowerCase() === label.toLowerCase()) return label;
-  if (v.toLowerCase().startsWith(`${label.toLowerCase()} `)) return v;
-  return `${label} ${v}`;
+  let base = "";
+  if (v) {
+    if (!item.options.length) base = v;
+    else if (v.toLowerCase() === label.toLowerCase()) base = label;
+    else if (v.toLowerCase().startsWith(`${label.toLowerCase()} `)) base = v;
+    else base = `${label} ${v}`;
+  }
+  const extra = (subs || []).map((s) => s.trim()).filter(Boolean);
+  if (!base) return extra.join(", ");
+  if (!extra.length) return base;
+  return `${base}, ${extra.join(", ")}`;
 }
 
 export function localStatusLines(picks: LocalPick[], packs: LocalPack[], free: string[]): string[] {
@@ -459,7 +465,7 @@ export function localStatusLines(picks: LocalPick[], packs: LocalPack[], free: s
     if (!pack) continue;
     const item = localItems(pack).find((it) => it.id === pick.itemId);
     if (!item) continue;
-    const line = localLine(item, pick.value);
+    const line = localLine(item, pick.value, pick.subs);
     if (!line || seen.has(line)) continue;
     seen.add(line);
     lines.push(line);
@@ -496,6 +502,54 @@ export function normalizeLocalPack(p: LocalPack): LocalPack {
     return { ...p, items: KIDNEY_ITEMS.map((it) => ({ ...it, options: [...it.options] })) };
   }
   return { ...p, items: localItems(p) };
+}
+
+export function formatLocalStatus(
+  picks: LocalPick[],
+  packs: LocalPack[],
+  activeIds: string[],
+  free: string[],
+): string {
+  if (!activeIds.length) return free.map((s) => s.trim()).filter(Boolean).join("; ");
+  const blocks: string[] = [];
+  const used = new Set<string>();
+  for (const id of activeIds) {
+    const pack = packs.find((p) => p.id === id);
+    if (!pack) continue;
+    const itemSep = pack.itemSep == null || pack.itemSep === "" ? ", " : pack.itemSep;
+    const packSep = pack.packSep == null ? "." : pack.packSep;
+    const lines: string[] = [];
+    for (const it of localItems(pack)) {
+      const pick = picks.find((p) => p.packId === id && p.itemId === it.id);
+      if (!pick) continue;
+      const line = localLine(it, pick.value, pick.subs);
+      if (!line || used.has(line)) continue;
+      used.add(line);
+      lines.push(line);
+    }
+    if (!lines.length) continue;
+    let text = lines.join(itemSep);
+    const end = packSep.trim();
+    if (end && !text.endsWith(end)) text = `${text}${packSep.startsWith(" ") ? packSep : end === packSep ? packSep : packSep}`;
+    blocks.push(text);
+  }
+  for (const raw of free) {
+    const t = raw.trim();
+    if (t && !used.has(t)) blocks.push(t);
+  }
+  return blocks.join("\n");
+}
+
+export function addSurgeryPreset(label: string) {
+  const text = label.trim();
+  if (!text) return;
+  const t = read();
+  const key = text.toLowerCase();
+  if ((t.surgeries || []).some((s) => s.label.toLowerCase() === key)) return;
+  write({
+    ...t,
+    surgeries: [...(t.surgeries || []), { id: `surg_${Date.now().toString(36)}`, label: text }],
+  });
 }
 
 export function addLocalOption(packId: string, itemId: string, option: string) {
@@ -558,11 +612,8 @@ export function getQuestionScales(): ScaleDef[] {
   return read().questionnaires;
 }
 
-export function packsMatchingCode(code: string): VisitPack[] {
-  const all = getVisitPacks();
-  if (!code) return [];
-  const prefix = code.split(".")[0];
-  return all.filter((p) => p.codes.includes(code) || (prefix && p.codes.includes(prefix)));
+export function packsMatchingCode(_code: string): VisitPack[] {
+  return getVisitPacks();
 }
 
 export function addComplaintTemplate(text: string) {

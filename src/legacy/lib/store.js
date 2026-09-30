@@ -496,6 +496,8 @@ const VITAE_SEED = {
       '{infections}',
       'Наследственность: {heritage}.',
       'Аллергические реакции: {allergy}.',
+      '{workLine}',
+      '{disabilityLine}',
       '{surgery}',
       '{transfusion}',
     ].join('\n'),
@@ -509,6 +511,14 @@ const VITAE_SEED = {
       { key: 'heritage', label: 'наследственность', kind: 'text', defaultValue: 'не отягощена' },
       { key: 'surgery', label: 'операции', kind: 'text', defaultValue: 'Операций не было' },
       { key: 'transfusion', label: 'гемотрансфузии', kind: 'text', defaultValue: 'Гемотрансфузии: отрицает' },
+      { key: 'employment', label: 'работа', kind: 'select', options: ['работает', 'не работает'], defaultValue: 'работает' },
+      { key: 'workplace', label: 'место работы', kind: 'text', showIf: { field: 'employment', values: ['работает'] }, optional: true },
+      { key: 'jobTitle', label: 'должность', kind: 'text', showIf: { field: 'employment', values: ['работает'] }, optional: true },
+      { key: 'notWorkReason', label: 'причина', kind: 'select', options: ['пенсионер', 'студент', 'декрет', 'безработный', 'ухаживает за ребёнком'], showIf: { field: 'employment', values: ['не работает'] } },
+      { key: 'notWorkText', label: 'своя причина', kind: 'text', showIf: { field: 'employment', values: ['не работает'] } },
+      { key: 'disability', label: 'инвалидность', kind: 'select', options: ['нет', 'да'], defaultValue: 'нет' },
+      { key: 'disabilityGroup', label: 'группа', kind: 'select', options: ['I', 'II', 'III'], showIf: { field: 'disability', values: ['да'] } },
+      { key: 'disabilityCause', label: 'причина инвалидности', kind: 'select', options: ['общее заболевание', 'трудовое увечье', 'профзаболевание', 'с детства', 'военная травма'], defaultValue: 'общее заболевание', showIf: { field: 'disability', values: ['да'] } },
     ],
   },
 }
@@ -523,6 +533,23 @@ function ensureVitaeTemplates() {
     state.vitaeTemplates = JSON.parse(JSON.stringify(VITAE_SEED))
     if (!state.vitaeDefaultKey) state.vitaeDefaultKey = 'standard'
     writeAll(state)
+  }
+  const std = state.vitaeTemplates.standard
+  const seed = VITAE_SEED.standard
+  if (std && seed) {
+    const keys = new Set((std.fields || []).map((f) => f.key))
+    let changed = false
+    for (const f of seed.fields) {
+      if (!keys.has(f.key)) {
+        std.fields.push(JSON.parse(JSON.stringify(f)))
+        changed = true
+      }
+    }
+    if (std.template && !std.template.includes('{workLine}')) {
+      std.template = std.template.replace('{surgery}', '{workLine}\n{disabilityLine}\n{surgery}')
+      changed = true
+    }
+    if (changed) writeAll(state)
   }
   return state
 }

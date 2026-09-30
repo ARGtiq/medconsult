@@ -34,6 +34,7 @@ export const defaultSettings = (): SettingsState => ({
   splitPct: 38,
   studyDeviations: true,
   diagnosisAbovePreview: false,
+  infoOnHover: false,
   openRouterKey: "",
   aiModel: "openai/gpt-4o-mini",
 });
@@ -47,6 +48,13 @@ export const demoPatient = (): Patient => ({
   allergies: [],
   currentMedications: [],
 });
+
+function nextAnonId(visits: { anonId?: string }[]) {
+  const d = new Date();
+  const prefix = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const n = visits.filter((v) => (v.anonId || "").startsWith(`${prefix}-`)).length + 1;
+  return `${prefix}-${n}`;
+}
 
 export function blankSession(partial?: Partial<SessionState>): SessionState {
   return {
@@ -321,6 +329,7 @@ type AppStore = {
   applyLocalFromIcd: (code: string) => void;
   applyVisitPack: (id: string) => void;
   ensureGlobals: () => void;
+  deleteVisit: (id: string) => void;
   saveVisit: () => void;
   loadVisit: (id: string) => void;
   loadLastForPatient: () => void;
@@ -921,6 +930,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
     get().setToast(`Шаблон: ${tpl.name}`);
   },
 
+  deleteVisit(id: string) {
+    const visits = get().visits.filter((v) => v.id !== id);
+    writeJson(VISITS_KEY, visits);
+    set({ visits });
+    try {
+      legacy.deleteVisit(id);
+    } catch {
+      /* */
+    }
+  },
+
   ensureGlobals() {
     const { session, patients } = get();
     const p = patients.find((x) => x.id === session.patientId);
@@ -936,6 +956,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const synced = persistGlobals(session, patients);
     set({ patients: synced });
     const patient = synced.find((p) => p.id === session.patientId);
+    const anonId = session.patientId ? undefined : nextAnonId(visits);
     const rec: VisitRecord = {
       id: uid("v"),
       patientId: session.patientId,
@@ -945,6 +966,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       diagnosisCode: session.diagnosisCode,
       diagnosisTitle: session.diagnosisTitle,
       preview: `${patient ? shortName(patient) : "без пациента"} · ${session.diagnosisCode || "без кода"}`,
+      anonId,
       session: { ...session },
     };
     const next = [rec, ...visits].slice(0, 80);
@@ -954,11 +976,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       legacy.saveVisit({
         id: rec.id,
         patientId: rec.patientId,
-        patientDisplayName: patient ? formatPatient(patient) : "без пациента",
+        patientDisplayName: patient ? formatPatient(patient) : anonId || "без пациента",
         visitDate: todayISO(),
         templateId: "protocol-v2",
         templateName: rec.preview,
         diagnosisCode: rec.diagnosisCode,
+        anonId,
         sectionValues: {
           diagnosis: rec.diagnosisTitle,
           complaints: session.complaints,
@@ -1002,8 +1025,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       patientId: prev.patientId,
       visitKind: prev.visitKind,
       mode: "consult",
-      allergies: prev.allergies || [],
-      currentMedications: prev.currentMedications || [],
+      allergies: prev.patientId ? prev.allergies || [] : [],
+      currentMedications: prev.patientId ? prev.currentMedications || [] : [],
     });
     if (prev.patientId) {
       session = applyGlobals(session, patients.find((p) => p.id === prev.patientId));

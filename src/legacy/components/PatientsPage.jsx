@@ -54,7 +54,7 @@ function summarizeVisit(v) {
   }
 }
 
-export default function PatientsPage({ onLoadVisit }) {
+export default function PatientsPage({ onLoadVisit, onDeleteVisit }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -124,10 +124,59 @@ export default function PatientsPage({ onLoadVisit }) {
         <button type="button" className={mode === 'patients' ? 'active' : ''} onClick={() => setMode('patients')}>
           По пациентам
         </button>
+        <button type="button" className={mode === 'anon' ? 'active' : ''} onClick={() => setMode('anon')}>
+          Без пациента
+        </button>
         <button type="button" className={mode === 'visitSearch' ? 'active' : ''} onClick={() => setMode('visitSearch')}>
           Поиск по всем визитам
         </button>
       </div>
+
+      {mode === 'anon' && (
+        <div className="visit-search-block">
+          {store.getVisits().filter((v) => !v.patientId).length === 0 && (
+            <p className="empty-hint">Протоколов без карточки пока нет. На приёме «без пациента» — «Сохранить в историю».</p>
+          )}
+          {store.getVisits()
+            .filter((v) => !v.patientId)
+            .map((v) => (
+              <div key={v.id} className="visit-history-card">
+                <div className="visit-history-date">
+                  <strong>{v.anonId || 'без id'}</strong>
+                  {v.diagnosisCode ? (
+                    <span>
+                      {' '}
+                      {v.diagnosisCode}
+                      {v.sectionValues?.diagnosis ? (
+                        <span style={{ marginLeft: 6, fontSize: 12, color: '#8b909a' }}>({v.sectionValues.diagnosis})</span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: 6, color: '#8b909a' }}>без диагноза</span>
+                  )}
+                </div>
+                <div className="visit-history-actions">
+                  {onLoadVisit && (
+                    <button type="button" className="btn-secondary btn-small" onClick={() => onLoadVisit(v)}>
+                      Открыть
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary btn-danger btn-small"
+                    onClick={() => {
+                      if (onDeleteVisit) onDeleteVisit(v.id)
+                      else store.deleteVisit(v.id)
+                      refresh()
+                    }}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
 
       {mode === 'visitSearch' && (
         <div className="visit-search-block">
@@ -281,10 +330,16 @@ export default function PatientsPage({ onLoadVisit }) {
               <div className="patients-field-row">
                 <label>Заметка</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={selected.note || ''}
-                  onChange={(e) => updatePatient({ note: e.target.value })}
+                  onChange={(e) => {
+                    const el = e.target
+                    el.style.height = 'auto'
+                    el.style.height = `${el.scrollHeight}px`
+                    updatePatient({ note: el.value })
+                  }}
                   placeholder="зачем сдавал мазок, особенности…"
+                  style={{ font: 'inherit', fontSize: 14, width: '100%', lineHeight: 1.4, resize: 'none', overflow: 'hidden' }}
                 />
               </div>
 

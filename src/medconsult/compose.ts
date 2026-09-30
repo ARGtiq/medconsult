@@ -1,6 +1,6 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
 import { fillStudyTemplate, collectDeviations, formatDeviations } from "./data/studies";
-import { protocolBlockOrder } from "./data/templates";
+import { formatLocalStatus, getLocalPacks, localStatusLines, protocolBlockOrder } from "./data/templates";
 import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
 
@@ -64,9 +64,14 @@ export function composeBlocks(
     const showLoc = includeStd(session, "status");
     if (!showObj && !showLoc) return;
     const obj = showObj ? (session.objective || "").trim() : "";
-    const loc = showLoc ? (session.localStatus || []).join("; ").trim() : "";
+    const packs = getLocalPacks();
+    const generated = new Set(localStatusLines(session.localPicks || [], packs, []));
+    const free = (session.localStatus || []).filter((x) => !generated.has(x));
+    const loc = showLoc
+      ? formatLocalStatus(session.localPicks || [], packs, session.activeLocalPacks || [], free)
+      : "";
     const title = obj && loc ? "Объективный + локальный статус" : obj ? "Объективный статус" : "Локальный статус";
-    push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join(" "));
+    push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join("\n"));
   };
   const emitStudies = () => {
     const studyParts = (session.studies || [])

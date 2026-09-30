@@ -26,6 +26,8 @@ export type StudyField = {
     numMax?: number;
   };
   computed?: boolean;
+  /** Серый, пока не включили кликом по названию. */
+  optional?: boolean;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
   refMin?: number;
@@ -106,6 +108,7 @@ export type VisitRecord = {
   diagnosisCode: string;
   diagnosisTitle: string;
   preview: string;
+  anonId?: string;
   session: SessionState;
 };
 
@@ -156,6 +159,8 @@ export type SettingsState = {
   studyDeviations: boolean;
   /** Поле диагноза над колонкой «В Медлок», а не в сборке. */
   diagnosisAbovePreview: boolean;
+  /** Всплывашка по наведению на «i», клик всё равно открывает карточку. */
+  infoOnHover: boolean;
   openRouterKey: string;
   aiModel: string;
 };
@@ -170,12 +175,15 @@ export type LocalItem = {
   id: string;
   label: string;
   options: string[];
+  /** Подпункты как у жалобы: в каждой группе выбирается один вариант. */
+  subs?: string[][];
 };
 
 export type LocalPick = {
   packId: string;
   itemId: string;
   value: string;
+  subs?: string[];
 };
 
 export type LocalPack = {
@@ -184,6 +192,10 @@ export type LocalPack = {
   label: string;
   chips: string[];
   items?: LocalItem[];
+  /** Между пунктами внутри шаблона. По умолчанию «, ». */
+  itemSep?: string;
+  /** После шаблона. По умолчанию «.». Шаблоны и так с новой строки. */
+  packSep?: string;
 };
 
 export type Guideline = {

@@ -148,15 +148,13 @@ export function TemplatesEditor({
           <div className="mb-3 flex flex-wrap gap-1">
             {(
               [
+                ["complaints", "жалобы"],
+                ["vitae", "анамнез жизни"],
                 ["objective", "объективный статус"],
                 ["status", "локальный статус"],
-                ["complaints", "жалобы"],
-                ["chronic", "перенесённые"],
-                ["surgery", "операции"],
-                ["vitae", "анамнез жизни"],
                 ["questionnaires", "анкеты"],
-                ["docs", "виды блоков"],
                 ["studies", "исследования"],
+                ["docs", "виды блоков"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -181,20 +179,6 @@ export function TemplatesEditor({
               onChange={(complaints) => persist({ complaints })}
             />
           )}
-          {tab === "chronic" && (
-            <PresetEditor
-              items={data.chronic}
-              onChange={(chronic) => persist({ chronic })}
-              hint="Чипы перенесённых заболеваний в анамнезе жизни. Дата — для ИМ, ОНМК и т.п."
-            />
-          )}
-          {tab === "surgery" && (
-            <PresetEditor
-              items={data.surgeries}
-              onChange={(surgeries) => persist({ surgeries })}
-              hint="Пустая дата может дать «давно» (поле «если пусто»)."
-            />
-          )}
           {tab === "questionnaires" && (
             <QuestionnaireEditor
               items={data.questionnaires}
@@ -203,7 +187,27 @@ export function TemplatesEditor({
           )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
           {tab === "studies" && <StudiesTab />}
-          {tab === "vitae" && <StudiesTab scope="vitae" />}
+          {tab === "vitae" && (
+            <div className="space-y-4">
+              <StudiesTab scope="vitae" />
+              <div>
+                <div className="mb-1 text-xs font-semibold text-ink">Перенесённые заболевания</div>
+                <PresetEditor
+                  items={data.chronic}
+                  onChange={(chronic) => persist({ chronic })}
+                  hint="Чипы перенесённых заболеваний в анамнезе жизни."
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold text-ink">Операции</div>
+                <PresetEditor
+                  items={data.surgeries}
+                  onChange={(surgeries) => persist({ surgeries })}
+                  hint="Свои операции с приёма тоже попадают сюда."
+                />
+              </div>
+            </div>
+          )}
         </>
       )}
       {layer === "packs" && (
@@ -605,38 +609,6 @@ function VisitPacksEditor({
             >
               ×
             </button>
-          </div>
-          <div>
-            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
-            <IcdCodesField
-              codes={current.codes}
-              onChange={(codes) => patch({ codes })}
-              placeholder="коды или кусок названия — пусто = любой диагноз"
-            />
-          </div>
-          <div>
-            <div className="text-[10px] tracking-wide text-mute uppercase">вид</div>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {(
-                [
-                  ["primary", "первичный"],
-                  ["followup", "повторный"],
-                  ["study", "обследование"],
-                  ["document", "другой документ"],
-                ] as [WorkKind, string][]
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => patch({ kind: id })}
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    current.kind === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-surface"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
           <div>
             <div className="text-[10px] tracking-wide text-mute uppercase">блоки протокола</div>
@@ -1149,6 +1121,27 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
               </button>
             </div>
             <div className="mt-1">
+              <div className="text-[10px] tracking-wide text-mute uppercase">разделители</div>
+              <div className="mt-1 flex gap-2">
+                <label className="min-w-0 flex-1 text-[10px] text-mute">
+                  между пунктами
+                  <input
+                    value={p.itemSep ?? ", "}
+                    onChange={(e) => patch(i, { itemSep: e.target.value })}
+                    className="mt-0.5 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+                  />
+                </label>
+                <label className="min-w-0 flex-1 text-[10px] text-mute">
+                  после шаблона
+                  <input
+                    value={p.packSep ?? "."}
+                    onChange={(e) => patch(i, { packSep: e.target.value })}
+                    className="mt-0.5 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="mt-1">
               <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
               <IcdCodesField codes={p.codes} onChange={(codes) => patch(i, { codes })} />
             </div>
@@ -1200,6 +1193,19 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
                       setItems(i, items.map((x, j) => (j === ii ? { ...x, options: [...x.options, raw] } : x)));
                       e.currentTarget.value = "";
                     }}
+                  />
+                  <textarea
+                    value={(it.subs || []).map((g) => g.join("/")).join("\n")}
+                    onChange={(e) => {
+                      const subs = e.target.value
+                        .split("\n")
+                        .map((line) => line.split("/").map((s) => s.trim()).filter(Boolean))
+                        .filter((g) => g.length);
+                      setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
+                    }}
+                    rows={2}
+                    placeholder={"подпункты: группа с новой строки, варианты через /\nсправа/слева\nотек/жидкость/образование"}
+                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
                   />
                 </div>
               ))}

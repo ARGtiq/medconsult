@@ -481,7 +481,7 @@ export function PlusStudyButton() {
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, maxH: 280, width: 280 });
-  const { session, addStudy } = useAppStore();
+  const { session, addStudy, addStudyInstance } = useAppStore();
   const templates = useTemplates();
   const studies = useMemo(() => allStudiesLive(), [templates.questionnaires]);
   const dx = session.diagnosisCode;
@@ -556,10 +556,11 @@ export function PlusStudyButton() {
     const s = filtered[i];
     if (!s) return;
     const exists = session.studies.some((e) => e.key === s.key);
-    if (exists && s.category !== "questionnaire") return;
+    if (exists) {
+      addStudyInstance(s.key);
+      return;
+    }
     addStudy(s.key);
-    setOpen(false);
-    setQ("");
   }
 
   return (

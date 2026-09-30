@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { store as legacy } from "@/legacy/lib/store";
 import {
   composeAnamnesis,
   composeVitae,
@@ -17,7 +19,8 @@ import {
   type VitaeDraft,
   type VitaeItem,
 } from "./anamnesisChips";
-import { useTemplates, type VitaePreset } from "./data/templates";
+import { useTemplates, addSurgeryPreset, type VitaePreset } from "./data/templates";
+import { diseaseHasBody, findDisease, rememberDisease, type Disease } from "./diseases";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchAllergy, searchDrugs } from "./live";
 import { useAppStore } from "./store";
@@ -90,14 +93,104 @@ function DoneBar({ sentence, onDone, preview = true }: { sentence: string; onDon
   );
 }
 
+function drugNameOnly(raw: string) {
+  const t = raw.trim();
+  const cut = t.split(/\s+\d+(?:[.,]\d+)?\s*(?:мг|г|мл|мкг|ме|ед|таб)\b/i)[0] || t;
+  return cut.trim() || t;
+}
+
+function rememberDrug(raw: string) {
+  const name = drugNameOnly(raw);
+  if (!name) return;
+  try {
+    if (!legacy.getDrugInfo(name)) legacy.saveDrugInfo({ name });
+  } catch {
+    /* */
+  }
+}
+
+function DiseaseDot({ name }: { name: string }) {
+  const info = findDisease(name);
+  const hoverOn = useAppStore((s) => s.settings.infoOnHover);
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  if (!diseaseHasBody(info) || !info) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className="inline-flex size-4 items-center justify-center rounded-full bg-teal text-[10px] font-bold text-paper"
+        title="карточка болезни"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        i
+      </button>
+      {hoverOn && hover && (
+        <span className="max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-[11px] text-ink shadow">
+          {[info.classification, info.diagnosis, info.treatment, info.prevention, info.extra].filter(Boolean).join(" · ")}
+        </span>
+      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/30 p-3 sm:items-center" onClick={() => setOpen(false)}>
+            <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-xl border border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="font-medium">{info.name}</div>
+                <button type="button" className="text-sm text-mute" onClick={() => setOpen(false)}>
+                  закрыть
+                </button>
+              </div>
+              <DiseaseRows info={info} />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function DiseaseRows({ info }: { info: Disease }) {
+  const rows = [
+    ["классификация", info.classification],
+    ["диагностика", info.diagnosis],
+    ["лечение", info.treatment],
+    ["профилактика", info.prevention],
+    ["дополнительно", info.extra],
+  ];
+  return (
+    <div className="space-y-1.5">
+      {rows.map(([label, value]) =>
+        value?.trim() ? (
+          <div key={label} className="rounded-md bg-paper px-2 py-1.5">
+            <div className="text-[10px] tracking-wide text-mute uppercase">{label}</div>
+            <div className="text-sm">{value}</div>
+          </div>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
 function PresetPicker({
   presets,
   selected,
   onChange,
+  yearAlways,
+  onRemember,
+  disease,
 }: {
   presets: VitaePreset[];
   selected: VitaeItem[];
   onChange: (next: VitaeItem[]) => void;
+  yearAlways?: boolean;
+  onRemember?: (label: string) => void;
+  disease?: boolean;
 }) {
   const [custom, setCustom] = useState("");
   const sorted = useMemo(
@@ -130,22 +223,24 @@ function PresetPicker({
         {sorted.map((p) => {
           const on = selected.some((s) => s.id === p.id);
           return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => toggle(p)}
-              className={`rounded-full px-2 py-0.5 text-xs ${
-                on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
-              }`}
-            >
-              {p.label}
-            </button>
+            <span key={p.id} className="inline-flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => toggle(p)}
+                className={`rounded-full px-2 py-0.5 text-xs ${
+                  on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+                }`}
+              >
+                {p.label}
+              </button>
+              {disease ? <DiseaseDot name={p.label} /> : null}
+            </span>
           );
         })}
       </div>
       {selected.map((s) => {
         const preset = presets.find((p) => p.id === s.id);
-        const showDate = preset?.needsDate || Boolean(s.date);
+        const showDate = yearAlways || preset?.needsDate || Boolean(s.date);
         if (!showDate) return null;
         return (
           <label key={s.id} className="mt-1 flex items-center gap-2 text-xs">
@@ -153,7 +248,7 @@ function PresetPicker({
             <input
               value={s.date || ""}
               onChange={(e) => setDate(s.id, e.target.value)}
-              placeholder={preset?.emptyDateText ? `пусто = ${preset.emptyDateText}` : "год или дата, можно пусто"}
+              placeholder={yearAlways ? "год" : preset?.emptyDateText ? `пусто = ${preset.emptyDateText}` : "год или дата, можно пусто"}
               className="w-44 rounded-md border border-line bg-paper px-1.5 py-0.5 text-xs"
             />
           </label>
@@ -167,6 +262,7 @@ function PresetPicker({
             if (e.key === "Enter" && custom.trim()) {
               e.preventDefault();
               onChange([...selected, { id: `c_${Date.now()}`, label: custom.trim() }]);
+              onRemember?.(custom.trim());
               setCustom("");
             }
           }}
@@ -215,10 +311,26 @@ function BlockLabel({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-function VitaeField({ label, children }: { label: string; children: ReactNode }) {
+function VitaeField({
+  label,
+  children,
+  dim,
+  onLabel,
+}: {
+  label: string;
+  children: ReactNode;
+  dim?: boolean;
+  onLabel?: () => void;
+}) {
   return (
-    <div className="mt-1.5 rounded-md border border-line bg-paper px-2 py-1">
-      <div className="text-xs leading-none font-medium text-ink-soft">{label}</div>
+    <div className={`mt-1.5 rounded-md border border-line bg-paper px-2 py-1 ${dim ? "opacity-50" : ""}`}>
+      {onLabel ? (
+        <button type="button" className="text-xs leading-none font-medium text-ink-soft" onClick={onLabel}>
+          {label}
+        </button>
+      ) : (
+        <div className="text-xs leading-none font-medium text-ink-soft">{label}</div>
+      )}
       <div className="mt-1 text-sm leading-snug text-ink">{children}</div>
     </div>
   );
@@ -617,6 +729,8 @@ export function AnamnesisVitae({
   function setCard(patch: { allergies?: string[]; currentMedications?: string[] }) {
     const allergies = patch.allergies ?? session.allergies ?? [];
     const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
+    allergies.forEach(rememberDrug);
+    currentMedications.forEach(rememberDrug);
     const nextCtx = { allergies, medications: currentMedications };
     const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
     setSession({
@@ -713,8 +827,10 @@ export function AnamnesisVitae({
               {f.label}
             </div>
           ) : (
-            <VitaeField key={f.key} label={f.label}>
-              <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
+            <VitaeField key={f.key} label={f.label} dim={f.optional && fields[`__on_${f.key}`] !== "1"} onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}>
+              {(!f.optional || fields[`__on_${f.key}`] === "1") && (
+                <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
+              )}
             </VitaeField>
           ),
         )}
@@ -829,7 +945,11 @@ export function AnamnesisVitae({
         <PresetPicker
           presets={chronicPresets}
           selected={d.pastItems}
-          onChange={(pastItems) => patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" })}
+          onChange={(pastItems) => {
+            pastItems.forEach((it) => rememberDisease(it.label));
+            patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" });
+          }}
+          disease
         />
       )}
       </VitaeSection>
@@ -923,6 +1043,8 @@ export function AnamnesisVitae({
           presets={surgeryPresets}
           selected={d.surgeryItems}
           onChange={(surgeryItems) => patch({ surgeryItems })}
+          yearAlways
+          onRemember={(label) => addSurgeryPreset(label)}
         />
       )}
       </VitaeSection>

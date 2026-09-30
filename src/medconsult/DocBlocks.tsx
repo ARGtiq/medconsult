@@ -1,7 +1,7 @@
 import { FileText, Layers, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { STD_DOC_BLOCKS, globalsMatchingCode, packsMatchingCode, useTemplates } from "./data/templates";
+import { STD_DOC_BLOCKS, globalsMatchingCode, useTemplates } from "./data/templates";
 import { useAppStore } from "./store";
 
 export function PlusDocBlockButton() {
@@ -147,9 +147,6 @@ export function PlusPackButton() {
   const [pos, setPos] = useState({ top: 0, left: 0, maxH: 320, width: 280 });
   const { session, applyVisitPack } = useAppStore();
   const { visitPacks } = useTemplates();
-  const matched = packsMatchingCode(session.diagnosisCode);
-  const matchedIds = new Set(matched.map((p) => p.id));
-  const rest = visitPacks.filter((p) => !matchedIds.has(p.id));
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -224,26 +221,7 @@ export function PlusPackButton() {
             className="fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
           >
             <div className="min-h-0 flex-1 overflow-auto p-2">
-              {matched.length > 0 && (
-                <>
-                  <div className="text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode}</div>
-                  {matched.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => pick(p.id)}
-                      className={`mb-1 w-full rounded-lg border px-2.5 py-2 text-left text-xs font-medium ${
-                        session.templateId === p.id ? "border-teal bg-teal-soft text-teal" : "border-line bg-paper"
-                      }`}
-                    >
-                      {p.name}
-                      <span className="ml-1 text-mute">· {KIND_LABEL[p.kind] || p.kind}</span>
-                    </button>
-                  ))}
-                </>
-              )}
-              <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">все наборы</div>
-              {rest.map((p) => (
+              {visitPacks.map((p) => (
                 <button
                   key={p.id}
                   type="button"
@@ -253,8 +231,6 @@ export function PlusPackButton() {
                   }`}
                 >
                   {p.name}
-                  <span className="ml-1 text-mute">· {KIND_LABEL[p.kind] || p.kind}</span>
-                  {p.codes.length ? <span className="ml-1 text-mute">{p.codes.join(", ")}</span> : null}
                 </button>
               ))}
               {visitPacks.length === 0 && <p className="px-1 py-2 text-xs text-mute">Справочник → Наборы</p>}

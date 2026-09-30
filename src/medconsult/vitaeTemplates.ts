@@ -73,6 +73,23 @@ export function fillVitaeTemplate(
   const tpl = def.template || "";
   text = text.replaceAll("{meds}", meds.length ? meds.join(", ") : "отрицает").replaceAll("{medications}", meds.length ? meds.join(", ") : "отрицает");
   text = text.replaceAll("{allergy}", allergy.length ? allergy.join(", ") : "отрицает");
+  const reason = (fields.notWorkText || fields.notWorkReason || "").trim();
+  const workLine =
+    fields.employment === "не работает"
+      ? `Не работает${reason ? ` (${reason})` : ""}.`
+      : [
+          "Работает",
+          fields.__on_workplace === "1" && (fields.workplace || "").trim() ? `место работы: ${fields.workplace.trim()}` : "",
+          fields.__on_job === "1" && (fields.jobTitle || "").trim() ? `должность: ${fields.jobTitle.trim()}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ")
+          .replace("Работает, ", "Работает, ") + ".";
+  const disabilityLine =
+    fields.disability === "да"
+      ? `Инвалидность: ${fields.disabilityGroup || "группа не указана"} группа, ${fields.disabilityCause || "общее заболевание"}.`
+      : "Инвалидности нет.";
+  text = text.replaceAll("{workLine}", workLine.endsWith("..") ? workLine.slice(0, -1) : workLine).replaceAll("{disabilityLine}", disabilityLine);
   if (!tpl.includes("{allergy}") && allergy.length) text = `${text}\nАллергические реакции: ${allergy.join(", ")}.`.trim();
   if (!tpl.includes("{meds}") && !tpl.includes("{medications}") && meds.length) {
     text = `${text}\nПринимаемые лекарства: ${meds.join(", ")}.`.trim();

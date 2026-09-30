@@ -305,7 +305,17 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
 }
 
 export function suggestComplaints(query: string, limit = 12): SuggestHit[] {
-  return suggestFromPhrases(query, liveComplaints(), limit);
+  const hits = suggestFromPhrases(query, liveComplaints(), limit);
+  const counts = new Map<string, number>();
+  try {
+    for (const s of store.getComplaintSuggestions("") as { text: string; count: number }[]) {
+      counts.set(s.text.toLowerCase(), s.count || 0);
+    }
+  } catch {
+    /* */
+  }
+  hits.sort((a, b) => (counts.get(b.label.toLowerCase()) || 0) - (counts.get(a.label.toLowerCase()) || 0));
+  return hits;
 }
 
 export function complaintsForSession(code: string) {
@@ -314,8 +324,21 @@ export function complaintsForSession(code: string) {
     ...(compactGuideline(code)?.complaints || []),
   ];
   const uniqueCode = Array.from(new Set(fromCode));
-  const rest = liveComplaints().filter((t) => !uniqueCode.includes(t));
+  const rest = liveComplaints()
+    .filter((t) => !uniqueCode.includes(t))
+    .sort((a, b) => (complaintCount(b) || 0) - (complaintCount(a) || 0));
   return { fromCode: uniqueCode, rest };
+}
+
+function complaintCount(text: string) {
+  try {
+    const hit = (store.getComplaintSuggestions(text) as { text: string; count: number }[]).find(
+      (s) => s.text.toLowerCase() === text.toLowerCase(),
+    );
+    return hit?.count || 0;
+  } catch {
+    return 0;
+  }
 }
 
 export function allStudiesLive(): StudyDef[] {

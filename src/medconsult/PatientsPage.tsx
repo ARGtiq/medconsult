@@ -47,7 +47,12 @@ export function PatientsPage() {
   return (
     <AppShell>
       <div className="legacy-surface min-h-[calc(100dvh-3rem)] p-3 pb-24 md:p-6">
-        <LegacyPatients onLoadVisit={onLoadVisit} />
+        <LegacyPatients
+          onLoadVisit={onLoadVisit}
+          onDeleteVisit={(id: string) => {
+            app.deleteVisit(id);
+          }}
+        />
         <p className="settings-note-inline mt-4">
           Пациентов в архиве: {legacy.getPatients().length}. Визитов: {legacy.getVisits().length}.
         </p>

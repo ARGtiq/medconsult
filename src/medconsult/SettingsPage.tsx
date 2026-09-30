@@ -76,6 +76,15 @@ export function SettingsPage() {
             <label className="mt-3 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                checked={settings.infoOnHover === true}
+                onChange={(e) => setSettings({ infoOnHover: e.target.checked })}
+              />
+              По наведению на «i» показывать краткую карточку
+            </label>
+            <p className="mt-1 text-xs text-ink-soft">Клик по «i» по-прежнему открывает полное окно. Аллергия, лекарства и болезни.</p>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
                 checked={settings.diagnosisAbovePreview === true}
                 onChange={(e) => setSettings({ diagnosisAbovePreview: e.target.checked })}
               />

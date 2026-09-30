@@ -23,6 +23,8 @@ export function PatientPicker() {
   const { patients, session, setSession, addPatient } = useAppStore();
   const [q, setQ] = useState("");
   const [form, setForm] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [splitName, setSplitName] = useState(false);
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [patronymic, setPatronymic] = useState("");
@@ -65,8 +67,15 @@ export function PatientPicker() {
 
   function create(e: FormEvent) {
     e.preventDefault();
-    if (!lastName.trim()) return;
-    addPatient({ lastName, firstName, patronymic, year });
+    const parsed = splitName
+      ? { lastName, firstName, patronymic }
+      : (() => {
+          const parts = fullName.trim().split(/\s+/).filter(Boolean);
+          return { lastName: parts[0] || "", firstName: parts[1] || "", patronymic: parts.slice(2).join(" ") };
+        })();
+    if (!parsed.lastName.trim()) return;
+    addPatient(parsed);
+    setFullName("");
     setLastName("");
     setFirstName("");
     setPatronymic("");
@@ -123,26 +132,43 @@ export function PatientPicker() {
             style={{ top: formPos.top, left: formPos.left, width: 280 }}
             className="fixed z-[80] rounded-xl border border-line bg-surface p-2.5 shadow-lg"
           >
-            <div className="mb-1.5 text-[10px] font-semibold tracking-wide text-mute uppercase">Новый пациент</div>
-            <input
-              autoFocus
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="Фамилия"
-              className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            />
-            <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Имя"
-              className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            />
-            <input
-              value={patronymic}
-              onChange={(e) => setPatronymic(e.target.value)}
-              placeholder="Отчество"
-              className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            />
+            <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold tracking-wide text-mute uppercase">
+              <span>Новый пациент</span>
+              <button type="button" className="normal-case text-teal" onClick={() => setSplitName((v) => !v)}>
+                {splitName ? "одной строкой" : "по отдельности"}
+              </button>
+            </div>
+            {splitName ? (
+              <>
+                <input
+                  autoFocus
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Фамилия"
+                  className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Имя"
+                  className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+                <input
+                  value={patronymic}
+                  onChange={(e) => setPatronymic(e.target.value)}
+                  placeholder="Отчество"
+                  className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              </>
+            ) : (
+              <input
+                autoFocus
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Фамилия Имя Отчество"
+                className="mb-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              />
+            )}
             <input
               value={year}
               onChange={(e) => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))}

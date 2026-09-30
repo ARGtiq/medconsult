@@ -57,12 +57,16 @@ function Slot({ order, children }: { order: number; children: ReactNode }) {
 function LocalOptionRow({
   item,
   value,
+  subs,
   onChange,
+  onSubs,
   onAddOption,
 }: {
   item: LocalItem;
   value: string;
+  subs: string[];
   onChange: (v: string) => void;
+  onSubs: (v: string[]) => void;
   onAddOption: (v: string) => void;
 }) {
   const [edit, setEdit] = useState(false);
@@ -177,6 +181,27 @@ function LocalOptionRow({
         placeholder="свой вариант + Enter"
         className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
       />
+      {(item.subs || []).map((group, gi) => (
+        <div key={gi} className="mt-1 flex flex-wrap gap-1">
+          {group.map((opt) => {
+            const on = (subs[gi] || "").toLowerCase() === opt.toLowerCase();
+            return (
+              <button
+                key={opt}
+                type="button"
+                className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal text-paper" : "border border-dashed border-line bg-paper"}`}
+                onClick={() => {
+                  const next = [...subs];
+                  next[gi] = on ? "" : opt;
+                  onSubs(next);
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -283,6 +308,35 @@ export function ProtocolPage() {
       window.removeEventListener("medconsult-copy-block", copyBlock);
     };
   }, [blocks, header, patient, session, store]);
+
+  useEffect(() => {
+    const root = splitWrap.current;
+    if (!root) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+      const t = e.target as HTMLElement | null;
+      if (!t || !root.contains(t)) return;
+      if (t.getAttribute("aria-expanded") === "true") return;
+      const tag = t.tagName;
+      if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return;
+      const input = t as HTMLInputElement;
+      if (input.disabled || input.type === "hidden" || input.type === "checkbox" || input.type === "radio" || input.type === "range" || input.type === "button") return;
+      const fields = [...root.querySelectorAll<HTMLElement>("input, textarea, select")].filter((el) => {
+        const inp = el as HTMLInputElement;
+        if (inp.disabled || inp.type === "hidden" || inp.type === "checkbox" || inp.type === "radio" || inp.type === "range") return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      const i = fields.indexOf(t);
+      if (i < 0) return;
+      const next = fields[i + (e.shiftKey ? -1 : 1)];
+      if (!next) return;
+      e.preventDefault();
+      next.focus();
+    }
+    root.addEventListener("keydown", onKey, true);
+    return () => root.removeEventListener("keydown", onKey, true);
+  }, []);
 
   const showAi = (section: string) => {
     if (settings.aiButton === "off") return false;
@@ -471,8 +525,10 @@ export function ProtocolPage() {
     writeLocal([...active, pack.id], picks, free);
   };
 
-  const setLocalPickValue = (packId: string, itemId: string, value: string) => {
-    const picks = (session.localPicks || []).map((p) => (p.packId === packId && p.itemId === itemId ? { ...p, value } : p));
+  const setLocalPickValue = (packId: string, itemId: string, value: string, subs?: string[]) => {
+    const picks = (session.localPicks || []).map((p) =>
+      p.packId === packId && p.itemId === itemId ? { ...p, value, subs: subs ?? p.subs } : p,
+    );
     writeLocal(session.activeLocalPacks || [], picks, localFree());
   };
 
@@ -676,7 +732,14 @@ export function ProtocolPage() {
             <Typeahead
               value={complaintQ}
               onChange={setComplaintQ}
-              items={complaintQ.trim().length >= 2 ? suggestComplaints(complaintQ, 12) : []}
+              items={(() => {
+                const q = complaintQ.trim();
+                if (q.length < 2) return [];
+                const hits = suggestComplaints(q, 12);
+                const exact = hits.some((h) => h.label.toLowerCase() === q.toLowerCase());
+                if (exact) return hits;
+                return [...hits, { id: "__as_is__", label: q, hint: "как есть" }];
+              })()}
               onPick={(it) => {
                 const has = !!findComplaintVariant(session.complaints, it.label) || session.complaints.includes(it.label);
                 if (!has) toggleComplaint(it.label);
@@ -993,7 +1056,9 @@ export function ProtocolPage() {
                         key={it.id}
                         item={it}
                         value={pick?.value || ""}
+                        subs={pick?.subs || []}
                         onChange={(v) => setLocalPickValue(id, it.id, v)}
+                        onSubs={(subs) => setLocalPickValue(id, it.id, pick?.value || "", subs)}
                         onAddOption={(v) => {
                           addLocalOption(id, it.id, v);
                           setLocalPickValue(id, it.id, v);
