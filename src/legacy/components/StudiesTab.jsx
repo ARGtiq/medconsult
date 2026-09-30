@@ -296,6 +296,9 @@ function serializeField(f) {
   if (normal) out.normal = normal
   const preset = (f.defaultValue || '').trim()
   if (preset) out.defaultValue = preset
+  if (f.showHeading === false) out.showHeading = false
+  const phrase = (f.phrase || '').trim()
+  if (phrase) out.phrase = phrase
   if (f.showIf?.field) {
     const values = (f.showIf.values || []).map((s) => String(s).trim()).filter(Boolean)
     const op = f.showIf.op || ''
@@ -418,6 +421,67 @@ function listedStudies() {
   return [...live, ...extra]
 }
 
+function splitTemplate(template) {
+  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  const parts = []
+  let last = 0
+  let m
+  while ((m = re.exec(template))) {
+    if (m.index > last) parts.push({ type: 'text', text: template.slice(last, m.index), start: last })
+    parts.push({ type: 'tag', raw: m[0], key: m[1], start: m.index })
+    last = m.index + m[0].length
+  }
+  if (last < template.length || !parts.length) parts.push({ type: 'text', text: template.slice(last), start: last })
+  return parts
+}
+
+function TemplateMark({ template, fields, onAsk, onTag }) {
+  const parts = splitTemplate(template || '')
+  return (
+    <div
+      className="study-template-mark"
+      onMouseDown={() => onAsk(null)}
+    >
+      {parts.map((part, i) =>
+        part.type === 'tag' ? (
+          <button
+            type="button"
+            key={`${part.start}-${part.key}`}
+            className="study-inline-tag"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => onTag(part.key)}
+          >
+            <code>{part.raw}</code>
+            {(() => {
+              const f = fields.find((x) => (x.key || '') === part.key)
+              return f?.phrase ? <span className="study-inline-phrase">{f.phrase}</span> : null
+            })()}
+          </button>
+        ) : (
+          <span
+            key={`${part.start}-t-${i}`}
+            className="study-mark-text"
+            onMouseUp={(e) => {
+              const text = window.getSelection()?.toString() || ''
+              const picked = text.replace(/\s+/g, ' ').trim()
+              if (!picked || !part.text.includes(picked)) return
+              const rect = window.getSelection()?.getRangeAt(0)?.getBoundingClientRect()
+              onAsk({
+                text: picked,
+                start: part.start + part.text.indexOf(picked),
+                x: Math.max(8, (rect?.left || e.clientX) - 8),
+                y: (rect?.bottom || e.clientY) + 6,
+              })
+            }}
+          >
+            {part.text}
+          </span>
+        ),
+      )}
+    </div>
+  )
+}
+
 export default function StudiesTab({ scope = 'studies' }) {
   const vitae = scope === 'vitae'
   const [studies, setStudies] = useState(() => (vitae ? store.getVitaeTemplates() : listedStudies()))
@@ -449,6 +513,10 @@ export default function StudiesTab({ scope = 'studies' }) {
       return false
     }
   })
+  const [markMode, setMarkMode] = useState(false)
+  const [templateMax, setTemplateMax] = useState(false)
+  const [selAsk, setSelAsk] = useState(null)
+  const [tagEdit, setTagEdit] = useState(null)
   const [openField, setOpenField] = useState(null)
   const [tagH, setTagH] = useState(() => {
     try {
@@ -1073,6 +1141,12 @@ export default function StudiesTab({ scope = 'studies' }) {
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>справа</button>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
+                <button type="button" className={`btn-secondary btn-small${markMode ? ' is-on' : ''}`} onClick={() => setMarkMode((v) => !v)} title="Выдели слова в тексте и сделай из них тег">
+                  {markMode ? 'выделение вкл' : 'выделение'}
+                </button>
+                <button type="button" className={`btn-secondary btn-small${templateMax ? ' is-on' : ''}`} onClick={() => setTemplateMax((v) => !v)}>
+                  {templateMax ? 'свернуть окно' : 'на всё окно'}
+                </button>
                 <button
                   type="button"
                   className={`btn-secondary btn-small${foldIdle ? ' is-on' : ''}`}
@@ -1217,6 +1291,16 @@ export default function StudiesTab({ scope = 'studies' }) {
                           value={f.label}
                           onChange={(e) => updateField(idx, { label: e.target.value })}
                         />
+                        {f.kind !== 'heading' && (
+                          <label className="study-field-check" title="Если выключено, в тексте исследования остаётся только значение">
+                            <input
+                              type="checkbox"
+                              checked={f.showHeading !== false}
+                              onChange={(e) => updateField(idx, { showHeading: e.target.checked ? undefined : false })}
+                            />
+                            заголовок
+                          </label>
+                        )}
                         {f.kind !== 'heading' && (
                           <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
                         )}
@@ -1578,7 +1662,7 @@ export default function StudiesTab({ scope = 'studies' }) {
               </div>
               </div>
 
-              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}`}>
+              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}`}>
               <div className="study-date-format" role="group" aria-label="Формат даты">
                 <span>Дата</span>
                 <button
@@ -1708,11 +1792,57 @@ export default function StudiesTab({ scope = 'studies' }) {
                 className="study-template-text"
                 placeholder="Chlamydia trachomatis - {chlamydia_trachomatis}"
                 value={form.template}
+                hidden={markMode}
                 onChange={(e) => {
                   const value = e.target.value
                   setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
                 }}
               />
+              {markMode && (
+                <TemplateMark
+                  template={form.template || ''}
+                  fields={form.fields}
+                  onAsk={(ask) => setSelAsk(ask)}
+                  onTag={(key) => {
+                    const f = form.fields.find((x) => fieldKeyOf(x) === key) || { key, label: key, kind: 'text', phrase: '' }
+                    setTagEdit({
+                      isNew: false,
+                      prevKey: f.key,
+                      key: f.key,
+                      label: f.label || key,
+                      phrase: f.phrase || '',
+                      kind: f.kind || 'text',
+                      options: (f.options || []).join(', '),
+                    })
+                  }}
+                />
+              )}
+              {selAsk && (
+                <button
+                  type="button"
+                  className="study-tag-pop"
+                  style={{ top: selAsk.y, left: selAsk.x }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const selected = selAsk.text
+                    const base = slugifyFieldKey(selected).slice(0, 24) || `t_${Date.now().toString(36)}`
+                    const key = form.fields.some((f) => f.key === base) ? `${base}_${Date.now().toString(36)}` : base
+                    setTagEdit({
+                      isNew: true,
+                      start: selAsk.start,
+                      selected,
+                      key,
+                      label: selected.slice(0, 48),
+                      phrase: `${selected} {value}`,
+                      kind: 'text',
+                      options: '',
+                    })
+                    setSelAsk(null)
+                  }}
+                >
+                  добавить тег
+                </button>
+              )}
               </div>
               </div>
               </div>
@@ -1725,6 +1855,65 @@ export default function StudiesTab({ scope = 'studies' }) {
                   setForm((prev) => ({ ...prev, referenceNotes: value }))
                 }}
               />
+
+              {tagEdit && (
+                <div className="study-tag-modal">
+                  <div className="study-tag-modal-card" onMouseDown={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <h3>{tagEdit.isNew ? 'Новый тег' : 'Тег'}</h3>
+                      <button type="button" className="modal-close" onClick={() => setTagEdit(null)}>×</button>
+                    </div>
+                    <input value={tagEdit.label} onChange={(e) => setTagEdit({ ...tagEdit, label: e.target.value })} placeholder="название пункта" />
+                    <input value={tagEdit.key} onChange={(e) => setTagEdit({ ...tagEdit, key: e.target.value.replace(/[{}\s]/g, '') })} placeholder="тег" />
+                    <textarea rows={3} value={tagEdit.phrase} onChange={(e) => setTagEdit({ ...tagEdit, phrase: e.target.value })} placeholder="фраза в протоколе. {value} — ответ на приёме" />
+                    <p className="settings-note-inline">В тексте шаблона остаётся только тег. Фраза показана серым и уходит в протокол.</p>
+                    <select value={tagEdit.kind || 'text'} onChange={(e) => setTagEdit({ ...tagEdit, kind: e.target.value })}>
+                      {KIND_OPTIONS.filter((k) => k.value !== 'heading').map((k) => (
+                        <option key={k.value} value={k.value}>{k.label}</option>
+                      ))}
+                    </select>
+                    {(tagEdit.kind === 'select' || tagEdit.kind === 'multi') && (
+                      <input value={tagEdit.options || ''} onChange={(e) => setTagEdit({ ...tagEdit, options: e.target.value })} placeholder="варианты через запятую" />
+                    )}
+                    <div className="drug-form-actions">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => {
+                          const edit = tagEdit
+                          setForm((prev) => {
+                            const key = (edit.key || slugifyFieldKey(edit.label) || '').replace(/[{}\s]/g, '') || `t_${Date.now().toString(36)}`
+                            const fields = prev.fields.map((f) => ({ ...f }))
+                            const idx = fields.findIndex((f) => f.key === key || (edit.prevKey && f.key === edit.prevKey))
+                            const next = {
+                              ...(idx >= 0 ? fields[idx] : {}),
+                              key,
+                              label: (edit.label || key).trim(),
+                              kind: edit.kind || 'text',
+                              phrase: edit.phrase || '',
+                            }
+                            if (edit.kind === 'select' || edit.kind === 'multi') {
+                              next.options = String(edit.options || '').split(',').map((s) => s.trim()).filter(Boolean)
+                            }
+                            if (idx >= 0) fields[idx] = next
+                            else fields.push(next)
+                            let template = prev.template || ''
+                            if (edit.isNew && edit.selected && Number.isFinite(edit.start)) {
+                              template = `${template.slice(0, edit.start)}{${key}}${template.slice(edit.start + String(edit.selected).length)}`
+                            } else if (edit.prevKey && edit.prevKey !== key) {
+                              template = template.split(`{${edit.prevKey}}`).join(`{${key}}`).split(`{+${edit.prevKey}}`).join(`{+${key}}`)
+                            }
+                            return { ...prev, fields, template, templateEdited: true }
+                          })
+                          setTagEdit(null)
+                        }}
+                      >
+                        Готово
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               </div>
               <div className="drug-form-actions study-save-bar">

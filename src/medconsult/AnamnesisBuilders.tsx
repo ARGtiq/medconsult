@@ -925,6 +925,108 @@ export function AnamnesisVitae({
         ]}
       />
       </VitaeSection>
+      <VitaeSection id="work" omitted={omitted("work")} onOmit={setOmit}>
+        <ChipRow
+          label="работа"
+          value={d.employment}
+          fallback="works"
+          onChange={(id) => patch({ employment: id as VitaeDraft["employment"] })}
+          options={[
+            { id: "works", text: "работает" },
+            { id: "off", text: "не работает" },
+          ]}
+        />
+        {(d.employment || "works") !== "off" && (
+          <>
+            <div className={`mt-1 ${d.workplaceOn ? "" : "opacity-50"}`}>
+              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ workplaceOn: !d.workplaceOn })}>
+                место работы
+              </button>
+              {d.workplaceOn && (
+                <input
+                  value={d.workplace}
+                  onChange={(e) => patch({ workplace: e.target.value })}
+                  placeholder="где работает"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              )}
+            </div>
+            <div className={`mt-1 ${d.jobOn ? "" : "opacity-50"}`}>
+              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ jobOn: !d.jobOn })}>
+                должность
+              </button>
+              {d.jobOn && (
+                <input
+                  value={d.jobTitle}
+                  onChange={(e) => patch({ jobTitle: e.target.value })}
+                  placeholder="должность"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              )}
+            </div>
+          </>
+        )}
+        {d.employment === "off" && (
+          <>
+            <ChipRow
+              label="причина"
+              value={d.notWorkReason}
+              onChange={(id) => patch({ notWorkReason: id })}
+              options={[
+                { id: "пенсионер", text: "пенсионер" },
+                { id: "студент", text: "студент" },
+                { id: "декрет", text: "декрет" },
+                { id: "безработный", text: "безработный" },
+                { id: "ухаживает за ребёнком", text: "ухаживает за ребёнком" },
+              ]}
+            />
+            <input
+              value={d.notWorkText}
+              onChange={(e) => patch({ notWorkText: e.target.value })}
+              placeholder="своя причина"
+              className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            />
+          </>
+        )}
+      </VitaeSection>
+      <VitaeSection id="disability" omitted={omitted("disability")} onOmit={setOmit}>
+        <ChipRow
+          label="инвалидность"
+          value={d.disability}
+          fallback="no"
+          onChange={(id) => patch({ disability: id as VitaeDraft["disability"] })}
+          options={[
+            { id: "no", text: "нет" },
+            { id: "yes", text: "да" },
+          ]}
+        />
+        {d.disability === "yes" && (
+          <>
+            <ChipRow
+              label="группа"
+              value={d.disabilityGroup}
+              onChange={(id) => patch({ disabilityGroup: id })}
+              options={[
+                { id: "I", text: "I" },
+                { id: "II", text: "II" },
+                { id: "III", text: "III" },
+              ]}
+            />
+            <ChipRow
+              label="причина"
+              value={d.disabilityCause || "общее заболевание"}
+              onChange={(id) => patch({ disabilityCause: id })}
+              options={[
+                { id: "общее заболевание", text: "общее заболевание" },
+                { id: "трудовое увечье", text: "трудовое увечье" },
+                { id: "профзаболевание", text: "профзаболевание" },
+                { id: "с детства", text: "с детства" },
+                { id: "военная травма", text: "военная травма" },
+              ]}
+            />
+          </>
+        )}
+      </VitaeSection>
       <VitaeSection id="past" omitted={omitted("past")} onOmit={setOmit}>
       <ChipRow
         label="перенесённые заболевания"

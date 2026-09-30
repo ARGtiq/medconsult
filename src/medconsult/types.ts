@@ -28,6 +28,10 @@ export type StudyField = {
   computed?: boolean;
   /** Серый, пока не включили кликом по названию. */
   optional?: boolean;
+  /** Если false — в тексте исследования нет названия пункта, только значение. */
+  showHeading?: boolean;
+  /** Фраза тега. `{value}` — введённое значение. */
+  phrase?: string;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
   refMin?: number;

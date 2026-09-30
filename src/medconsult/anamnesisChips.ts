@@ -113,6 +113,16 @@ export type VitaeDraft = {
   transfusion: "" | "denies" | "has";
   transfusionText: string;
   transfusionItems: VitaeItem[];
+  employment: "" | "works" | "off";
+  workplace: string;
+  jobTitle: string;
+  workplaceOn: boolean;
+  jobOn: boolean;
+  notWorkReason: string;
+  notWorkText: string;
+  disability: "" | "no" | "yes";
+  disabilityGroup: string;
+  disabilityCause: string;
   omit: string[];
 };
 
@@ -125,6 +135,8 @@ export const VITAE_LINES: { id: string; label: string }[] = [
   { id: "development", label: "развитие" },
   { id: "occupation", label: "профвредности" },
   { id: "habits", label: "вредные привычки" },
+  { id: "work", label: "работа" },
+  { id: "disability", label: "инвалидность" },
   { id: "past", label: "перенесённые заболевания" },
   { id: "meds", label: "лекарства" },
   { id: "infections", label: "туберкулёз, гепатиты, вен. заб." },
@@ -175,6 +187,16 @@ export const emptyVitae = (): VitaeDraft => ({
   transfusion: "",
   transfusionText: "",
   transfusionItems: [],
+  employment: "",
+  workplace: "",
+  jobTitle: "",
+  workplaceOn: false,
+  jobOn: false,
+  notWorkReason: "",
+  notWorkText: "",
+  disability: "",
+  disabilityGroup: "",
+  disabilityCause: "",
   omit: [],
 });
 
@@ -309,6 +331,19 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
   const alcohol = d.alcohol === "yes" ? "употребляет алкоголь" : "алкоголь отрицает";
   const habits = `Вредные привычки: ${smoke}, ${alcohol}`;
 
+  const workReason = (d.notWorkText || d.notWorkReason || "").trim();
+  const workBits = ["Работает"];
+  if (d.workplaceOn && d.workplace.trim()) workBits.push(`место работы: ${d.workplace.trim()}`);
+  if (d.jobOn && d.jobTitle.trim()) workBits.push(`должность: ${d.jobTitle.trim()}`);
+  const work =
+    d.employment === "off"
+      ? `Не работает${workReason ? ` (${workReason})` : ""}`
+      : workBits.join(", ");
+  const disability =
+    d.disability === "yes"
+      ? `Инвалидность: ${d.disabilityGroup || "группа не указана"} группа, ${d.disabilityCause || "общее заболевание"}`
+      : "Инвалидности нет";
+
   const pastExtra = [
     ...namedItems(d.pastItems, chronicPresets),
     ...namedItems(d.chronicItems, chronicPresets),
@@ -354,6 +389,8 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
     ["development", development],
     ["occupation", occupation],
     ["habits", habits],
+    ["work", work],
+    ["disability", disability],
     ["past", past],
     ["meds", meds],
     ["infections", infections],

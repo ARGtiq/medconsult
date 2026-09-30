@@ -150,6 +150,7 @@ export function TemplatesEditor({
               [
                 ["complaints", "жалобы"],
                 ["vitae", "анамнез жизни"],
+                ["surgery", "операции"],
                 ["objective", "объективный статус"],
                 ["status", "локальный статус"],
                 ["questionnaires", "анкеты"],
@@ -171,6 +172,13 @@ export function TemplatesEditor({
           </div>
           {tab === "objective" && (
             <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
+          )}
+          {tab === "surgery" && (
+            <PresetEditor
+              items={data.surgeries}
+              onChange={(surgeries) => persist({ surgeries })}
+              hint="Свои операции с приёма тоже попадают сюда."
+            />
           )}
           {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
           {tab === "complaints" && (
@@ -1194,19 +1202,46 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
                       e.currentTarget.value = "";
                     }}
                   />
-                  <textarea
-                    value={(it.subs || []).map((g) => g.join("/")).join("\n")}
-                    onChange={(e) => {
-                      const subs = e.target.value
-                        .split("\n")
-                        .map((line) => line.split("/").map((s) => s.trim()).filter(Boolean))
-                        .filter((g) => g.length);
-                      setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
-                    }}
-                    rows={2}
-                    placeholder={"подпункты: группа с новой строки, варианты через /\nсправа/слева\nотек/жидкость/образование"}
-                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
-                  />
+                  <div className="mt-1">
+                    <div className="text-[10px] text-mute">подпункты</div>
+                    {(it.subs || []).map((group, gi) => (
+                      <div key={gi} className="mt-1 flex flex-wrap items-center gap-1">
+                        {group.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            className="rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal"
+                            onClick={() => {
+                              const subs = (it.subs || []).map((g, j) => (j === gi ? g.filter((x) => x !== opt) : g)).filter((g) => g.length);
+                              setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
+                            }}
+                          >
+                            {opt} ×
+                          </button>
+                        ))}
+                        <input
+                          placeholder="вариант + Enter"
+                          className="w-28 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]"
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            const raw = e.currentTarget.value.trim();
+                            if (!raw || group.some((o) => o.toLowerCase() === raw.toLowerCase())) return;
+                            e.preventDefault();
+                            const subs = (it.subs || []).map((g, j) => (j === gi ? [...g, raw] : g));
+                            setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="mt-1 text-[11px] text-teal"
+                      onClick={() => setItems(i, items.map((x, j) => (j === ii ? { ...x, subs: [...(x.subs || []), ["вариант"]] } : x)))}
+                    >
+                      + группа подпунктов
+                    </button>
+                  </div>
                 </div>
               ))}
               <button

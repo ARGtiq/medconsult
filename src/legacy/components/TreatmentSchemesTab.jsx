@@ -102,7 +102,15 @@ function SchemeStudyDrugs({ codesText, onAdd }) {
   const drugs = Object.values(store.getDrugInfoAll() || {}).filter((d) =>
     (d.studyTriggers || []).some((t) => (t.studyKeys || []).some((k) => keys.has(k))),
   )
-  if (!drugs.length) {
+  const analysis = Object.values(store.getDrugInfoAll() || {}).filter((d) => {
+    if (!(d.studyTriggers || []).some((t) => (t.studyKeys || []).length && (t.fieldKeys || []).length)) return false
+    const raw = d.mkb10Codes || ''
+    const list = String(raw).split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+    return list.some((u) => codes.includes(u) || codes.some((code) => code.split('.')[0] === u.split('.')[0]))
+  })
+  const seen = new Set(drugs.map((d) => d.name))
+  const extra = analysis.filter((d) => !seen.has(d.name))
+  if (!drugs.length && !extra.length) {
     return (
       <p className="settings-note-inline">
         По исследованиям этой болезни препаратов с зависимостью пока нет. Привязка задаётся в карточке лекарства.
@@ -111,14 +119,30 @@ function SchemeStudyDrugs({ codesText, onAdd }) {
   }
   return (
     <div className="drug-trigger-block">
-      <div className="scenarios-block-label">Препараты по исследованиям болезни</div>
-      <div className="guideline-complaint-suggestions">
-        {drugs.map((d) => (
-          <button type="button" key={d.name} className="suggestion-pill suggestion-pill-guideline" onClick={() => onAdd(d.name)}>
-            + {d.name}
-          </button>
-        ))}
-      </div>
+      {drugs.length > 0 && (
+        <>
+          <div className="scenarios-block-label">Препараты по исследованиям болезни</div>
+          <div className="guideline-complaint-suggestions">
+            {drugs.map((d) => (
+              <button type="button" key={d.name} className="suggestion-pill suggestion-pill-guideline" onClick={() => onAdd(d.name)}>
+                + {d.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {extra.length > 0 && (
+        <>
+          <div className="scenarios-block-label">По результатам анализа</div>
+          <div className="guideline-complaint-suggestions">
+            {extra.map((d) => (
+              <button type="button" key={d.name} className="suggestion-pill suggestion-pill-guideline" onClick={() => onAdd(d.name)}>
+                + {d.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

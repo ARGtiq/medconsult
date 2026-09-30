@@ -416,11 +416,12 @@ export function applyComputed(def: StudyDef, fields: Record<string, string>) {
   return next;
 }
 
-function withPrev(cur: string, prev?: string) {
+function withPrev(cur: string, prev?: string, prevDate?: string) {
   const c = (cur || "").trim() || "—";
   const p = (prev || "").trim();
   if (!p || p === c) return c;
-  return `${c} (${p})`;
+  const d = prettyDate(prevDate);
+  return d ? `${c} (${p}, ${d})` : `${c} (${p})`;
 }
 
 function parseScore(raw: string) {
@@ -900,13 +901,15 @@ function filledFieldBit(
   f: StudyField,
   fields: Record<string, string>,
   prevFields?: Record<string, string>,
+  prevDate?: string,
 ): { label: string; shown: string } | null {
   const v = (fields[f.key] || "").trim();
   if (!v) return null;
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const shown = p && p !== v ? `${v}${unit} (${p})` : `${v}${unit}`;
-  return { label: f.label, shown };
+  const value = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+  const shown = f.phrase ? f.phrase.replaceAll("{value}", value) : value;
+  return { label: f.showHeading === false ? "" : f.label, shown };
 }
 
 /** `{name}` `{summary}` `{lines}` `{abnormal}` — unless a field already owns that key. */
@@ -916,6 +919,7 @@ function studyAutoTag(
   fields: Record<string, string>,
   prevFields: Record<string, string> | undefined,
   omit: Set<string>,
+  prevDate?: string,
 ): string | null {
   if (def.fields.some((f) => f.kind !== "heading" && f.key === tag)) return null;
   if (tag === "name") return def.label;
@@ -927,11 +931,13 @@ function studyAutoTag(
     const v = (fields[f.key] || "").trim();
     if (!v) continue;
     if (tag === "abnormal" && !fieldAbnormal(v, f.normal, f, fields)) continue;
-    const bit = filledFieldBit(f, fields, prevFields);
+    const bit = filledFieldBit(f, fields, prevFields, prevDate);
     if (bit) bits.push(bit);
   }
-  if (tag === "lines") return bits.map((b) => `${b.label} - ${b.shown}`).join("\n");
-  return bits.map((b) => `${b.label} ${b.shown}`).join(", ");
+  const line = (b: { label: string; shown: string }) => (b.label ? `${b.label} - ${b.shown}` : b.shown);
+  const inline = (b: { label: string; shown: string }) => (b.label ? `${b.label} ${b.shown}` : b.shown);
+  if (tag === "lines") return bits.map(line).join("\n");
+  return bits.map(inline).join(", ");
 }
 
 export function fillStudyTemplate(
@@ -942,6 +948,7 @@ export function fillStudyTemplate(
   const seeded = applyConditionalDefaults(def, instance.fields);
   const fields = applyComputed(def, seeded);
   const prevFields = previous ? applyComputed(def, previous.fields) : undefined;
+  const prevDate = previous?.date;
   const date = composeStudyDate(instance.date, previous?.date, def.dateFormat);
   const omit = new Set(instance.omit || []);
   const visible = def.fields.filter((f) => !omit.has(f.key));
@@ -959,7 +966,9 @@ export function fillStudyTemplate(
       const p = prevFields ? (prevFields[scale.totalKey] || "").trim() : "";
       const shown = interpretScore(scale.totalKey, v, scale);
       const domains = domainLine(fields, scale);
-      let line = p && p !== v ? `${scale.title} ${shown} (ранее ${interpretScore(scale.totalKey, p, scale)})` : `${scale.title} ${shown}`;
+      const prevShown = p && p !== v ? interpretScore(scale.totalKey, p, scale) : "";
+      const prevBit = prevShown ? withPrev(shown, prevShown, prevDate) : shown;
+      let line = `${scale.title} ${prevBit}`;
       if (domains) line = `${line}; ${domains}`;
       bits.push(line);
     }
@@ -969,7 +978,7 @@ export function fillStudyTemplate(
         if (!v) continue;
         const p = prevFields ? (prevFields[f.key] || "").trim() : "";
         const shown = interpretScore(f.key, v);
-        bits.push(p && p !== v ? `${f.label} ${shown} (ранее ${interpretScore(f.key, p)})` : `${f.label} ${shown}`);
+        bits.push(p && p !== v ? `${f.label} ${withPrev(shown, interpretScore(f.key, p), prevDate)}` : `${f.label} ${shown}`);
       }
     }
     if (!bits.length) return "";
@@ -986,8 +995,10 @@ export function fillStudyTemplate(
       if (!v) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
       const unit = f.unit ? ` ${f.unit}` : "";
-      const shown = p && p !== v ? `${v}${unit} (${p})` : `${v}${unit}`;
-      bits.push(`${f.label} ${shown}`.trim());
+      const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+      const text = f.phrase ? f.phrase.replaceAll("{value}", shown) : shown;
+      const label = f.showHeading === false ? "" : f.label;
+      bits.push(`${label} ${text}`.trim());
     }
     if (!bits.length) return "";
     return `${def.label} от ${date}: ${bits.join(", ")}.`;
@@ -997,18 +1008,24 @@ export function fillStudyTemplate(
   for (const f of def.fields) {
     const named = `{+${f.key}}`;
     if (!text.includes(named)) continue;
-    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit));
+    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit, prevDate));
   }
   for (const f of def.fields) {
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    const replacement = f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed) ? "" : withPrev(v, p);
+    const valueBit = withPrev(v, p, prevDate);
+    const replacement =
+      f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
+        ? ""
+        : f.phrase
+          ? f.phrase.replaceAll("{value}", valueBit)
+          : valueBit;
     text = text.replaceAll(`{${f.key}}`, replacement);
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {
     if (!text.includes(`{${tag}}`)) continue;
-    const value = studyAutoTag(tag, def, fields, prevFields, omit);
+    const value = studyAutoTag(tag, def, fields, prevFields, omit, prevDate);
     if (value == null) continue;
     text = text.replaceAll(`{${tag}}`, value);
   }
@@ -1039,12 +1056,15 @@ function namedFieldText(
   fields: Record<string, string>,
   prevFields: Record<string, string> | undefined,
   omit: Set<string>,
+  prevDate?: string,
 ): string {
   if (f.kind === "heading" || omit.has(f.key) || !fieldShown(f, fields)) return "";
   const v = (fields[f.key] || "").trim();
   if (!v) return "";
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const shown = p && p !== v ? `${v}${unit} (${p}${unit})` : `${v}${unit}`;
+  const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+  if (f.phrase) return f.phrase.replaceAll("{value}", shown);
+  if (f.showHeading === false) return shown;
   return `${(f.label || f.key).trim()} - ${shown}`.trim();
 }
