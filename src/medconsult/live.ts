@@ -498,7 +498,12 @@ function overlayComputed(def: StudyDef): StudyDef {
 }
 
 export function drugLine(d: { name: string; dose?: string; dosage?: string; frequency?: string; duration?: string }) {
-  return [d.name, d.dose || [d.dosage, d.frequency, d.duration].filter(Boolean).join(" ")].filter(Boolean).join(" ");
+  const structured = [d.dosage, d.frequency, d.duration].map((s) => (s || "").trim()).filter(Boolean);
+  const scheme = structured.length ? structured.join(" ") : (d.dose || "").trim();
+  const name = (d.name || "").trim();
+  if (!name) return scheme;
+  if (scheme && scheme.toLowerCase().startsWith(name.toLowerCase())) return scheme;
+  return [name, scheme].filter(Boolean).join(" ");
 }
 
 export type DrugRecord = {
@@ -517,12 +522,17 @@ export function liveDrugRecords(): DrugRecord[] {
   try {
     Object.values(store.getDrugInfoAll() || {}).forEach((d) => {
       if (!d?.name) return;
+      const dosage = String(d.dosage || "").trim();
+      const frequency = String(d.frequency || "").trim();
+      const duration = String(d.duration || "").trim();
+      const cat = DRUGS.find((x) => x.name.toLowerCase() === String(d.name).toLowerCase());
+      const dose = [dosage, frequency, duration].filter(Boolean).join(" ") || cat?.dose || "";
       fromDb.push({
         name: d.name,
-        dose: [d.dosage, d.frequency].filter(Boolean).join(" "),
-        dosage: d.dosage,
-        frequency: d.frequency,
-        duration: d.duration,
+        dose,
+        dosage,
+        frequency,
+        duration,
         brandNames: d.brandNames,
         group: d.group,
         mkb10Codes: d.mkb10Codes,
@@ -570,7 +580,8 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
     const key = d.name.toLowerCase();
     if (!key || seen.has(key)) return;
     seen.add(key);
-    hits.push({ line: drugLine(d), name: d.name, via, hint });
+    const scheme = [d.dosage, d.frequency, d.duration].map((s) => (s || "").trim()).filter(Boolean).join(" · ") || (d.dose || "").trim();
+    hits.push({ line: drugLine(d), name: d.name, via, hint: scheme || hint });
   };
 
   if (!q) {

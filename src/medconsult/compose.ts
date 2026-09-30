@@ -111,7 +111,7 @@ export function composeBlocks(
       const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
       push("diagnosis", "Диагноз", dx);
     } else if (id === "recommendations" && includeStd(session, "recommendations")) {
-      push("recommendations", "Рекомендации", (session.recommendations || []).join(". "));
+      push("recommendations", "Рекомендации", (session.recommendations || []).map((s) => s.trim()).filter(Boolean).join("\n"));
     }
   }
   if (!studiesSent) emitStudies();

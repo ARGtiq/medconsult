@@ -18,6 +18,7 @@ import {
   compactGuideline,
   complaintsForSession,
   drugLine,
+  liveDrugRecords,
   learnedDrugs,
   matchPhraseOrWord,
   optionsForComplaint,
@@ -417,7 +418,7 @@ export function ProtocolPage() {
       ${blocks
         .map(
           (b) =>
-            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text)}</div></div>`,
+            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text).replace(/\n/g, "<br/>")}</div></div>`,
         )
         .join("")}
     `;
@@ -425,7 +426,16 @@ export function ProtocolPage() {
   }
 
   const insertDrug = (d: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }) => {
-    addRecommendation(drugLine({ name: d.name || "", dosage: d.dosage || d.dose, frequency: d.frequency, duration: d.duration }));
+    const known = liveDrugRecords().find((r) => r.name.toLowerCase() === (d.name || "").trim().toLowerCase());
+    addRecommendation(
+      drugLine({
+        name: d.name || "",
+        dosage: d.dosage || known?.dosage,
+        frequency: d.frequency || known?.frequency,
+        duration: d.duration || known?.duration,
+        dose: d.dose || known?.dose,
+      }),
+    );
   };
 
   const insertInvestigation = (item: string) => {
@@ -1492,7 +1502,7 @@ function DrugSearch({
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
   const items = hits
     .filter((h) => !selected.includes(h.line))
-    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.via, name: h.name }));
+    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.hint || h.via, name: h.name }));
 
   return (
     <div className="mt-1">

@@ -22,18 +22,39 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
   const matching = useMemo(() => packsForDiagnosis(diagnosisText), [diagnosisText, open])
   const all = useMemo(() => (open ? store.searchRecommendationPacks(query) : []), [open, query])
 
-  function add(pack) {
-    onApply(pack.items || [], pack.name)
+  function addLines(lines) {
+    onApply(lines || [])
+  }
+
+  function PackBody({ pack }) {
+    return (
+      <div className="scheme-search-result">
+        <div className="scheme-search-result-title">{pack.name}</div>
+        {(pack.mkb10Codes || []).length > 0 && (
+          <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>
+        )}
+        <div className="guideline-complaint-suggestions">
+          {(pack.items || []).map((line) => (
+            <button type="button" key={line} className="suggestion-pill" onClick={() => addLines([line])}>
+              + {line}
+            </button>
+          ))}
+        </div>
+        {(pack.items || []).length > 1 && (
+          <button type="button" className="btn-secondary btn-small" onClick={() => addLines(pack.items)}>
+            добавить все
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
     <div>
-      {matching.length > 0 && (
-        <div className="guideline-complaint-suggestions">
+      {!open && matching.length > 0 && (
+        <div className="scheme-search-block">
           {matching.map((p) => (
-            <button type="button" key={p.id} className="suggestion-pill suggestion-pill-guideline" onClick={() => add(p)}>
-              + {p.name}
-            </button>
+            <PackBody key={p.id} pack={p} />
           ))}
         </div>
       )}
@@ -60,20 +81,7 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
           </div>
           {all.length === 0 && <p className="empty-hint">Пакетов нет. Их заводят в Назначения → пакеты.</p>}
           {all.map((p) => (
-            <div key={p.id} className="scheme-search-result">
-              <div className="scheme-search-result-title">{p.name}</div>
-              {(p.mkb10Codes || []).length > 0 && (
-                <div className="guideline-panel-text-muted">{p.mkb10Codes.join(', ')}</div>
-              )}
-              <ul className="guideline-drug-list">
-                {(p.items || []).map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <button type="button" className="btn-secondary btn-small" onClick={() => add(p)}>
-                Добавить в назначения
-              </button>
-            </div>
+            <PackBody key={p.id} pack={p} />
           ))}
         </div>
       )}
