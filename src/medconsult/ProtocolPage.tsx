@@ -1196,6 +1196,7 @@ export function ProtocolPage() {
             <>
               <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
               <EditableChips
+                lines
                 items={session.recommendations}
                 onChange={(next) => store.renameList("recommendations", next)}
               />

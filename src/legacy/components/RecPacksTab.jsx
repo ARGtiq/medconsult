@@ -2,7 +2,17 @@ import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
 
-const EMPTY = { id: '', name: '', mkb10CodesText: '', items: [''] }
+const EMPTY_ITEM = { text: '', subs: [] }
+
+function asItem(raw) {
+  if (typeof raw === 'string') return { text: raw, subs: [] }
+  return {
+    text: String(raw?.text || ''),
+    subs: (raw?.subs || []).map((s) => String(s)),
+  }
+}
+
+const EMPTY = { id: '', name: '', mkb10CodesText: '', items: [{ ...EMPTY_ITEM }] }
 
 function lineOfDrug(d) {
   return [d.name, d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(' ')
@@ -37,11 +47,12 @@ function drugHits(query) {
 }
 
 function toForm(pack) {
+  const items = (pack.items || []).map(asItem)
   return {
     id: pack.id,
     name: pack.name || '',
     mkb10CodesText: (pack.mkb10Codes || []).join(', '),
-    items: (pack.items || []).length ? [...pack.items] : [''],
+    items: items.length ? items : [{ ...EMPTY_ITEM }],
   }
 }
 
@@ -65,7 +76,12 @@ export default function RecPacksTab() {
       id: form.id || undefined,
       name,
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
-      items: form.items.map((s) => s.trim()).filter(Boolean),
+      items: form.items
+        .map((it) => ({
+          text: it.text.trim(),
+          subs: (it.subs || []).map((s) => s.trim()).filter(Boolean),
+        }))
+        .filter((it) => it.text),
     })
     setForm(null)
     setSchemeQ('')
@@ -87,7 +103,7 @@ export default function RecPacksTab() {
       <p className="settings-note-inline">
         Коды МКБ подсказываются из базы. Пункты добавляются по строке: можно вписать своё, взять лекарство с дозой и схемой приёма или вставить целую схему лечения.
       </p>
-      <button type="button" className="btn-primary" onClick={() => setForm({ ...EMPTY, items: [''] })}>
+      <button type="button" className="btn-primary" onClick={() => setForm({ ...EMPTY, items: [{ ...EMPTY_ITEM }] })}>
         + пакет
       </button>
       <div className="drug-db-list">
@@ -117,15 +133,15 @@ export default function RecPacksTab() {
                 label="Коды МКБ-10"
               />
               <div className="settings-note-inline">Пункты пакета</div>
-              {form.items.map((line, i) => (
+              {form.items.map((item, i) => (
                 <PackLine
                   key={i}
-                  value={line}
-                  onChange={(value) => patchItem(i, value)}
+                  item={item}
+                  onChange={(next) => patchItem(i, next)}
                   onRemove={() => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })}
                 />
               ))}
-              <button type="button" className="btn-secondary btn-small" onClick={() => setForm({ ...form, items: [...form.items, ''] })}>
+              <button type="button" className="btn-secondary btn-small" onClick={() => setForm({ ...form, items: [...form.items, { ...EMPTY_ITEM }] })}>
                 + пункт
               </button>
               <input
@@ -142,10 +158,10 @@ export default function RecPacksTab() {
                       key={s.id}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        const lines = schemeLines(s)
+                        const lines = schemeLines(s).map((text) => ({ text, subs: [] }))
                         setForm({
                           ...form,
-                          items: [...form.items.map((x) => x.trim()).filter(Boolean), ...lines],
+                          items: [...form.items.filter((x) => x.text.trim()), ...lines],
                         })
                         setSchemeQ('')
                       }}
@@ -179,16 +195,24 @@ export default function RecPacksTab() {
   )
 }
 
-function PackLine({ value, onChange, onRemove }) {
+function PackLine({ item, onChange, onRemove }) {
   const [open, setOpen] = useState(false)
-  const hits = useMemo(() => (open ? drugHits(value) : []), [open, value])
+  const [subDraft, setSubDraft] = useState('')
+  const hits = useMemo(() => (open ? drugHits(item.text) : []), [open, item.text])
+  function addSub(raw) {
+    const text = raw.trim()
+    if (!text) return
+    if ((item.subs || []).some((s) => s.toLowerCase() === text.toLowerCase())) return
+    onChange({ ...item, subs: [...(item.subs || []), text] })
+    setSubDraft('')
+  }
   return (
-    <div>
+    <div className="rounded-md border border-line/70 px-2 py-1">
       <div className="drug-form-row">
         <input
-          value={value}
+          value={item.text}
           onChange={(e) => {
-            onChange(e.target.value)
+            onChange({ ...item, text: e.target.value })
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
@@ -205,7 +229,7 @@ function PackLine({ value, onChange, onRemove }) {
               key={h.line}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                onChange(h.line)
+                onChange({ ...item, text: h.line })
                 setOpen(false)
               }}
             >
@@ -215,6 +239,37 @@ function PackLine({ value, onChange, onRemove }) {
           ))}
         </div>
       )}
+      {(item.subs || []).length > 0 && (
+        <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
+          {item.subs.map((sub, si) => (
+            <button
+              type="button"
+              key={`${sub}-${si}`}
+              className="suggestion-pill"
+              title="Убрать подпункт"
+              onClick={() => onChange({ ...item, subs: item.subs.filter((_, j) => j !== si) })}
+            >
+              {sub} ×
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="drug-form-row" style={{ marginTop: 4 }}>
+        <input
+          value={subDraft}
+          onChange={(e) => setSubDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addSub(subDraft)
+            }
+          }}
+          placeholder="подпункт + Enter. В протокол попадёт пункт, не подпункт"
+        />
+        <button type="button" className="btn-secondary btn-small" onClick={() => addSub(subDraft)}>
+          + подпункт
+        </button>
+      </div>
     </div>
   )
 }

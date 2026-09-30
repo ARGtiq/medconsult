@@ -1046,7 +1046,18 @@ export const store = {
     const state = readAll()
     state.recommendationPacks = state.recommendationPacks || {}
     const id = pack.id || crypto.randomUUID()
-    const items = (pack.items || []).map((s) => String(s).trim()).filter(Boolean)
+    const items = (pack.items || [])
+      .map((raw) => {
+        if (typeof raw === 'string') {
+          const text = raw.trim()
+          return text ? { text, subs: [] } : null
+        }
+        const text = String(raw?.text || '').trim()
+        if (!text) return null
+        const subs = (raw.subs || []).map((s) => String(s).trim()).filter(Boolean)
+        return { text, subs }
+      })
+      .filter(Boolean)
     const mkb10Codes = (pack.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
     state.recommendationPacks[id] = {
       ...pack,
@@ -1075,7 +1086,14 @@ export const store = {
       (p) =>
         (p.name || '').toLowerCase().includes(q) ||
         (p.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)) ||
-        (p.items || []).some((t) => t.toLowerCase().includes(q)),
+        (p.items || []).some((t) => {
+          const text = typeof t === 'string' ? t : t?.text || ''
+          const subs = typeof t === 'string' ? [] : t?.subs || []
+          return (
+            String(text).toLowerCase().includes(q) ||
+            subs.some((s) => String(s).toLowerCase().includes(q))
+          )
+        }),
     )
   },
 

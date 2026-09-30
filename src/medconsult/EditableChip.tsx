@@ -27,9 +27,11 @@ function chipClass(on: boolean, dashed?: boolean, marked?: boolean) {
 export function EditableChips({
   items,
   onChange,
+  lines,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
+  lines?: boolean;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -50,7 +52,7 @@ export function EditableChips({
   }
 
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
+    <div className={lines ? "mt-1 flex flex-col gap-1" : "mt-1 flex flex-wrap gap-1"}>
       {items.map((t, i) =>
         edit === i ? (
           <input
@@ -66,10 +68,17 @@ export function EditableChips({
               }
               if (e.key === "Escape") setEdit(null);
             }}
-            className="min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+            className={
+              lines
+                ? "w-full rounded-md border border-teal bg-paper px-2 py-1 text-sm"
+                : "min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
+            }
           />
         ) : (
-          <span key={`${t}-${i}`} className={`inline-flex items-center gap-0.5 ${chipClass(true, false, drugMarked(t))}`}>
+          <span
+            key={`${t}-${i}`}
+            className={`${lines ? "flex w-full items-start gap-1 rounded-md px-2 py-1 text-sm" : "inline-flex items-center gap-0.5"} ${chipClass(true, false, drugMarked(t))}`}
+          >
             <button
               type="button"
               title="Нажми — править как текст"

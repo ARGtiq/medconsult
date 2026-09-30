@@ -26,22 +26,43 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
     onApply(lines || [])
   }
 
+  function packItem(raw) {
+    if (typeof raw === 'string') return { text: raw, subs: [] }
+    return { text: String(raw?.text || '').trim(), subs: (raw?.subs || []).map((s) => String(s).trim()).filter(Boolean) }
+  }
+
   function PackBody({ pack }) {
+    const rows = (pack.items || []).map(packItem).filter((it) => it.text)
     return (
       <div className="scheme-search-result">
         <div className="scheme-search-result-title">{pack.name}</div>
         {(pack.mkb10Codes || []).length > 0 && (
           <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>
         )}
-        <div className="guideline-complaint-suggestions">
-          {(pack.items || []).map((line) => (
-            <button type="button" key={line} className="suggestion-pill" onClick={() => addLines([line])}>
-              + {line}
+        {rows.map((item) => (
+          <div key={item.text} style={{ marginTop: 6 }}>
+            <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => addLines([item.text])}>
+              + {item.text}
             </button>
-          ))}
-        </div>
-        {(pack.items || []).length > 1 && (
-          <button type="button" className="btn-secondary btn-small" onClick={() => addLines(pack.items)}>
+            {item.subs.length > 0 && (
+              <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
+                {item.subs.map((sub) => (
+                  <button
+                    type="button"
+                    key={sub}
+                    className="suggestion-pill"
+                    title="В протокол попадёт пункт, без текста подпункта"
+                    onClick={() => addLines([item.text])}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {rows.length > 1 && (
+          <button type="button" className="btn-secondary btn-small" onClick={() => addLines(rows.map((it) => it.text))}>
             добавить все
           </button>
         )}
