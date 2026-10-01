@@ -886,6 +886,25 @@
   cursor: pointer;
 }
 .legacy-surface .mkb10-input-suggestions button:hover { background: var(--paper); }
+.legacy-surface .pack-drug-hits {
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  max-height: 180px;
+  overflow-y: auto;
+}
+.legacy-surface .pack-drug-hits button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.legacy-surface .pack-drug-hits button:hover { background: var(--paper); }
 
 .legacy-surface .drug-regimen-row { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
 .legacy-surface .drug-regimen-label { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }

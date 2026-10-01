@@ -51,10 +51,10 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
                     type="button"
                     key={sub}
                     className="suggestion-pill"
-                    title="В протокол попадёт пункт, без текста подпункта"
-                    onClick={() => addLines([item.text])}
+                    title="В протокол попадёт этот подпункт"
+                    onClick={() => addLines([sub])}
                   >
-                    {sub}
+                    + {sub}
                   </button>
                 ))}
               </div>
@@ -62,7 +62,11 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
           </div>
         ))}
         {rows.length > 1 && (
-          <button type="button" className="btn-secondary btn-small" onClick={() => addLines(rows.map((it) => it.text))}>
+          <button
+            type="button"
+            className="btn-secondary btn-small"
+            onClick={() => addLines(rows.flatMap((it) => (it.subs.length ? it.subs : [it.text])))}
+          >
             добавить все
           </button>
         )}

@@ -32,18 +32,27 @@ function schemeLines(scheme) {
   return lines
 }
 
+import { DRUGS } from '../../medconsult/data/catalog'
+
 function drugHits(query) {
   const q = query.trim().toLowerCase()
   if (q.length < 2) return []
   const rows = Object.values(store.getDrugInfoAll?.() || {})
-  return rows
-    .filter((d) => {
-      const name = String(d.name || '').toLowerCase()
-      const brands = String(d.brandNames || '').toLowerCase()
-      return name.includes(q) || brands.includes(q)
-    })
-    .slice(0, 8)
-    .map((d) => ({ line: lineOfDrug(d), hint: [d.dosage, d.frequency, d.duration].filter(Boolean).join(' · ') }))
+  const seen = new Set()
+  const out = []
+  const take = (d) => {
+    const name = String(d.name || '').trim()
+    const key = name.toLowerCase()
+    if (!key || seen.has(key)) return
+    const brands = String(d.brandNames || d.note || '').toLowerCase()
+    const words = `${key} ${brands}`.split(/[^a-zа-яё0-9+]+/i)
+    if (!key.includes(q) && !brands.includes(q) && !words.some((w) => w.startsWith(q))) return
+    seen.add(key)
+    out.push({ line: lineOfDrug(d), hint: [d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(' · ') })
+  }
+  rows.forEach(take)
+  ;(DRUGS || []).forEach((d) => take({ name: d.name, dose: d.dose, brandNames: d.note || '' }))
+  return out.slice(0, 8)
 }
 
 function toForm(pack) {
@@ -198,7 +207,9 @@ export default function RecPacksTab() {
 function PackLine({ item, onChange, onRemove }) {
   const [open, setOpen] = useState(false)
   const [subDraft, setSubDraft] = useState('')
+  const [subOpen, setSubOpen] = useState(false)
   const hits = useMemo(() => (open ? drugHits(item.text) : []), [open, item.text])
+  const subHits = useMemo(() => (subOpen ? drugHits(subDraft) : []), [subOpen, subDraft])
   function addSub(raw) {
     const text = raw.trim()
     if (!text) return
@@ -222,7 +233,7 @@ function PackLine({ item, onChange, onRemove }) {
         <button type="button" className="remove-btn" onClick={onRemove}>×</button>
       </div>
       {open && hits.length > 0 && (
-        <div className="mkb10-input-suggestions">
+        <div className="pack-drug-hits">
           {hits.map((h) => (
             <button
               type="button"
@@ -234,7 +245,7 @@ function PackLine({ item, onChange, onRemove }) {
               }}
             >
               <strong>{h.line}</strong>
-              {h.hint ? <span className="guideline-panel-text-muted"> {h.hint}</span> : null}
+              {h.hint && h.hint !== h.line ? <span className="guideline-panel-text-muted"> {h.hint}</span> : null}
             </button>
           ))}
         </div>
@@ -257,19 +268,41 @@ function PackLine({ item, onChange, onRemove }) {
       <div className="drug-form-row" style={{ marginTop: 4 }}>
         <input
           value={subDraft}
-          onChange={(e) => setSubDraft(e.target.value)}
+          onChange={(e) => {
+            setSubDraft(e.target.value)
+            setSubOpen(true)
+          }}
+          onFocus={() => setSubOpen(true)}
+          onBlur={() => setTimeout(() => setSubOpen(false), 150)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
               addSub(subDraft)
             }
           }}
-          placeholder="подпункт + Enter. В протокол попадёт пункт, не подпункт"
+          placeholder="подпункт + Enter. В протокол попадёт выбранный подпункт"
         />
         <button type="button" className="btn-secondary btn-small" onClick={() => addSub(subDraft)}>
           + подпункт
         </button>
       </div>
+      {subOpen && subHits.length > 0 && (
+        <div className="pack-drug-hits">
+          {subHits.map((h) => (
+            <button
+              type="button"
+              key={h.line}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                addSub(h.line)
+                setSubOpen(false)
+              }}
+            >
+              <strong>{h.line}</strong>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

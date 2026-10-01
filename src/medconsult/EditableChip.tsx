@@ -28,10 +28,12 @@ export function EditableChips({
   items,
   onChange,
   lines,
+  removable,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
   lines?: boolean;
+  removable?: boolean;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -82,6 +84,7 @@ export function EditableChips({
             <button
               type="button"
               title="Нажми — править как текст"
+              className={lines ? "min-w-0 flex-1 text-left" : undefined}
               onClick={() => {
                 setEdit(i);
                 setDraft(t);
@@ -90,6 +93,16 @@ export function EditableChips({
               {t}
             </button>
             <InfoDot query={t} />
+            {removable && (
+              <button
+                type="button"
+                title="Убрать"
+                className="ml-auto shrink-0 px-1 text-sm leading-none text-mute"
+                onClick={() => onChange(items.filter((_, j) => j !== i))}
+              >
+                ×
+              </button>
+            )}
           </span>
         ),
       )}
