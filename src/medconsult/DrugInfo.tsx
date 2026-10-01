@@ -98,7 +98,7 @@ export function DrugInfoModal() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
+      className="fixed inset-0 z-[600] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
       onClick={close}
       role="presentation"
     >

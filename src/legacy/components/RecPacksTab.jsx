@@ -472,7 +472,7 @@ function PackLine({ item, onChange, onRemove }) {
             const meta = [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
             const editing = editSub === si
             return (
-              <div key={`${composeDrug(sub)}-${si}`} className="pack-sub">
+              <div key={si} className="pack-sub">
                 <button type="button" className="pack-sub-main" onClick={() => setEditSub(editing ? null : si)}>
                   <span className="pack-sub-name">{subLabel}</span>
                   {meta && <span className="pack-drug-meta">{meta}</span>}
