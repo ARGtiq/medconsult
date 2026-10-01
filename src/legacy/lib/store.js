@@ -1052,10 +1052,28 @@ export const store = {
           const text = raw.trim()
           return text ? { text, subs: [] } : null
         }
-        const text = String(raw?.text || '').trim()
+        const name = String(raw?.name || '').trim()
+        const dosage = String(raw?.dosage || '').trim()
+        const frequency = String(raw?.frequency || '').trim()
+        const duration = String(raw?.duration || '').trim()
+        const subs = (raw.subs || [])
+          .map((s) => {
+            if (typeof s === 'string') {
+              const text = s.trim()
+              return text ? { text } : null
+            }
+            const sn = String(s?.name || '').trim()
+            const sd = String(s?.dosage || '').trim()
+            const sf = String(s?.frequency || '').trim()
+            const su = String(s?.duration || '').trim()
+            const text = sn ? [sn, sd, sf, su].filter(Boolean).join(' ') : String(s?.text || '').trim()
+            if (!text) return null
+            return { text, name: sn, dosage: sd, frequency: sf, duration: su, fromDb: !!s?.fromDb }
+          })
+          .filter(Boolean)
+        const text = name ? [name, dosage, frequency, duration].filter(Boolean).join(' ') : String(raw?.text || '').trim()
         if (!text) return null
-        const subs = (raw.subs || []).map((s) => String(s).trim()).filter(Boolean)
-        return { text, subs }
+        return { text, name, dosage, frequency, duration, fromDb: !!raw?.fromDb, subs }
       })
       .filter(Boolean)
     const mkb10Codes = (pack.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
@@ -1063,6 +1081,7 @@ export const store = {
       ...pack,
       id,
       name: String(pack.name || '').trim(),
+      note: String(pack.note || '').trim(),
       items,
       mkb10Codes,
       updatedAt: Date.now(),
@@ -1086,12 +1105,13 @@ export const store = {
       (p) =>
         (p.name || '').toLowerCase().includes(q) ||
         (p.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)) ||
+        (p.note || '').toLowerCase().includes(q) ||
         (p.items || []).some((t) => {
           const text = typeof t === 'string' ? t : t?.text || ''
           const subs = typeof t === 'string' ? [] : t?.subs || []
           return (
             String(text).toLowerCase().includes(q) ||
-            subs.some((s) => String(s).toLowerCase().includes(q))
+            subs.some((s) => String(typeof s === 'string' ? s : s?.text || '').toLowerCase().includes(q))
           )
         }),
     )

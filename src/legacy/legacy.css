@@ -905,6 +905,54 @@
   cursor: pointer;
 }
 .legacy-surface .pack-drug-hits button:hover { background: var(--paper); }
+.legacy-surface .pack-line {
+  margin: 0 0 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.legacy-surface .pack-regimen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.legacy-surface .pack-regimen input {
+  flex: 1;
+  min-width: 90px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.legacy-surface .pack-drug-meta {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #8b909a;
+  font-weight: 400;
+}
+.legacy-surface .pack-subs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.legacy-surface .pack-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.legacy-surface .pack-sub-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.legacy-surface .pack-sub-name { font-size: 13px; }
+.legacy-surface .pack-sub-x {
+  border: none;
+  background: none;
+  color: #8b909a;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
 
 .legacy-surface .drug-regimen-row { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
 .legacy-surface .drug-regimen-label { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
@@ -1638,6 +1686,12 @@
   flex-wrap: wrap;
   gap: 6px;
   margin: 4px 0 0;
+}
+.legacy-surface .study-template-chip.is-used {
+  background: color-mix(in srgb, var(--teal) 16%, var(--panel));
+  border-color: var(--teal);
+  font-weight: 650;
+  box-shadow: inset 3px 0 0 var(--teal);
 }
 .legacy-surface .study-template-chip {
   font-size: 12px;
@@ -3591,6 +3645,10 @@
   flex-wrap: wrap;
   gap: 6px;
   margin: 0 0 6px;
+}
+.legacy-surface .study-tag-chip.is-used {
+  background: color-mix(in srgb, var(--teal) 18%, var(--panel));
+  font-weight: 650;
 }
 .legacy-surface .study-tag-chip {
   position: relative;

@@ -14,13 +14,28 @@ export default function Mkb10CodesInput({ value, onChange, placeholder, classNam
     setSuggestions(lastSegment ? searchMkb10(lastSegment) : [])
   }
 
-  function pickSuggestion(code) {
-    const parts = value.split(',')
+  function commitCode(code) {
+    const parts = String(value || '').split(',')
     parts[parts.length - 1] = ` ${code}`
-    const next = parts.join(',').replace(/^,\s*/, '').trimStart()
-    onChange(next.startsWith(' ') ? next.trimStart() : next)
+    const next = parts.join(',').replace(/^,\s*/, '').replace(/\s+,/g, ',').trim()
+    onChange(`${next}, `)
     setSuggestions([])
     inputRef.current?.focus()
+  }
+
+  function exactHit(segment) {
+    const q = segment.trim().toLowerCase()
+    if (!q) return null
+    return searchMkb10(q).find((s) => s.code.toLowerCase() === q) || null
+  }
+
+  function handleKeyDown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== ',') return
+    const last = String(value || '').split(',').pop() || ''
+    const hit = exactHit(last)
+    if (!hit) return
+    e.preventDefault()
+    commitCode(hit.code)
   }
 
   return (
@@ -32,12 +47,13 @@ export default function Mkb10CodesInput({ value, onChange, placeholder, classNam
           placeholder={placeholder || 'Коды МКБ-10 через запятую'}
           value={value}
           onChange={handleChange}
+          onKeyDown={handleKeyDown}
           onBlur={() => setTimeout(() => setSuggestions([]), 150)}
         />
         {suggestions.length > 0 && (
           <div className="mkb10-input-suggestions">
             {suggestions.map((s) => (
-              <button type="button" key={s.code} onMouseDown={(e) => e.preventDefault()} onClick={() => pickSuggestion(s.code)}>
+              <button type="button" key={s.code} onMouseDown={(e) => e.preventDefault()} onClick={() => commitCode(s.code)}>
                 <strong>{s.code}</strong> {s.label}
               </button>
             ))}

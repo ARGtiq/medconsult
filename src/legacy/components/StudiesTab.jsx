@@ -505,6 +505,7 @@ export default function StudiesTab({ scope = 'studies' }) {
   })
   const [markMode, setMarkMode] = useState(false)
   const [templateMax, setTemplateMax] = useState(false)
+  const [tagsFold, setTagsFold] = useState(false)
   const [selAsk, setSelAsk] = useState(null)
   const [tagEdit, setTagEdit] = useState(null)
   const [openField, setOpenField] = useState(null)
@@ -1655,7 +1656,15 @@ export default function StudiesTab({ scope = 'studies' }) {
               <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}`}>
               {templateMax && (
                 <div className="study-date-format">
-                  <button type="button" className="btn-primary btn-small" onClick={() => setTemplateMax(false)}>
+                  <button type="submit" className="btn-primary btn-small">
+                    сохранить
+                  </button>
+                  {markMode && (
+                    <button type="button" className="btn-secondary btn-small" onClick={() => setTagsFold((v) => !v)}>
+                      {tagsFold ? 'показать теги' : 'свернуть теги'}
+                    </button>
+                  )}
+                  <button type="button" className="btn-secondary btn-small" onClick={() => setTemplateMax(false)}>
                     закрыть и вернуться
                   </button>
                 </div>
@@ -1698,55 +1707,65 @@ export default function StudiesTab({ scope = 'studies' }) {
                   с названием
                 </button>
               </div>
+              {!(templateMax && markMode && tagsFold) && (
               <div className="study-template-chips-scroll" style={{ height: tagH, maxHeight: tagH, flexBasis: tagH }}>
               <div className="study-template-chips">
-                {AUTO_TAGS.map((tag) => (
+                {AUTO_TAGS.map((tag) => {
+                  const used = (form.template || '').includes(tag.token)
+                  return (
                   <button
                     type="button"
                     key={tag.token}
-                    className="study-template-chip is-auto"
+                    className={`study-template-chip is-auto${used ? ' is-used' : ''}`}
                     draggable
                     onDragStart={(e) => onChipDragStart(e, tag.token)}
                     onClick={() => insertToken(tag.token)}
-                    title={tag.hint}
+                    title={used ? `${tag.hint} · уже в тексте` : tag.hint}
                   >
                     <code>{tag.token}</code>
                     <span>{tag.hint}</span>
                   </button>
-                ))}
+                  )
+                })}
                 {vitae && [
                   { token: '{allergy}', hint: 'аллергия из карточки' },
                   { token: '{meds}', hint: 'постоянные препараты из карточки' },
-                ].map((tag) => (
+                ].map((tag) => {
+                  const used = (form.template || '').includes(tag.token)
+                  return (
                   <button
                     type="button"
                     key={tag.token}
-                    className="study-template-chip is-auto"
+                    className={`study-template-chip is-auto${used ? ' is-used' : ''}`}
                     draggable
                     onDragStart={(e) => onChipDragStart(e, tag.token)}
                     onClick={() => insertToken(tag.token)}
-                    title={tag.hint}
+                    title={used ? `${tag.hint} · уже в тексте` : tag.hint}
                   >
                     <code>{tag.token}</code>
                     <span>{tag.hint}</span>
                   </button>
-                ))}
+                  )
+                })}
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
                   const plain = `{${key}}`
                   const named = `{+${key}}`
                   const line = autoFieldLine(f.label, key)
                   const payload = namedTag ? named : line && !(form.template || '').includes(plain) ? line : plain
+                  const used = (form.template || '').includes(plain) || (form.template || '').includes(named)
                   return (
                     <button
                       type="button"
                       key={`${key}-${idx}`}
-                      className="study-template-chip"
+                      className={`study-template-chip${used ? ' is-used' : ''}`}
                       draggable
                       onDragStart={(e) => onChipDragStart(e, payload)}
                       onClick={() => insertToken(payload)}
                       title={
-                        namedTag
+                        used
+                          ? 'Уже есть в тексте шаблона'
+                          : namedTag
                           ? 'Вставить тег с названием. Если пункт скрыт или пустой, строка не появляется'
                           : payload === line
                             ? 'Вставить название и тег'
@@ -1759,9 +1778,11 @@ export default function StudiesTab({ scope = 'studies' }) {
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется. Режим «с названием» пишет такой тег сам. {'{summary}'} — все заполненные, {'{lines}'} — с новой строки, {'{abnormal}'} — только вне нормы.
+                Подсвечены теги, которые уже стоят в тексте. {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется. Режим «с названием» пишет такой тег сам. {'{summary}'} — все заполненные, {'{lines}'} — с новой строки, {'{abnormal}'} — только вне нормы.
               </p>
               </div>
+              )}
+              {!(templateMax && markMode && tagsFold) && (
               <div
                 className="study-template-split"
                 role="separator"
@@ -1770,6 +1791,7 @@ export default function StudiesTab({ scope = 'studies' }) {
                 title="Потяни, чтобы изменить высоту тегов и текста"
                 onPointerDown={onTagSplitDown}
               />
+              )}
 
               <div className="study-template-format">
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('**')} title="Полужирный">Ж</button>
@@ -1790,7 +1812,7 @@ export default function StudiesTab({ scope = 'studies' }) {
                     <button
                       type="button"
                       key={f.key}
-                      className="study-tag-chip"
+                      className="study-tag-chip is-used"
                       onClick={() => {
                         const sides = sidesOf(f)
                         setTagEdit({

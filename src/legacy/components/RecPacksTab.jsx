@@ -1,18 +1,47 @@
 import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
+import { DRUGS } from '../../medconsult/data/catalog'
+import { InfoDot } from '../../medconsult/DrugInfo'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
-function asItem(raw) {
-  if (typeof raw === 'string') return { text: raw, subs: [] }
+function drugBits(raw) {
   return {
-    text: String(raw?.text || ''),
-    subs: (raw?.subs || []).map((s) => String(s)),
+    name: String(raw?.name || '').trim(),
+    dosage: String(raw?.dosage || '').trim(),
+    frequency: String(raw?.frequency || '').trim(),
+    duration: String(raw?.duration || '').trim(),
+    fromDb: !!raw?.fromDb,
   }
 }
 
-const EMPTY = { id: '', name: '', mkb10CodesText: '', items: [{ ...EMPTY_ITEM }] }
+function composeDrug(raw) {
+  const d = drugBits(raw)
+  if (!d.name) return String(raw?.text || '').trim()
+  return [d.name, d.dosage, d.frequency, d.duration].filter(Boolean).join(' ')
+}
+
+function asSub(raw) {
+  if (typeof raw === 'string') {
+    const text = raw.trim()
+    return text ? { text } : null
+  }
+  const bits = drugBits(raw)
+  const text = bits.name ? composeDrug(bits) : String(raw?.text || '').trim()
+  if (!text) return null
+  return { ...bits, text }
+}
+
+function asItem(raw) {
+  if (typeof raw === 'string') return { text: raw, subs: [] }
+  const subs = (raw?.subs || []).map(asSub).filter(Boolean)
+  const bits = drugBits(raw)
+  const text = bits.name ? composeDrug(bits) : String(raw?.text || '')
+  return { ...bits, text, subs }
+}
+
+const EMPTY = { id: '', name: '', mkb10CodesText: '', note: '', items: [{ ...EMPTY_ITEM }] }
 
 function lineOfDrug(d) {
   return [d.name, d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(' ')
@@ -32,15 +61,14 @@ function schemeLines(scheme) {
   return lines
 }
 
-import { DRUGS } from '../../medconsult/data/catalog'
-
 function drugHits(query) {
   const q = query.trim().toLowerCase()
   if (q.length < 2) return []
   const rows = Object.values(store.getDrugInfoAll?.() || {})
+  const dbNames = new Set(rows.map((d) => String(d?.name || '').trim().toLowerCase()).filter(Boolean))
   const seen = new Set()
   const out = []
-  const take = (d) => {
+  const take = (d, fromDb) => {
     const name = String(d.name || '').trim()
     const key = name.toLowerCase()
     if (!key || seen.has(key)) return
@@ -48,10 +76,17 @@ function drugHits(query) {
     const words = `${key} ${brands}`.split(/[^a-zа-яё0-9+]+/i)
     if (!key.includes(q) && !brands.includes(q) && !words.some((w) => w.startsWith(q))) return
     seen.add(key)
-    out.push({ line: lineOfDrug(d), hint: [d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(' · ') })
+    const hit = {
+      name,
+      dosage: String(d.dosage || d.dose || '').trim(),
+      frequency: String(d.frequency || '').trim(),
+      duration: String(d.duration || '').trim(),
+      fromDb: fromDb || dbNames.has(key),
+    }
+    out.push({ ...hit, line: composeDrug(hit) })
   }
-  rows.forEach(take)
-  ;(DRUGS || []).forEach((d) => take({ name: d.name, dose: d.dose, brandNames: d.note || '' }))
+  rows.forEach((d) => take(d, true))
+  ;(DRUGS || []).forEach((d) => take({ name: d.name, dose: d.dose, brandNames: d.note || '' }, false))
   return out.slice(0, 8)
 }
 
@@ -61,6 +96,7 @@ function toForm(pack) {
     id: pack.id,
     name: pack.name || '',
     mkb10CodesText: (pack.mkb10Codes || []).join(', '),
+    note: pack.note || '',
     items: items.length ? items : [{ ...EMPTY_ITEM }],
   }
 }
@@ -85,12 +121,8 @@ export default function RecPacksTab() {
       id: form.id || undefined,
       name,
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
-      items: form.items
-        .map((it) => ({
-          text: it.text.trim(),
-          subs: (it.subs || []).map((s) => s.trim()).filter(Boolean),
-        }))
-        .filter((it) => it.text),
+      note: form.note || '',
+      items: form.items.map(asItem).filter((it) => it.text.trim() || it.name),
     })
     setForm(null)
     setSchemeQ('')
@@ -140,6 +172,12 @@ export default function RecPacksTab() {
                 onChange={(mkb10CodesText) => setForm({ ...form, mkb10CodesText })}
                 placeholder="код или название болезни"
                 label="Коды МКБ-10"
+              />
+              <textarea
+                value={form.note || ''}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+                placeholder="Примечание к пакету. В протокол попадает кнопкой «добавить все»"
+                rows={2}
               />
               <div className="settings-note-inline">Пункты пакета</div>
               {form.items.map((item, i) => (
@@ -208,30 +246,77 @@ function PackLine({ item, onChange, onRemove }) {
   const [open, setOpen] = useState(false)
   const [subDraft, setSubDraft] = useState('')
   const [subOpen, setSubOpen] = useState(false)
-  const hits = useMemo(() => (open ? drugHits(item.text) : []), [open, item.text])
+  const [editSub, setEditSub] = useState(null)
+  const query = item.name || item.text || ''
+  const hits = useMemo(() => (open ? drugHits(query) : []), [open, query])
   const subHits = useMemo(() => (subOpen ? drugHits(subDraft) : []), [subOpen, subDraft])
-  function addSub(raw) {
+  const drug = !!(item.name || item.fromDb)
+
+  function applyDrug(base, hit) {
+    return asItem({
+      ...base,
+      name: hit.name,
+      dosage: hit.dosage,
+      frequency: hit.frequency,
+      duration: hit.duration,
+      fromDb: hit.fromDb,
+      subs: base.subs || [],
+    })
+  }
+
+  function patchDrug(patch) {
+    onChange(asItem({ ...item, ...patch, subs: item.subs || [] }))
+  }
+
+  function addPlain(raw) {
     const text = raw.trim()
     if (!text) return
-    if ((item.subs || []).some((s) => s.toLowerCase() === text.toLowerCase())) return
-    onChange({ ...item, subs: [...(item.subs || []), text] })
+    if ((item.subs || []).some((s) => composeDrug(s).toLowerCase() === text.toLowerCase())) return
+    onChange({ ...item, subs: [...(item.subs || []), { text }] })
     setSubDraft('')
   }
+
+  function addDrugSub(hit) {
+    const sub = asSub(hit)
+    if (!sub) return
+    if ((item.subs || []).some((s) => composeDrug(s).toLowerCase() === sub.text.toLowerCase())) return
+    const subs = [...(item.subs || []), sub]
+    onChange({ ...item, subs })
+    setSubDraft('')
+    setSubOpen(false)
+    setEditSub(subs.length - 1)
+  }
+
+  function patchSub(si, patch) {
+    const subs = (item.subs || []).map((s, i) => (i === si ? asSub({ ...s, ...patch }) : s)).filter(Boolean)
+    onChange({ ...item, subs })
+  }
+
   return (
-    <div className="rounded-md border border-line/70 px-2 py-1">
+    <div className="pack-line">
       <div className="drug-form-row">
         <input
-          value={item.text}
+          value={drug ? item.name : item.text}
           onChange={(e) => {
-            onChange({ ...item, text: e.target.value })
+            const v = e.target.value
+            if (drug) patchDrug({ name: v })
+            else onChange({ ...item, text: v, name: '', fromDb: false })
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder="пункт, или начни название лекарства"
         />
+        {drug && <InfoDot query={item.name} />}
         <button type="button" className="remove-btn" onClick={onRemove}>×</button>
       </div>
+      {drug && (
+        <div className="pack-regimen">
+          <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
+          <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
+          <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
+        </div>
+      )}
       {open && hits.length > 0 && (
         <div className="pack-drug-hits">
           {hits.map((h) => (
@@ -240,29 +325,46 @@ function PackLine({ item, onChange, onRemove }) {
               key={h.line}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                onChange({ ...item, text: h.line })
+                onChange(applyDrug(item, h))
                 setOpen(false)
               }}
             >
-              <strong>{h.line}</strong>
-              {h.hint && h.hint !== h.line ? <span className="guideline-panel-text-muted"> {h.hint}</span> : null}
+              <strong>{h.name}</strong>
+              <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
             </button>
           ))}
         </div>
       )}
       {(item.subs || []).length > 0 && (
-        <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
-          {item.subs.map((sub, si) => (
-            <button
-              type="button"
-              key={`${sub}-${si}`}
-              className="suggestion-pill"
-              title="Убрать подпункт"
-              onClick={() => onChange({ ...item, subs: item.subs.filter((_, j) => j !== si) })}
-            >
-              {sub} ×
-            </button>
-          ))}
+        <div className="pack-subs">
+          {item.subs.map((sub, si) => {
+            const named = !!(sub.name || sub.fromDb)
+            const meta = [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
+            return (
+              <div key={`${composeDrug(sub)}-${si}`} className="pack-sub">
+                <button type="button" className="pack-sub-main" onClick={() => named && setEditSub(editSub === si ? null : si)}>
+                  <span className="pack-sub-name">{named ? sub.name : sub.text}</span>
+                  {meta && <span className="pack-drug-meta">{meta}</span>}
+                </button>
+                {named && <InfoDot query={sub.name} />}
+                <button
+                  type="button"
+                  className="pack-sub-x"
+                  title="Убрать подпункт"
+                  onClick={() => onChange({ ...item, subs: item.subs.filter((_, j) => j !== si) })}
+                >
+                  ×
+                </button>
+                {editSub === si && named && (
+                  <div className="pack-regimen">
+                    <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
+                    <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
+                    <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
       <div className="drug-form-row" style={{ marginTop: 4 }}>
@@ -277,12 +379,12 @@ function PackLine({ item, onChange, onRemove }) {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              addSub(subDraft)
+              addPlain(subDraft)
             }
           }}
-          placeholder="подпункт + Enter. В протокол попадёт выбранный подпункт"
+          placeholder="подпункт + Enter, или лекарство из базы"
         />
-        <button type="button" className="btn-secondary btn-small" onClick={() => addSub(subDraft)}>
+        <button type="button" className="btn-secondary btn-small" onClick={() => addPlain(subDraft)}>
           + подпункт
         </button>
       </div>
@@ -293,12 +395,10 @@ function PackLine({ item, onChange, onRemove }) {
               type="button"
               key={h.line}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                addSub(h.line)
-                setSubOpen(false)
-              }}
+              onClick={() => addDrugSub(h)}
             >
-              <strong>{h.line}</strong>
+              <strong>{h.name}</strong>
+              <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
             </button>
           ))}
         </div>

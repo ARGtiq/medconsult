@@ -26,9 +26,19 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
     onApply(lines || [])
   }
 
+  function subLine(raw) {
+    if (typeof raw === 'string') return raw.trim()
+    const name = String(raw?.name || '').trim()
+    if (name) return [name, raw.dosage, raw.frequency, raw.duration].filter(Boolean).join(' ')
+    return String(raw?.text || '').trim()
+  }
+
   function packItem(raw) {
     if (typeof raw === 'string') return { text: raw, subs: [] }
-    return { text: String(raw?.text || '').trim(), subs: (raw?.subs || []).map((s) => String(s).trim()).filter(Boolean) }
+    const subs = (raw?.subs || [])
+      .map((s) => (typeof s === 'string' ? { text: s.trim() } : s))
+      .filter((s) => subLine(s))
+    return { text: subLine(raw), subs }
   }
 
   function PackBody({ pack }) {
@@ -39,6 +49,9 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
         {(pack.mkb10Codes || []).length > 0 && (
           <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>
         )}
+        {(pack.note || '').trim() && (
+          <div className="guideline-panel-text-muted">{pack.note}</div>
+        )}
         {rows.map((item) => (
           <div key={item.text} style={{ marginTop: 6 }}>
             <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => addLines([item.text])}>
@@ -46,26 +59,32 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
             </button>
             {item.subs.length > 0 && (
               <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
-                {item.subs.map((sub) => (
+                {item.subs.map((sub) => {
+                  const line = subLine(sub)
+                  const name = typeof sub === 'string' ? '' : String(sub.name || '').trim()
+                  const meta = typeof sub === 'string' ? '' : [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
+                  return (
                   <button
                     type="button"
-                    key={sub}
+                    key={line}
                     className="suggestion-pill"
                     title="В протокол попадёт этот подпункт"
-                    onClick={() => addLines([sub])}
+                    onClick={() => addLines([line])}
                   >
-                    + {sub}
+                    + {name || line}
+                    {meta ? <span className="pack-drug-meta">{meta}</span> : null}
                   </button>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
         ))}
-        {rows.length > 1 && (
+        {(rows.length > 1 || rows.some((it) => it.subs.length) || (pack.note || '').trim()) && (
           <button
             type="button"
             className="btn-secondary btn-small"
-            onClick={() => addLines(rows.flatMap((it) => (it.subs.length ? it.subs : [it.text])))}
+            onClick={() => addLines([...(rows.flatMap((it) => (it.subs.length ? it.subs.map(subLine) : [it.text]))), (pack.note || '').trim()].filter(Boolean))}
           >
             добавить все
           </button>
