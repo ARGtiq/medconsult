@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { store } from '../lib/store'
 import { extractCodesFromText, getAllMkb10 } from '../data/mkb10'
+import { rxText } from '../lib/rx'
 
 function codeHits(packCodes, diagnosisCodes) {
   return (packCodes || []).some((raw) => {
@@ -29,10 +30,7 @@ export function packsForDiagnosis(diagnosisText) {
 }
 
 function subLine(raw) {
-  if (typeof raw === 'string') return raw.trim()
-  const name = String(raw?.name || '').trim()
-  if (name) return [name, raw.dosage, raw.frequency, raw.duration].filter(Boolean).join(' ')
-  return String(raw?.text || '').trim()
+  return rxText(raw)
 }
 
 function packItem(raw) {

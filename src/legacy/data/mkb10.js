@@ -1,4 +1,6 @@
 
+import { asMkb } from '../lib/rx'
+
 function _ls() {
   if (typeof window === "undefined") {
     const mem = globalThis.__medconsultMemLS || (globalThis.__medconsultMemLS = {});
@@ -361,7 +363,7 @@ export function removeCustomCode(code) {
 }
 
 export function getAllMkb10() {
-  return [...MKB10_SEED, ...getCustomCodes()]
+  return [...MKB10_SEED, ...getCustomCodes()].map(asMkb).filter((c) => c.code)
 }
 
 export function searchMkb10(query) {

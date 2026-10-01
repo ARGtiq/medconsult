@@ -5,6 +5,7 @@ import { DRUGS } from '../../medconsult/data/catalog'
 import { InfoDot } from '../../medconsult/DrugInfo'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { StudyDepends } from './DrugsTab'
+import { rxText } from '../lib/rx'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
@@ -20,8 +21,8 @@ function drugBits(raw) {
 
 function composeDrug(raw) {
   const d = drugBits(raw)
-  if (!d.name) return String(raw?.text || '').trim()
-  return [d.name, d.dosage, d.frequency, d.duration].filter(Boolean).join(' ')
+  if (!String(d.name || '').trim()) return String(raw?.text || '').trim()
+  return rxText(d)
 }
 
 function asSub(raw) {
@@ -46,7 +47,7 @@ function asItem(raw) {
 const EMPTY = { id: '', name: '', category: '', mkb10CodesText: '', note: '', items: [{ ...EMPTY_ITEM }] }
 
 function lineOfDrug(d) {
-  return [d.name, d.dosage || d.dose, d.frequency, d.duration].filter(Boolean).join(' ')
+  return rxText(d)
 }
 
 function schemeLines(scheme) {

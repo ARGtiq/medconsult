@@ -1,3 +1,4 @@
+import { rxText } from "@/legacy/lib/rx";
 import { store } from "@/legacy/lib/store";
 import { explicitChips } from "@/legacy/lib/guidelineChips";
 import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
@@ -504,12 +505,7 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
   } catch {
     packs = [];
   }
-  const lineOf = (raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string } | string) => {
-    if (typeof raw === "string") return raw.trim();
-    const name = String(raw?.name || "").trim();
-    if (name) return [name, raw.dosage, raw.frequency, raw.duration].filter(Boolean).join(" ");
-    return String(raw?.text || "").trim();
-  };
+  const lineOf = (raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; dose?: string } | string) => rxText(raw);
   for (const pack of packs) {
     const packHits = triggerWhy(pack.studyTriggers, entries);
     for (const item of pack.items || []) {
@@ -559,13 +555,8 @@ function overlayComputed(def: StudyDef): StudyDef {
   return { ...def, fields: [...byKey.values()] };
 }
 
-export function drugLine(d: { name: string; dose?: string; dosage?: string; frequency?: string; duration?: string }) {
-  const structured = [d.dosage, d.frequency, d.duration].map((s) => (s || "").trim()).filter(Boolean);
-  const scheme = structured.length ? structured.join(" ") : (d.dose || "").trim();
-  const name = (d.name || "").trim();
-  if (!name) return scheme;
-  if (scheme && scheme.toLowerCase().startsWith(name.toLowerCase())) return scheme;
-  return [name, scheme].filter(Boolean).join(" ");
+export function drugLine(d: { name: string; dose?: string; dosage?: string; frequency?: string; duration?: string; text?: string }) {
+  return rxText(d);
 }
 
 export type DrugRecord = {

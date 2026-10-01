@@ -1,5 +1,6 @@
 import { readClinicalSync, writeClinicalSync } from './clinicalLock'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
+import { asDrug, asPack, asScheme, asStudy, rxText } from './rx'
 
 function normalizeMkbCodes(value) {
   const raw = Array.isArray(value) ? value : [value]
@@ -874,14 +875,19 @@ export const store = {
 
   // --- база лекарств (дозировка/кратность/побочки) ---
   getDrugInfoAll() {
-    return readAll().drugDatabase
+    const db = readAll().drugDatabase || {}
+    const out = {}
+    Object.entries(db).forEach(([key, drug]) => {
+      out[key] = asDrug(drug)
+    })
+    return out
   },
 
   // Карточки, созданные "на скорую руку" (напр. автоматически при добавлении
   // в "принимает сейчас") — есть только название, ни дозы, ни группы. Для
   // напоминания на главной странице.
   getEmptyDrugEntries() {
-    return Object.values(readAll().drugDatabase).filter(
+    return Object.values(this.getDrugInfoAll()).filter(
       (d) => !d.dosage && !d.frequency && !d.duration && !d.group
     )
   },
@@ -900,7 +906,9 @@ export const store = {
     Object.values(custom).forEach((s) => {
       byKey[s.key] = s
     })
-    return Object.values(byKey).filter((s) => !hidden.has(s.key))
+    return Object.values(byKey)
+      .map(asStudy)
+      .filter((s) => s && !hidden.has(s.key))
   },
 
   getHiddenStudies() {
@@ -1006,7 +1014,7 @@ export const store = {
 
   // --- схемы лечения (самостоятельные, не привязаны к коду МКБ) ---
   getTreatmentSchemes() {
-    return Object.values(readAll().treatmentSchemes || {})
+    return Object.values(readAll().treatmentSchemes || {}).map(asScheme)
   },
 
   saveTreatmentScheme(scheme) {
@@ -1028,11 +1036,11 @@ export const store = {
   searchTreatmentSchemes(query) {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    return Object.values(readAll().treatmentSchemes || {}).filter(
+    return this.getTreatmentSchemes().filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.category || '').toLowerCase().includes(q) ||
-        (s.tags || []).some((t) => t.toLowerCase().includes(q))
+        (s.tags || []).some((t) => t.toLowerCase().includes(q)),
     )
   },
 
@@ -1040,18 +1048,16 @@ export const store = {
   getDrugsForMkbCode(code) {
     const norm = String(code || '').trim().toUpperCase()
     if (!norm) return []
-    return Object.values(readAll().drugDatabase || {}).filter((d) => normalizeMkbCodes(d.mkb10Codes).includes(norm))
+    return Object.values(this.getDrugInfoAll()).filter((d) => normalizeMkbCodes(d.mkb10Codes).includes(norm))
   },
 
   getTreatmentSchemesForMkbCode(code) {
     const norm = code.trim().toUpperCase()
-    return Object.values(readAll().treatmentSchemes || {}).filter((s) =>
-      (s.mkb10Codes || []).some((c) => c.trim().toUpperCase() === norm)
-    )
+    return this.getTreatmentSchemes().filter((s) => (s.mkb10Codes || []).some((c) => c.trim().toUpperCase() === norm))
   },
 
   getRecommendationPacks() {
-    return Object.values(readAll().recommendationPacks || {})
+    return Object.values(readAll().recommendationPacks || {}).map(asPack)
   },
 
   saveRecommendationPack(pack) {
@@ -1078,7 +1084,7 @@ export const store = {
             const sd = String(s?.dosage || '').trim()
             const sf = String(s?.frequency || '').trim()
             const su = String(s?.duration || '').trim()
-            const text = sn ? [sn, sd, sf, su].filter(Boolean).join(' ') : String(s?.text || '').trim()
+            const text = sn ? rxText({ name: sn, dosage: sd, frequency: sf, duration: su }) : String(s?.text || '').trim()
             if (!text) return null
             return {
               text,
@@ -1091,7 +1097,7 @@ export const store = {
             }
           })
           .filter(Boolean)
-        const text = name ? [name, dosage, frequency, duration].filter(Boolean).join(' ') : String(raw?.text || '').trim()
+        const text = name ? rxText({ name, dosage, frequency, duration }) : String(raw?.text || '').trim()
         if (!text) return null
         return {
           text,
@@ -1150,8 +1156,8 @@ export const store = {
   },
 
   getDrugInfo(name) {
-    const state = readAll()
-    return state.drugDatabase[name.trim().toLowerCase()] || null
+    const found = readAll().drugDatabase[name.trim().toLowerCase()]
+    return found ? asDrug(found) : null
   },
 
   saveDrugInfo(info) {
