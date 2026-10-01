@@ -961,6 +961,23 @@
   border-radius: 6px;
   font-size: 13px;
 }
+.legacy-surface .pack-spoiler-list { display: flex; flex-direction: column; gap: 4px; min-width: 220px; flex: 1; }
+.legacy-surface .pack-spoiler { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.legacy-surface .pack-spoiler.is-pinned { border-color: var(--teal); background: var(--teal-soft, #e8f2ee); }
+.legacy-surface .pack-spoiler-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: 650;
+}
+.legacy-surface .pack-spoiler-body { padding: 0 8px 8px; }
 .legacy-surface .pack-sub-x {
   border: none;
   background: none;

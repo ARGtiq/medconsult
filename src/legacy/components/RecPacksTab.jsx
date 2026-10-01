@@ -9,7 +9,7 @@ const EMPTY_ITEM = { text: '', subs: [] }
 
 function drugBits(raw) {
   return {
-    name: String(raw?.name || '').trim(),
+    name: String(raw?.name ?? ''),
     dosage: String(raw?.dosage || '').trim(),
     frequency: String(raw?.frequency || '').trim(),
     duration: String(raw?.duration || '').trim(),

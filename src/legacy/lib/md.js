@@ -6,6 +6,39 @@ export function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
+function renderLists(src) {
+  const lines = String(src).split('\n')
+  const out = []
+  let buf = []
+  const flush = () => {
+    if (!buf.length) return
+    const items = []
+    buf.forEach((row) => {
+      if (!row.sub) items.push({ text: row.text, kids: [] })
+      else if (items.length) items[items.length - 1].kids.push(row.text)
+      else items.push({ text: row.text, kids: [] })
+    })
+    out.push(
+      `<ul>${items
+        .map((it) => `<li>${it.text}${it.kids.length ? `<ul>${it.kids.map((k) => `<li>${k}</li>`).join('')}</ul>` : ''}</li>`)
+        .join('')}</ul>`,
+    )
+    buf = []
+  }
+  lines.forEach((line) => {
+    const sub = line.match(/^\s{2,}[-*] (.+)$/)
+    const top = !sub && line.match(/^[-*] (.+)$/)
+    if (sub) buf.push({ sub: true, text: sub[1] })
+    else if (top) buf.push({ sub: false, text: top[1] })
+    else {
+      flush()
+      out.push(line)
+    }
+  })
+  flush()
+  return out.join('\n')
+}
+
 export function mdToHtml(src) {
   if (!src || !String(src).trim()) return ''
   let s = escapeHtml(src)
@@ -16,8 +49,7 @@ export function mdToHtml(src) {
   s = s.replace(/__(.+?)__/g, '<strong>$1</strong>')
   s = s.replace(/(^|[^*])\*(?!\*)(.+?)\*(?!\*)/g, '$1<em>$2</em>')
   s = s.replace(/`(.+?)`/g, '<code>$1</code>')
-  s = s.replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
-  s = s.replace(/(?:<li>.*<\/li>\n?)+/g, (block) => `<ul>${block.replace(/\n/g, '')}</ul>`)
+  s = renderLists(s)
   s = s.replace(/\n+(?=<ul>|<h[234]>)/g, '')
   s = s.replace(/(<\/ul>|<\/h[234]>)\n+/g, '$1')
   s = s.replace(/\n{2,}/g, '</p><p>')
