@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { lookupDrug, type DrugCardInfo } from "./drugLookup";
 import { useAppStore } from "./store";
+import DrugsTab from "@/legacy/components/DrugsTab";
 
 export function InfoDot({ query, className = "" }: { query: string; className?: string }) {
   const hoverOn = useAppStore((s) => s.settings.infoOnHover);
@@ -81,6 +82,7 @@ export function DrugInfoModal() {
   const query = useAppStore((s) => s.drugInfoQuery);
   const close = useAppStore((s) => s.closeDrugInfo);
   const info = query ? lookupDrug(query) : null;
+  const [editName, setEditName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!query) return;
@@ -94,44 +96,66 @@ export function DrugInfoModal() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [query, close]);
 
-  if (!query || typeof document === "undefined") return null;
+  if (typeof document === "undefined") return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[600] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
-      onClick={close}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="drug-info-title"
-        className="max-h-[85vh] w-full max-w-md overflow-auto rounded-xl border border-line bg-surface p-3 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-2 flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] tracking-wide text-mute uppercase">препарат</div>
-            <h3 id="drug-info-title" className="font-display text-lg leading-tight">
-              {info?.name || query}
-            </h3>
-          </div>
-          <button
-            type="button"
+  return (
+    <>
+      {query &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[600] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
             onClick={close}
-            className="flex size-8 items-center justify-center rounded-md text-mute hover:bg-paper"
-            aria-label="Закрыть"
+            role="presentation"
           >
-            <X className="size-4" />
-          </button>
-        </div>
-        {info ? (
-          <Card info={info} />
-        ) : (
-          <p className="text-sm text-ink-soft">В базе и справочнике ничего нет — только название.</p>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="drug-info-title"
+              className="max-h-[85vh] w-full max-w-md overflow-auto rounded-xl border border-line bg-surface p-3 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-2 flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] tracking-wide text-mute uppercase">препарат</div>
+                  <h3 id="drug-info-title" className="font-display text-lg leading-tight">
+                    {info?.name || query}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-xs text-teal hover:bg-paper"
+                  onClick={() => {
+                    setEditName(info?.name || query);
+                    close();
+                  }}
+                >
+                  редактировать
+                </button>
+                <button
+                  type="button"
+                  onClick={close}
+                  className="flex size-8 items-center justify-center rounded-md text-mute hover:bg-paper"
+                  aria-label="Закрыть"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              {info ? (
+                <Card info={info} />
+              ) : (
+                <p className="text-sm text-ink-soft">В базе и справочнике ничего нет — только название.</p>
+              )}
+            </div>
+          </div>,
+          document.body,
         )}
-      </div>
-    </div>,
-    document.body,
+      {editName &&
+        createPortal(
+          <div className="legacy-surface">
+            <DrugsTab editorOnly initialItemId={editName} onClose={() => setEditName(null)} />
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }

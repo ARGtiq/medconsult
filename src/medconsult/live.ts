@@ -409,6 +409,31 @@ export type StudyDrugHint = {
   why: string;
 };
 
+function triggerWhy(
+  triggers: { studyKeys?: string[]; fieldKeys?: string[] }[] | undefined,
+  entries: StudyEntry[],
+): string[] {
+  const hits: string[] = [];
+  for (const trigger of triggers || []) {
+    const studyKeys = new Set((trigger.studyKeys || []).map(String));
+    const fieldKeys = new Set((trigger.fieldKeys || []).map(String));
+    if (!studyKeys.size || !fieldKeys.size) continue;
+    for (const entry of entries || []) {
+      if (!studyKeys.has(entry.key)) continue;
+      const def = getStudyLive(entry.key);
+      const inst = entry.instances?.[entry.instances.length - 1];
+      if (!def || !inst) continue;
+      for (const field of def.fields || []) {
+        if (!fieldKeys.has(field.key)) continue;
+        const val = inst.fields?.[field.key] || "";
+        if (!indicatorHit(val, field, inst.fields || {})) continue;
+        hits.push(`${def.label}: ${field.label} ${val.trim()}`);
+      }
+    }
+  }
+  return hits;
+}
+
 /** Drug cards whose selected indicators came back positive on this visit. */
 export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
   let drugs: {
@@ -466,6 +491,43 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
             duration: drug.duration,
           });
       out.push({ id: `${drug.name}|${hits.join("|")}`, name: drug.name, line, why: hits.join("; ") });
+    }
+  }
+  let packs: {
+    id?: string;
+    name?: string;
+    studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[]; timesPerDay?: string; days?: string; note?: string }[];
+    items?: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[] }[]; subs?: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[] }[] }[] }[];
+  }[] = [];
+  try {
+    packs = store.getRecommendationPacks() || [];
+  } catch {
+    packs = [];
+  }
+  const lineOf = (raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string } | string) => {
+    if (typeof raw === "string") return raw.trim();
+    const name = String(raw?.name || "").trim();
+    if (name) return [name, raw.dosage, raw.frequency, raw.duration].filter(Boolean).join(" ");
+    return String(raw?.text || "").trim();
+  };
+  for (const pack of packs) {
+    const packHits = triggerWhy(pack.studyTriggers, entries);
+    for (const item of pack.items || []) {
+      const itemHits = triggerWhy(item.studyTriggers, entries);
+      const why = [...packHits, ...itemHits];
+      if (why.length) {
+        const subs = (item.subs || []).map(lineOf).filter(Boolean);
+        const head = lineOf(item);
+        const line = subs.length ? [`* ${head}`, ...subs.map((s) => `  * ${s}`)].join("\n") : head;
+        if (line) out.push({ id: `${pack.id}|${line}`, name: pack.name || head, line, why: why.join("; ") });
+      }
+      for (const sub of item.subs || []) {
+        const subHits = triggerWhy(sub.studyTriggers, entries);
+        if (!subHits.length) continue;
+        const line = lineOf(sub);
+        if (!line) continue;
+        out.push({ id: `${pack.id}|sub|${line}`, name: pack.name || line, line, why: subHits.join("; ") });
+      }
     }
   }
   return out;

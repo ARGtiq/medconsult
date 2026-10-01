@@ -106,6 +106,7 @@ function PackSpoiler({ pack, pinned, onApply }) {
 }
 
 export default function RecPackSearch({ diagnosisText, onApply }) {
+  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const matching = useMemo(() => packsForDiagnosis(diagnosisText), [diagnosisText])
   const ordered = useMemo(() => {
@@ -119,25 +120,54 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
     const rest = filtered.filter((p) => !hitIds.has(p.id))
     const rank = new Map(matching.map((p, i) => [p.id, i]))
     pinned.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
-    return { pinned, rest }
+    const groups = new Map()
+    rest.forEach((p) => {
+      const key = (p.category || '').trim() || 'без категории'
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(p)
+    })
+    const cats = [...groups.keys()].sort((a, b) => (a === 'без категории' ? 1 : b === 'без категории' ? -1 : a.localeCompare(b, 'ru')))
+    return { pinned, cats: cats.map((name) => ({ name, packs: groups.get(name) })) }
   }, [diagnosisText, matching, query])
 
+  if (!open) {
+    return (
+      <button type="button" className="scheme-search-trigger" onClick={() => setOpen(true)}>
+        Пакеты рекомендаций
+        {matching.length > 0 && (
+          <span className="scheme-match-badge" title={matching.map((p) => p.name).join(', ')}>
+            есть подходящий: {matching[0].name}
+          </span>
+        )}
+      </button>
+    )
+  }
+
   return (
-    <div className="pack-spoiler-list">
-      <input
-        className="scheme-search-input"
-        placeholder="пакеты рекомендаций"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      {ordered.pinned.length === 0 && ordered.rest.length === 0 && (
+    <div className="scheme-search-block pack-spoiler-list">
+      <div className="scheme-search-header">
+        <input
+          autoFocus
+          className="scheme-search-input"
+          placeholder="название, категория или код"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="button" className="modal-close" onClick={() => setOpen(false)}>×</button>
+      </div>
+      {ordered.pinned.length === 0 && ordered.cats.length === 0 && (
         <p className="empty-hint">Пакетов нет. Их заводят в Назначения → пакеты.</p>
       )}
       {ordered.pinned.map((p) => (
         <PackSpoiler key={p.id} pack={p} pinned onApply={onApply} />
       ))}
-      {ordered.rest.map((p) => (
-        <PackSpoiler key={p.id} pack={p} onApply={onApply} />
+      {ordered.cats.map((g) => (
+        <div key={g.name}>
+          <div className="pack-spoiler-cat">{g.name}</div>
+          {g.packs.map((p) => (
+            <PackSpoiler key={p.id} pack={p} onApply={onApply} />
+          ))}
+        </div>
       ))}
     </div>
   )

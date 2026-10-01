@@ -4,6 +4,7 @@ import Mkb10CodesInput from './Mkb10CodesInput'
 import { DRUGS } from '../../medconsult/data/catalog'
 import { InfoDot } from '../../medconsult/DrugInfo'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import { StudyDepends } from './DrugsTab'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
@@ -31,7 +32,7 @@ function asSub(raw) {
   const bits = drugBits(raw)
   const text = bits.name ? composeDrug(bits) : String(raw?.text || '').trim()
   if (!text) return null
-  return { ...bits, text }
+  return { ...bits, text, studyTriggers: raw.studyTriggers || [] }
 }
 
 function asItem(raw) {
@@ -39,7 +40,7 @@ function asItem(raw) {
   const subs = (raw?.subs || []).map(asSub).filter(Boolean)
   const bits = drugBits(raw)
   const text = bits.name ? composeDrug(bits) : String(raw?.text || '')
-  return { ...bits, text, subs }
+  return { ...bits, text, subs, studyTriggers: raw.studyTriggers || [] }
 }
 
 const EMPTY = { id: '', name: '', category: '', mkb10CodesText: '', note: '', items: [{ ...EMPTY_ITEM }] }
@@ -131,7 +132,7 @@ function linkPackDrugs(pack) {
   })
   wanted.forEach((row) => {
     const prev = store.getDrugInfo(row.name)
-    const ref = { packId: pack.id, packName: pack.name, title: row.title }
+    const ref = { packId: pack.id, packName: pack.name, title: row.title, dosage: row.dosage, frequency: row.frequency, duration: row.duration }
     if (!prev) {
       if (!row.frequency && !row.dosage && !row.duration) return
       store.saveDrugInfo({
@@ -172,6 +173,7 @@ function toForm(pack) {
     category: pack.category || '',
     mkb10CodesText: (pack.mkb10Codes || []).join(', '),
     note: pack.note || '',
+    studyTriggers: pack.studyTriggers || [],
     items: items.length ? items : [{ ...EMPTY_ITEM }],
   }
 }
@@ -199,6 +201,7 @@ export default function RecPacksTab() {
       category: (form.category || '').trim(),
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
       note: form.note || '',
+      studyTriggers: form.studyTriggers || [],
       items: form.items.map(asItem).filter((it) => it.text.trim() || it.name),
     })
     const saved = store.getRecommendationPacks().find((p) => p.id === id)
@@ -295,6 +298,10 @@ export default function RecPacksTab() {
                 placeholder="Примечание к пакету. В протокол попадает кнопкой «добавить все»"
                 minRows={2}
               />
+              <QuietDepends
+                triggers={form.studyTriggers || []}
+                onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
+              />
               <div className="settings-note-inline">Пункты пакета</div>
               {form.items.map((item, i) => (
                 <PackLine
@@ -354,6 +361,19 @@ export default function RecPacksTab() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function QuietDepends({ triggers, onChange }) {
+  const [open, setOpen] = useState(false)
+  const has = (triggers || []).some((t) => (t.studyKeys || []).length)
+  return (
+    <div className="pack-depend">
+      <button type="button" className="pack-depend-btn" onClick={() => setOpen((v) => !v)}>
+        {has ? 'зависимость от исследований' : '+зависимость от исследований'}
+      </button>
+      {open && <StudyDepends quiet triggers={triggers || []} onChange={onChange} />}
     </div>
   )
 }
@@ -446,6 +466,7 @@ function PackLine({ item, onChange, onRemove }) {
           <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
         </div>
       )}
+      <QuietDepends triggers={item.studyTriggers || []} onChange={(studyTriggers) => onChange({ ...item, studyTriggers })} />
       {open && hits.length > 0 && (
         <div className="pack-drug-hits">
           {hits.map((h) => (
@@ -501,6 +522,7 @@ function PackLine({ item, onChange, onRemove }) {
                     </div>
                   </>
                 )}
+                <QuietDepends triggers={sub.studyTriggers || []} onChange={(studyTriggers) => patchSub(si, { studyTriggers })} />
               </div>
             )
           })}

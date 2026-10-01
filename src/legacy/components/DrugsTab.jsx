@@ -40,6 +40,28 @@ function blankRegimen() {
   return { label: '', dosage: '', frequency: '', duration: '' }
 }
 
+function regimenPacks(refs, regimen, onlyOne) {
+  const norm = (v) => String(v || '').trim().toLowerCase()
+  const names = []
+  ;(refs || []).forEach((ref) => {
+    const pack = String(ref.packName || '').trim()
+    if (!pack) return
+    const hasScheme = ref.dosage || ref.frequency || ref.duration
+    if (!hasScheme) {
+      if (onlyOne) names.push(pack)
+      return
+    }
+    if (
+      norm(ref.dosage) === norm(regimen.dosage) &&
+      norm(ref.frequency) === norm(regimen.frequency) &&
+      norm(ref.duration) === norm(regimen.duration)
+    ) {
+      names.push(pack)
+    }
+  })
+  return [...new Set(names)].join(', ')
+}
+
 function packRefCaption(refs, drugName) {
   const clean = (refs || [])
     .map((r) => ({ pack: String(r.packName || '').trim(), title: String(r.title || '').trim() }))
@@ -66,10 +88,11 @@ function blankTrigger() {
   return { studyKeys: [], fieldKeys: [], timesPerDay: '', days: '', note: '' }
 }
 
-function StudyDepends({ triggers, onChange }) {
+export function StudyDepends({ triggers, onChange, quiet = false }) {
   const studies = catalogStudies()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  const [openKey, setOpenKey] = useState('')
   const list = triggers.length ? triggers : [blankTrigger()]
 
   function commit(next) {
@@ -100,18 +123,13 @@ function StudyDepends({ triggers, onChange }) {
 
   return (
     <div className="drug-trigger-block">
-      <div className="scenarios-block-label">Зависимость от исследования</div>
-      <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>
+      {!quiet && <div className="scenarios-block-label">Зависимость от исследования</div>}
+      {!quiet && <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>}
       {list.map((t, i) => {
         const picked = studies.filter((s) => (t.studyKeys || []).includes(s.key))
         return (
           <div key={i} className="drug-trigger-card">
             <div className="drug-trigger-fields">
-              {picked.map((s) => (
-                <button type="button" key={s.key} className="study-field-opt is-ref" onClick={() => toggleStudy(i, s.key)}>
-                  {s.label} ×
-                </button>
-              ))}
               <input
                 placeholder="исследование, например ПЦР"
                 value={active === i ? query : ''}
@@ -149,26 +167,38 @@ function StudyDepends({ triggers, onChange }) {
                 ))}
               </div>
             )}
-            {picked.map((s) => (
-              <div key={s.key}>
-                <p className="guideline-panel-text-muted">{s.label}</p>
-                <div className="guideline-complaint-suggestions">
-                  {(s.fields || []).map((f) => {
-                    const on = (t.fieldKeys || []).includes(f.key)
-                    return (
-                      <button
-                        type="button"
-                        key={f.key}
-                        className={`study-field-opt${on ? ' is-ref' : ''}`}
-                        onClick={() => toggleField(i, f.key)}
-                      >
-                        {f.label}
-                      </button>
-                    )
-                  })}
+            {picked.map((s) => {
+              const selected = (s.fields || []).filter((f) => (t.fieldKeys || []).includes(f.key))
+              const opened = openKey === `${i}:${s.key}`
+              return (
+                <div key={s.key} className="drug-trigger-study">
+                  <button type="button" className="drug-trigger-study-name" onClick={() => setOpenKey(opened ? '' : `${i}:${s.key}`)}>
+                    {s.label}
+                  </button>
+                  {!opened && selected.length > 0 && (
+                    <span className="drug-trigger-quiet">{selected.map((f) => f.label).join(', ')}</span>
+                  )}
+                  <button type="button" className="pack-sub-x" title="Убрать исследование" onClick={() => toggleStudy(i, s.key)}>×</button>
+                  {opened && (
+                    <div className="guideline-complaint-suggestions">
+                      {(s.fields || []).map((f) => {
+                        const on = (t.fieldKeys || []).includes(f.key)
+                        return (
+                          <button
+                            type="button"
+                            key={f.key}
+                            className={`study-field-opt${on ? ' is-ref' : ''}`}
+                            onClick={() => toggleField(i, f.key)}
+                          >
+                            {f.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
             <div className="drug-trigger-fields">
               <input
                 placeholder="приёмов в день"
@@ -210,7 +240,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
   const [form, setForm] = useState(() => {
     const preset = initialItemId ? store.getDrugInfo(initialItemId) : null
-    return preset ? { ...blankForm(), ...preset } : blankForm()
+    if (!preset) return { ...blankForm(), name: initialItemId || '' }
+    return { ...blankForm(), ...preset, regimens: regimensFromDrug(preset) }
   })
   const [formOpen, setFormOpen] = useState(!!initialItemId)
   const [instructionText, setInstructionText] = useState('')
@@ -424,6 +455,9 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
                   <button type="button" className="remove-btn" onClick={() => removeRegimen(idx)}>×</button>
                 )}
               </div>
+              {regimenPacks(form.packRefs, r, form.regimens.length === 1) && (
+                <p className="drug-pack-refs">{regimenPacks(form.packRefs, r, form.regimens.length === 1)}</p>
+              )}
             </div>
           ))}
           <button type="button" className="btn-secondary btn-small" onClick={addRegimen}>+ Ещё схема приёма</button>

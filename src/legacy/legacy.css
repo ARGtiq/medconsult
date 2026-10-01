@@ -973,11 +973,37 @@
   text-align: left;
   background: none;
   border: none;
-  padding: 6px 8px;
+  padding: 3px 8px;
   cursor: pointer;
-  font-weight: 650;
+  font-size: 12.5px;
+  font-weight: 600;
 }
-.legacy-surface .pack-spoiler-body { padding: 0 8px 8px; }
+.legacy-surface .pack-spoiler-body { padding: 0 8px 6px; }
+.legacy-surface .pack-spoiler-cat {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  color: #8b909a;
+}
+.legacy-surface .pack-depend { margin-top: 2px; }
+.legacy-surface .pack-depend-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #8b909a;
+  font-size: 11px;
+  cursor: pointer;
+}
+.legacy-surface .drug-trigger-study { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.legacy-surface .drug-trigger-study-name {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.legacy-surface .drug-trigger-quiet { font-size: 11px; color: #8b909a; }
 .legacy-surface .pack-sub-x {
   border: none;
   background: none;

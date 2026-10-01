@@ -215,6 +215,18 @@ function defaultState() {
   }
 }
 
+function cleanStudyTriggers(list) {
+  return (list || [])
+    .map((t) => ({
+      studyKeys: (t?.studyKeys || []).map(String).filter(Boolean),
+      fieldKeys: (t?.fieldKeys || []).map(String).filter(Boolean),
+      timesPerDay: String(t?.timesPerDay || '').trim(),
+      days: String(t?.days || '').trim(),
+      note: String(t?.note || '').trim(),
+    }))
+    .filter((t) => t.studyKeys.length && t.fieldKeys.length)
+}
+
 function slugifyGroupKey(label) {
   return (
     (label || '')
@@ -1068,12 +1080,29 @@ export const store = {
             const su = String(s?.duration || '').trim()
             const text = sn ? [sn, sd, sf, su].filter(Boolean).join(' ') : String(s?.text || '').trim()
             if (!text) return null
-            return { text, name: sn, dosage: sd, frequency: sf, duration: su, fromDb: !!s?.fromDb }
+            return {
+              text,
+              name: sn,
+              dosage: sd,
+              frequency: sf,
+              duration: su,
+              fromDb: !!s?.fromDb,
+              studyTriggers: cleanStudyTriggers(s?.studyTriggers),
+            }
           })
           .filter(Boolean)
         const text = name ? [name, dosage, frequency, duration].filter(Boolean).join(' ') : String(raw?.text || '').trim()
         if (!text) return null
-        return { text, name, dosage, frequency, duration, fromDb: !!raw?.fromDb, subs }
+        return {
+          text,
+          name,
+          dosage,
+          frequency,
+          duration,
+          fromDb: !!raw?.fromDb,
+          subs,
+          studyTriggers: cleanStudyTriggers(raw?.studyTriggers),
+        }
       })
       .filter(Boolean)
     const mkb10Codes = (pack.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
@@ -1083,6 +1112,7 @@ export const store = {
       name: String(pack.name || '').trim(),
       category: String(pack.category || '').trim(),
       note: String(pack.note || '').trim(),
+      studyTriggers: cleanStudyTriggers(pack.studyTriggers),
       items,
       mkb10Codes,
       updatedAt: Date.now(),
