@@ -46,6 +46,9 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
     return (
       <div className="scheme-search-result">
         <div className="scheme-search-result-title">{pack.name}</div>
+        {(pack.category || '').trim() && (
+          <div className="guideline-panel-text-muted">{pack.category}</div>
+        )}
         {(pack.mkb10Codes || []).length > 0 && (
           <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>
         )}

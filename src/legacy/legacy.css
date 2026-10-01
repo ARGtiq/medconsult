@@ -953,6 +953,14 @@
   text-align: left;
 }
 .legacy-surface .pack-sub-name { font-size: 13px; }
+.legacy-surface .pack-sub-main.is-on { border-color: var(--teal); }
+.legacy-surface .pack-sub-edit {
+  flex-basis: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
 .legacy-surface .pack-sub-x {
   border: none;
   background: none;

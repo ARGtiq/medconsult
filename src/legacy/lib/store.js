@@ -1081,6 +1081,7 @@ export const store = {
       ...pack,
       id,
       name: String(pack.name || '').trim(),
+      category: String(pack.category || '').trim(),
       note: String(pack.note || '').trim(),
       items,
       mkb10Codes,
@@ -1104,6 +1105,7 @@ export const store = {
     return this.getRecommendationPacks().filter(
       (p) =>
         (p.name || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q) ||
         (p.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)) ||
         (p.note || '').toLowerCase().includes(q) ||
         (p.items || []).some((t) => {
