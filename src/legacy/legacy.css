@@ -933,6 +933,14 @@
 }
 .legacy-surface .pack-subs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .legacy-surface .pack-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.legacy-surface .pack-sub .pack-regimen { flex-basis: 100%; }
+.legacy-surface .drug-pack-refs {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #8b909a;
+  font-weight: 400;
+}
 .legacy-surface .pack-sub-main {
   display: inline-flex;
   align-items: baseline;

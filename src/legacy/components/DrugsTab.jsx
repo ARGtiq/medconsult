@@ -40,6 +40,18 @@ function blankRegimen() {
   return { label: '', dosage: '', frequency: '', duration: '' }
 }
 
+function packRefCaption(refs, drugName) {
+  const clean = (refs || [])
+    .map((r) => ({ pack: String(r.packName || '').trim(), title: String(r.title || '').trim() }))
+    .filter((r) => r.pack)
+  if (!clean.length) return ''
+  const useless = (title) => !title || title.toLowerCase() === String(drugName || '').trim().toLowerCase()
+  const titles = [...new Set(clean.map((r) => r.title))]
+  if (titles.length === 1 && useless(titles[0])) return [...new Set(clean.map((r) => r.pack))].join(', ')
+  if (titles.length === 1) return `${[...new Set(clean.map((r) => r.pack))].join(', ')} — ${titles[0]}`
+  return [...new Set(clean.map((r) => (useless(r.title) || r.title.toLowerCase() === r.pack.toLowerCase() ? r.pack : `${r.pack} — ${r.title}`)))].join(', ')
+}
+
 function catalogStudies() {
   const live = store.getAllStudies() || []
   const hidden = new Set(store.getHiddenStudies() || [])
@@ -348,7 +360,12 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{form.name ? `Редактировать: ${form.name}` : 'Новый препарат'}</h3>
+              <div>
+                <h3>{form.name ? `Редактировать: ${form.name}` : 'Новый препарат'}</h3>
+                {packRefCaption(form.packRefs, form.name) && (
+                  <p className="drug-pack-refs">{packRefCaption(form.packRefs, form.name)}</p>
+                )}
+              </div>
               <button type="button" className="modal-close" onClick={() => closeForm()}>×</button>
             </div>
       <form className="drug-form" onSubmit={saveForm}>

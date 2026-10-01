@@ -3,6 +3,7 @@ import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import { DRUGS } from '../../medconsult/data/catalog'
 import { InfoDot } from '../../medconsult/DrugInfo'
+import AutoResizeTextarea from './AutoResizeTextarea'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
@@ -90,6 +91,79 @@ function drugHits(query) {
   return out.slice(0, 8)
 }
 
+function linkPackDrugs(pack) {
+  if (!pack?.id) return
+  const rows = []
+  const take = (entry, title) => {
+    const name = String(entry?.name || '').trim()
+    if (!name) return
+    const dosage = String(entry.dosage || '').trim()
+    const frequency = String(entry.frequency || '').trim()
+    const duration = String(entry.duration || '').trim()
+    rows.push({ name, dosage, frequency, duration, fromDb: !!entry.fromDb, title: String(title || '').trim() })
+  }
+  ;(pack.items || []).forEach((it) => {
+    const heading = it.name || it.text || ''
+    take(it, heading)
+    ;(it.subs || []).forEach((s) => take(typeof s === 'string' ? { name: s } : { ...s, name: s.name || s.text }, heading))
+  })
+  const wanted = new Map()
+  rows.forEach((row) => {
+    const key = row.name.toLowerCase()
+    const prev = wanted.get(key)
+    if (!prev) {
+      wanted.set(key, row)
+      return
+    }
+    const titleBetter = prev.title.toLowerCase() === prev.name.toLowerCase() && row.title && row.title.toLowerCase() !== row.name.toLowerCase()
+    wanted.set(key, {
+      ...prev,
+      dosage: prev.dosage || row.dosage,
+      frequency: prev.frequency || row.frequency,
+      duration: prev.duration || row.duration,
+      fromDb: prev.fromDb || row.fromDb,
+      title: titleBetter ? row.title : prev.title,
+    })
+  })
+  Object.values(store.getDrugInfoAll() || {}).forEach((d) => {
+    const refs = (d.packRefs || []).filter((r) => r.packId !== pack.id)
+    if (refs.length !== (d.packRefs || []).length) store.saveDrugInfo({ ...d, packRefs: refs })
+  })
+  wanted.forEach((row) => {
+    const prev = store.getDrugInfo(row.name)
+    const ref = { packId: pack.id, packName: pack.name, title: row.title }
+    if (!prev) {
+      if (!row.frequency && !row.dosage && !row.duration) return
+      store.saveDrugInfo({
+        name: row.name,
+        dosage: row.dosage,
+        frequency: row.frequency,
+        duration: row.duration,
+        regimens: [{ label: '', dosage: row.dosage, frequency: row.frequency, duration: row.duration }],
+        packRefs: [ref],
+      })
+      return
+    }
+    const refs = [...(prev.packRefs || []).filter((r) => !(r.packId === ref.packId && r.title === ref.title)), ref]
+    const regimens = (prev.regimens || []).length
+      ? prev.regimens.map((r, i) => (i === 0 ? {
+          ...r,
+          dosage: r.dosage || row.dosage,
+          frequency: r.frequency || row.frequency,
+          duration: r.duration || row.duration,
+        } : r))
+      : [{ label: '', dosage: prev.dosage || row.dosage, frequency: prev.frequency || row.frequency, duration: prev.duration || row.duration }]
+    store.saveDrugInfo({
+      ...prev,
+      dosage: prev.dosage || row.dosage,
+      frequency: prev.frequency || row.frequency,
+      duration: prev.duration || row.duration,
+      regimens,
+      packRefs: refs,
+    })
+  })
+}
+
 function toForm(pack) {
   const items = (pack.items || []).map(asItem)
   return {
@@ -117,13 +191,16 @@ export default function RecPacksTab() {
   function save() {
     const name = form.name.trim()
     if (!name) return
+    const id = form.id || crypto.randomUUID()
     store.saveRecommendationPack({
-      id: form.id || undefined,
+      id,
       name,
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
       note: form.note || '',
       items: form.items.map(asItem).filter((it) => it.text.trim() || it.name),
     })
+    const saved = store.getRecommendationPacks().find((p) => p.id === id)
+    if (saved) linkPackDrugs(saved)
     setForm(null)
     setSchemeQ('')
     refresh()
@@ -159,7 +236,7 @@ export default function RecPacksTab() {
         ))}
       </div>
       {form && (
-        <div className="modal-overlay" onClick={() => setForm(null)}>
+        <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{form.name.trim() || 'Пакет рекомендаций'}</h3>
@@ -173,11 +250,11 @@ export default function RecPacksTab() {
                 placeholder="код или название болезни"
                 label="Коды МКБ-10"
               />
-              <textarea
+              <AutoResizeTextarea
                 value={form.note || ''}
                 onChange={(e) => setForm({ ...form, note: e.target.value })}
                 placeholder="Примечание к пакету. В протокол попадает кнопкой «добавить все»"
-                rows={2}
+                minRows={2}
               />
               <div className="settings-note-inline">Пункты пакета</div>
               {form.items.map((item, i) => (
@@ -246,11 +323,9 @@ function PackLine({ item, onChange, onRemove }) {
   const [open, setOpen] = useState(false)
   const [subDraft, setSubDraft] = useState('')
   const [subOpen, setSubOpen] = useState(false)
-  const [editSub, setEditSub] = useState(null)
   const query = item.name || item.text || ''
   const hits = useMemo(() => (open ? drugHits(query) : []), [open, query])
   const subHits = useMemo(() => (subOpen ? drugHits(subDraft) : []), [subOpen, subDraft])
-  const drug = !!(item.name || item.fromDb)
 
   function applyDrug(base, hit) {
     return asItem({
@@ -272,7 +347,7 @@ function PackLine({ item, onChange, onRemove }) {
     const text = raw.trim()
     if (!text) return
     if ((item.subs || []).some((s) => composeDrug(s).toLowerCase() === text.toLowerCase())) return
-    onChange({ ...item, subs: [...(item.subs || []), { text }] })
+    onChange({ ...item, subs: [...(item.subs || []), asSub({ name: text, text })] })
     setSubDraft('')
   }
 
@@ -284,11 +359,12 @@ function PackLine({ item, onChange, onRemove }) {
     onChange({ ...item, subs })
     setSubDraft('')
     setSubOpen(false)
-    setEditSub(subs.length - 1)
   }
 
   function patchSub(si, patch) {
-    const subs = (item.subs || []).map((s, i) => (i === si ? asSub({ ...s, ...patch }) : s)).filter(Boolean)
+    const cur = item.subs[si]
+    const base = typeof cur === 'string' ? { text: cur, name: cur } : { ...cur, name: cur.name || cur.text || '' }
+    const subs = item.subs.map((s, i) => (i === si ? asSub({ ...base, ...patch }) : s)).filter(Boolean)
     onChange({ ...item, subs })
   }
 
@@ -296,27 +372,24 @@ function PackLine({ item, onChange, onRemove }) {
     <div className="pack-line">
       <div className="drug-form-row">
         <input
-          value={drug ? item.name : item.text}
+          value={item.name || item.text || ''}
           onChange={(e) => {
             const v = e.target.value
-            if (drug) patchDrug({ name: v })
-            else onChange({ ...item, text: v, name: '', fromDb: false })
+            onChange(asItem({ ...item, name: v, fromDb: item.fromDb && v.trim().toLowerCase() === (item.name || '').toLowerCase(), subs: item.subs || [] }))
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder="пункт, или начни название лекарства"
         />
-        {drug && <InfoDot query={item.name} />}
+        {(item.name || item.text) && <InfoDot query={item.name || item.text} />}
         <button type="button" className="remove-btn" onClick={onRemove}>×</button>
       </div>
-      {drug && (
-        <div className="pack-regimen">
-          <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
-          <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
-          <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
-        </div>
-      )}
+      <div className="pack-regimen">
+        <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
+        <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
+        <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
+      </div>
       {open && hits.length > 0 && (
         <div className="pack-drug-hits">
           {hits.map((h) => (
@@ -338,15 +411,15 @@ function PackLine({ item, onChange, onRemove }) {
       {(item.subs || []).length > 0 && (
         <div className="pack-subs">
           {item.subs.map((sub, si) => {
-            const named = !!(sub.name || sub.fromDb)
+            const label = sub.name || sub.text || ''
             const meta = [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
             return (
               <div key={`${composeDrug(sub)}-${si}`} className="pack-sub">
-                <button type="button" className="pack-sub-main" onClick={() => named && setEditSub(editSub === si ? null : si)}>
-                  <span className="pack-sub-name">{named ? sub.name : sub.text}</span>
+                <span className="pack-sub-main">
+                  <span className="pack-sub-name">{label}</span>
                   {meta && <span className="pack-drug-meta">{meta}</span>}
-                </button>
-                {named && <InfoDot query={sub.name} />}
+                </span>
+                {label && <InfoDot query={sub.name || sub.text} />}
                 <button
                   type="button"
                   className="pack-sub-x"
@@ -355,13 +428,11 @@ function PackLine({ item, onChange, onRemove }) {
                 >
                   ×
                 </button>
-                {editSub === si && named && (
-                  <div className="pack-regimen">
-                    <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
-                    <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
-                    <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
-                  </div>
-                )}
+                <div className="pack-regimen">
+                  <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
+                  <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
+                  <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
+                </div>
               </div>
             )
           })}
