@@ -1,6 +1,6 @@
 import { readClinicalSync, writeClinicalSync } from './clinicalLock'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
-import { asDrug, asPack, asScheme, asStudy, rxText } from './rx'
+import { asDrug, asPack, asScheme, asStudy, packFromScheme, rxText } from './rx'
 
 function normalizeMkbCodes(value) {
   const raw = Array.isArray(value) ? value : [value]
@@ -226,6 +226,31 @@ function cleanStudyTriggers(list) {
       note: String(t?.note || '').trim(),
     }))
     .filter((t) => t.studyKeys.length && t.fieldKeys.length)
+}
+
+function itemHit(raw, q) {
+  const text = typeof raw === 'string' ? raw : raw?.text || ''
+  const subs = typeof raw === 'string' ? [] : raw?.subs || []
+  return (
+    String(text).toLowerCase().includes(q) ||
+    subs.some((s) => String(typeof s === 'string' ? s : s?.text || '').toLowerCase().includes(q))
+  )
+}
+
+function absorbSchemes(state) {
+  state.recommendationPacks = state.recommendationPacks || {}
+  state.skippedSchemeIds = state.skippedSchemeIds || []
+  const skipped = new Set(state.skippedSchemeIds)
+  const taken = new Set(Object.values(state.recommendationPacks).map((p) => p?.fromSchemeId).filter(Boolean))
+  let changed = false
+  Object.values(state.treatmentSchemes || {}).forEach((scheme) => {
+    if (!scheme?.id || taken.has(scheme.id) || skipped.has(scheme.id)) return
+    const id = `scheme-${scheme.id}`
+    if (state.recommendationPacks[id]) return
+    state.recommendationPacks[id] = packFromScheme(scheme)
+    changed = true
+  })
+  if (changed) writeAll(state)
 }
 
 function slugifyGroupKey(label) {
@@ -1057,14 +1082,16 @@ export const store = {
   },
 
   getRecommendationPacks() {
-    return Object.values(readAll().recommendationPacks || {}).map(asPack)
+    const state = readAll()
+    absorbSchemes(state)
+    return Object.values(state.recommendationPacks || {}).map(asPack)
   },
 
   saveRecommendationPack(pack) {
     const state = readAll()
     state.recommendationPacks = state.recommendationPacks || {}
     const id = pack.id || crypto.randomUUID()
-    const items = (pack.items || [])
+    const normalizePackItems = (list) => (list || [])
       .map((raw) => {
         if (typeof raw === 'string') {
           const text = raw.trim()
@@ -1111,6 +1138,20 @@ export const store = {
         }
       })
       .filter(Boolean)
+    const items = normalizePackItems(pack.items)
+    const cleanPhase = (phase) => ({
+      name: String(phase?.name || '').trim(),
+      items: normalizePackItems(phase?.items),
+    })
+    const subtypes = (pack.subtypes || [])
+      .map((s) => ({
+        name: String(s?.name || '').trim(),
+        phases: (s?.phases || []).map(cleanPhase),
+      }))
+      .filter((s) => s.name || s.phases.some((p) => p.items.length || p.name))
+    const phases = subtypes.length
+      ? []
+      : (pack.phases || []).map(cleanPhase).filter((p) => p.name || p.items.length)
     const mkb10Codes = (pack.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
     state.recommendationPacks[id] = {
       ...pack,
@@ -1120,6 +1161,16 @@ export const store = {
       note: String(pack.note || '').trim(),
       studyTriggers: cleanStudyTriggers(pack.studyTriggers),
       items,
+      phases,
+      subtypes,
+      activeSubtype: Number(pack.activeSubtype) || 0,
+      redFlags: String(pack.redFlags || '').trim(),
+      nonDrugTherapy: String(pack.nonDrugTherapy || '').trim(),
+      nonDrugOn: !!pack.nonDrugOn,
+      source: String(pack.source || '').trim(),
+      sourceYear: String(pack.sourceYear || '').trim(),
+      sourceOn: !!pack.sourceOn,
+      fromSchemeId: pack.fromSchemeId || '',
       mkb10Codes,
       updatedAt: Date.now(),
     }
@@ -1130,6 +1181,11 @@ export const store = {
   deleteRecommendationPack(id) {
     const state = readAll()
     state.recommendationPacks = state.recommendationPacks || {}
+    const pack = state.recommendationPacks[id]
+    if (pack?.fromSchemeId) {
+      state.skippedSchemeIds = state.skippedSchemeIds || []
+      if (!state.skippedSchemeIds.includes(pack.fromSchemeId)) state.skippedSchemeIds.push(pack.fromSchemeId)
+    }
     delete state.recommendationPacks[id]
     writeAll(state)
     return state.recommendationPacks
@@ -1144,14 +1200,9 @@ export const store = {
         (p.category || '').toLowerCase().includes(q) ||
         (p.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)) ||
         (p.note || '').toLowerCase().includes(q) ||
-        (p.items || []).some((t) => {
-          const text = typeof t === 'string' ? t : t?.text || ''
-          const subs = typeof t === 'string' ? [] : t?.subs || []
-          return (
-            String(text).toLowerCase().includes(q) ||
-            subs.some((s) => String(typeof s === 'string' ? s : s?.text || '').toLowerCase().includes(q))
-          )
-        }),
+        (p.items || []).some((t) => itemHit(t, q)) ||
+        (p.phases || []).some((phase) => (phase.items || []).some((t) => itemHit(t, q))) ||
+        (p.subtypes || []).some((sub) => (sub.phases || []).some((phase) => (phase.items || []).some((t) => itemHit(t, q)))),
     )
   },
 

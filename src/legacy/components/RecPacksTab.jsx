@@ -44,26 +44,6 @@ function asItem(raw) {
   return { ...bits, text, subs, studyTriggers: raw.studyTriggers || [] }
 }
 
-const EMPTY = { id: '', name: '', category: '', mkb10CodesText: '', note: '', items: [{ ...EMPTY_ITEM }] }
-
-function lineOfDrug(d) {
-  return rxText(d)
-}
-
-function schemeLines(scheme) {
-  const phases = scheme.subtypes?.length
-    ? scheme.subtypes.flatMap((v) => v.phases || [])
-    : scheme.phases || []
-  const lines = []
-  phases.forEach((p) => {
-    ;(p.drugs || []).forEach((d) => {
-      if (d?.name?.trim()) lines.push(lineOfDrug(d))
-    })
-  })
-  if (scheme.nonDrugTherapy?.trim()) lines.push(scheme.nonDrugTherapy.trim())
-  return lines
-}
-
 function drugHits(query) {
   const q = query.trim().toLowerCase()
   if (q.length < 2) return []
@@ -167,48 +147,101 @@ function linkPackDrugs(pack) {
 }
 
 function toForm(pack) {
-  const items = (pack.items || []).map(asItem)
+  const phaseForm = (phase) => ({
+    name: phase?.name || '',
+    items: (phase?.items || []).map(asItem).filter((it) => it.text || it.name).length
+      ? (phase?.items || []).map(asItem)
+      : [{ ...EMPTY_ITEM }],
+  })
+  const subtypes = (pack.subtypes || []).map((s) => ({
+    name: s.name || '',
+    phases: (s.phases || []).length ? s.phases.map(phaseForm) : [{ name: '', items: [{ ...EMPTY_ITEM }] }],
+  }))
+  const phases = subtypes.length
+    ? []
+    : (pack.phases || []).length
+      ? pack.phases.map(phaseForm)
+      : [{ name: '', items: (pack.items || []).map(asItem).length ? (pack.items || []).map(asItem) : [{ ...EMPTY_ITEM }] }]
   return {
     id: pack.id,
+    fromSchemeId: pack.fromSchemeId || '',
     name: pack.name || '',
     category: pack.category || '',
     mkb10CodesText: (pack.mkb10Codes || []).join(', '),
     note: pack.note || '',
     studyTriggers: pack.studyTriggers || [],
-    items: items.length ? items : [{ ...EMPTY_ITEM }],
+    phases,
+    subtypes,
+    activeSubtype: Math.min(pack.activeSubtype || 0, Math.max(subtypes.length - 1, 0)),
+    redFlags: pack.redFlags || '',
+    nonDrugTherapy: pack.nonDrugTherapy || '',
+    nonDrugOn: pack.nonDrugOn != null ? !!pack.nonDrugOn : !!pack.nonDrugTherapy,
+    source: pack.source || '',
+    sourceYear: pack.sourceYear || '',
+    sourceOn: pack.sourceOn != null ? !!pack.sourceOn : !!(pack.source || pack.sourceYear),
   }
 }
 
 export default function RecPacksTab() {
   const [items, setItems] = useState(() => store.getRecommendationPacks())
   const [form, setForm] = useState(null)
-  const [schemeQ, setSchemeQ] = useState('')
 
   function refresh() {
     setItems(store.getRecommendationPacks())
   }
 
-  function patchItem(i, value) {
-    setForm({ ...form, items: form.items.map((x, idx) => (idx === i ? value : x)) })
+  function viewPhases(current = form) {
+    if (current?.subtypes?.length) return current.subtypes[current.activeSubtype || 0]?.phases || []
+    return current?.phases || []
+  }
+
+  function withPhases(phases, current = form) {
+    if (current?.subtypes?.length) {
+      const active = current.activeSubtype || 0
+      return {
+        ...current,
+        subtypes: current.subtypes.map((s, i) => (i === active ? { ...s, phases } : s)),
+      }
+    }
+    return { ...current, phases }
+  }
+
+  function patchItem(pi, ii, value) {
+    const phases = viewPhases().map((phase, i) =>
+      i === pi ? { ...phase, items: phase.items.map((item, j) => (j === ii ? value : item)) } : phase,
+    )
+    setForm(withPhases(phases))
   }
 
   function save() {
     const name = form.name.trim()
     if (!name) return
     const id = form.id || crypto.randomUUID()
+    const phasesNow = viewPhases()
     store.saveRecommendationPack({
       id,
+      fromSchemeId: form.fromSchemeId || '',
       name,
       category: (form.category || '').trim(),
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
       note: form.note || '',
       studyTriggers: form.studyTriggers || [],
-      items: form.items.map(asItem).filter((it) => it.text.trim() || it.name),
+      items: phasesNow.flatMap((phase) => phase.items.map(asItem)).filter((it) => it.text.trim() || it.name),
+      phases: form.subtypes?.length ? [] : form.phases,
+      subtypes: form.subtypes || [],
+      activeSubtype: form.activeSubtype || 0,
+      redFlags: form.redFlags || '',
+      nonDrugTherapy: form.nonDrugTherapy || '',
+      nonDrugOn: !!form.nonDrugOn,
+      source: form.source || '',
+      sourceYear: form.sourceYear || '',
+      sourceOn: !!form.sourceOn,
     })
     const saved = store.getRecommendationPacks().find((p) => p.id === id)
-    if (saved) linkPackDrugs(saved)
+    const everyPhase = [...(form.phases || []), ...(form.subtypes || []).flatMap((s) => s.phases || [])]
+    const everyItem = everyPhase.flatMap((phase) => (phase.items || []).map(asItem)).filter((it) => it.text.trim() || it.name)
+    if (saved) linkPackDrugs({ ...saved, items: everyItem.length ? everyItem : saved.items })
     setForm(null)
-    setSchemeQ('')
     refresh()
   }
 
@@ -230,22 +263,13 @@ export default function RecPacksTab() {
   const categoryHits = (form?.category || '').trim().toLowerCase()
     ? categories.filter((c) => c.toLowerCase().includes(form.category.trim().toLowerCase()) && c.toLowerCase() !== form.category.trim().toLowerCase())
     : categories
-  const schemes = useMemo(() => {
-    if (!form) return []
-    const q = schemeQ.trim().toLowerCase()
-    const all = store.getTreatmentSchemes()
-    if (!q) return all.slice(0, 6)
-    return all
-      .filter((s) => (s.name || '').toLowerCase().includes(q) || (s.mkb10Codes || []).some((c) => c.toLowerCase().includes(q)))
-      .slice(0, 8)
-  }, [form, schemeQ])
 
   return (
     <div className="settings-tab">
       <p className="settings-note-inline">
-        Коды МКБ подсказываются из базы. Пункты добавляются по строке: можно вписать своё, взять лекарство с дозой и схемой приёма или вставить целую схему лечения.
+        Коды МКБ подсказываются из базы. Пункты — свои или лекарства. Подтип один из нескольких, фаза группирует пункты.
       </p>
-      <button type="button" className="btn-primary" onClick={() => setForm({ ...EMPTY, items: [{ ...EMPTY_ITEM }] })}>
+      <button type="button" className="btn-primary" onClick={() => setForm(toForm({ name: '', items: [] }))}>
         + пакет
       </button>
       <div className="drug-db-list">
@@ -303,43 +327,124 @@ export default function RecPacksTab() {
                 triggers={form.studyTriggers || []}
                 onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
               />
-              <div className="settings-note-inline">Пункты пакета</div>
-              {form.items.map((item, i) => (
-                <PackLine
-                  key={i}
-                  item={item}
-                  onChange={(next) => patchItem(i, next)}
-                  onRemove={() => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })}
-                />
-              ))}
-              <button type="button" className="btn-secondary btn-small" onClick={() => setForm({ ...form, items: [...form.items, { ...EMPTY_ITEM }] })}>
-                + пункт
-              </button>
-              <input
-                value={schemeQ}
-                onChange={(e) => setSchemeQ(e.target.value)}
-                placeholder="вставить схему лечения — название или код МКБ"
+              <AutoResizeTextarea
+                value={form.redFlags || ''}
+                onChange={(e) => setForm({ ...form, redFlags: e.target.value })}
+                placeholder="Красные флаги. В протоколе это предупреждение рядом с пакетом, в текст не попадает"
+                minRows={2}
               />
-              {schemeQ.trim() && (
-                <div className="mkb10-input-suggestions">
-                  {schemes.length === 0 && <p className="empty-hint">Схем нет.</p>}
-                  {schemes.map((s) => (
-                    <button
-                      type="button"
-                      key={s.id}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        const lines = schemeLines(s).map((text) => ({ text, subs: [] }))
-                        setForm({
-                          ...form,
-                          items: [...form.items.filter((x) => x.text.trim()), ...lines],
-                        })
-                        setSchemeQ('')
-                      }}
-                    >
-                      <strong>{s.name}</strong> {(s.mkb10Codes || []).join(', ')}
-                    </button>
+              {form.subtypes.length > 0 && (
+                <div className="pack-subtypes">
+                  {form.subtypes.map((sub, i) => (
+                    <label key={i} className={`pack-subtype${i === (form.activeSubtype || 0) ? ' is-on' : ''}`}>
+                      <input
+                        type="radio"
+                        name="pack-subtype"
+                        checked={i === (form.activeSubtype || 0)}
+                        onChange={() => setForm({ ...form, activeSubtype: i })}
+                      />
+                      <input
+                        value={sub.name}
+                        placeholder={`подтип ${i + 1}`}
+                        onChange={(e) => {
+                          const name = e.target.value
+                          setForm({
+                            ...form,
+                            subtypes: form.subtypes.map((s, idx) => (idx === i ? { ...s, name } : s)),
+                          })
+                        }}
+                      />
+                    </label>
                   ))}
+                </div>
+              )}
+              <button
+                type="button"
+                className="pack-depend-btn"
+                onClick={() => {
+                  const current = form.subtypes.length
+                    ? form.subtypes
+                    : [{ name: '', phases: viewPhases() }]
+                  const subtypes = [...current, { name: '', phases: [{ name: '', items: [{ ...EMPTY_ITEM }] }] }]
+                  setForm({ ...form, subtypes, phases: [], activeSubtype: subtypes.length - 1 })
+                }}
+              >
+                + подтип
+              </button>
+              {viewPhases().map((phase, pi) => (
+                <div key={pi} className="pack-phase">
+                  <div className="drug-form-row">
+                    <input
+                      value={phase.name}
+                      placeholder="фаза — оставь пустым, если она одна"
+                      onChange={(e) => {
+                        const name = e.target.value
+                        setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, name } : p))))
+                      }}
+                    />
+                    {viewPhases().length > 1 && (
+                      <button
+                        type="button"
+                        className="remove-btn"
+                        onClick={() => setForm(withPhases(viewPhases().filter((_, i) => i !== pi)))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  {phase.items.map((item, ii) => (
+                    <PackLine
+                      key={ii}
+                      item={item}
+                      onChange={(next) => patchItem(pi, ii, next)}
+                      onRemove={() => {
+                        const items = phase.items.filter((_, j) => j !== ii)
+                        setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, items: items.length ? items : [{ ...EMPTY_ITEM }] } : p))))
+                      }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-secondary btn-small"
+                    onClick={() => setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, items: [...p.items, { ...EMPTY_ITEM }] } : p))))}
+                  >
+                    + пункт
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn-secondary btn-small"
+                onClick={() => setForm(withPhases([...viewPhases(), { name: '', items: [{ ...EMPTY_ITEM }] }]))}
+              >
+                + фаза
+              </button>
+              <button type="button" className="pack-depend-btn" onClick={() => setForm({ ...form, nonDrugOn: !form.nonDrugOn })}>
+                {form.nonDrugOn ? 'немедикаментозная терапия' : '+ немедикаментозная терапия'}
+              </button>
+              {form.nonDrugOn && (
+                <AutoResizeTextarea
+                  value={form.nonDrugTherapy || ''}
+                  onChange={(e) => setForm({ ...form, nonDrugTherapy: e.target.value })}
+                  placeholder="Немедикаментозная терапия. В текст протокола попадёт, только если пункт включён"
+                  minRows={2}
+                />
+              )}
+              <button type="button" className="pack-depend-btn" onClick={() => setForm({ ...form, sourceOn: !form.sourceOn })}>
+                {form.sourceOn ? 'источник и год' : '+ источник и год'}
+              </button>
+              {form.sourceOn && (
+                <div className="drug-form-row">
+                  <input
+                    value={form.source || ''}
+                    placeholder="источник"
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                  />
+                  <input
+                    value={form.sourceYear || ''}
+                    placeholder="год"
+                    onChange={(e) => setForm({ ...form, sourceYear: e.target.value })}
+                  />
                 </div>
               )}
               <div className="drug-form-actions">

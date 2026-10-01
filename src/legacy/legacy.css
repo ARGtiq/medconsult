@@ -985,6 +985,10 @@
   color: #8b909a;
 }
 .legacy-surface .pack-depend { margin-top: 2px; }
+.legacy-surface .pack-phase { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.legacy-surface .pack-subtypes { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.legacy-surface .pack-subtype { display: flex; align-items: center; gap: 6px; }
+.legacy-surface .pack-subtype.is-on input[type='text'], .legacy-surface .pack-subtype.is-on input:not([type]) { border-color: var(--teal); }
 .legacy-surface .pack-depend-btn {
   border: none;
   background: none;

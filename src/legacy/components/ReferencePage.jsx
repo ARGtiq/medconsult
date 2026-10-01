@@ -3,7 +3,6 @@ import GuidelinesPage from './GuidelinesPage'
 import DrugsTab from './DrugsTab'
 import DrugGroupsTab from './DrugGroupsTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
-import TreatmentSchemesTab from './TreatmentSchemesTab'
 import RecPacksTab from './RecPacksTab'
 import Mkb10Page from './Mkb10Page'
 import { DiseasesPage } from '../../medconsult/DiseasesPage'
@@ -18,16 +17,13 @@ function startTab(initialTab) {
 
 function AppointmentsHub({ initialTab, initialItemId }) {
   const [sub, setSub] = useState(
-    initialTab === 'schemes' ? 'schemes' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
+    initialTab === 'schemes' || initialTab === 'packs' ? 'packs' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
   )
   return (
     <div>
       <div className="settings-tabs">
         <button type="button" className={sub === 'guidelines' ? 'active' : ''} onClick={() => setSub('guidelines')}>
           Клинреки
-        </button>
-        <button type="button" className={sub === 'schemes' ? 'active' : ''} onClick={() => setSub('schemes')}>
-          Схемы лечения
         </button>
         <button type="button" className={sub === 'drugs' ? 'active' : ''} onClick={() => setSub('drugs')}>
           Лекарства
@@ -37,7 +33,6 @@ function AppointmentsHub({ initialTab, initialItemId }) {
         </button>
       </div>
       {sub === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
-      {sub === 'schemes' && <TreatmentSchemesTab initialItemId={initialTab === 'schemes' ? initialItemId : null} />}
       {sub === 'drugs' && (
         <DrugsHub initialSub={initialTab === 'groups' ? 'groups' : 'drugs'} initialItemId={initialTab === 'drugs' ? initialItemId : null} />
       )}
@@ -72,7 +67,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       <h2 className="guidelines-title">Справочник</h2>
       <p className="settings-note-inline">
         МКБ-10, болезни, блоки, наборы, глобальные шаблоны, назначения, печать.
-        В «Назначениях» — клинреки, схемы лечения, лекарства и пакеты рекомендаций.
+        В «Назначениях» — клинреки, лекарства и пакеты рекомендаций.
       </p>
       <div className="settings-tabs">
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>

@@ -24,7 +24,9 @@ export default function Mkb10Page({ onOpenScheme, onLoadVisit }) {
   const selected = selectedCode ? all.find((c) => c.code === selectedCode) : null
   const linkedGuidelines = selectedCode ? store.getGuidelinesForCodes([selectedCode]) : []
   const linkedDrugs = selectedCode ? store.getDrugsForMkbCode(selectedCode) : []
-  const linkedSchemes = selectedCode ? store.getTreatmentSchemesForMkbCode(selectedCode) : []
+  const linkedPacks = selectedCode
+    ? store.getRecommendationPacks().filter((p) => (p.mkb10Codes || []).some((c) => String(c).trim().toUpperCase() === selectedCode.toUpperCase()))
+    : []
   const linkedVisits = selectedCode ? store.searchVisits(selectedCode).slice(0, 10) : []
   const note = selectedCode ? getMkbNote(selectedCode) : ''
   const guidelines = Object.values(store.getGuidelines() || {})
@@ -188,13 +190,13 @@ export default function Mkb10Page({ onOpenScheme, onLoadVisit }) {
                 </div>
 
                 <div className="mkb10-cross-block">
-                  <h4>Схемы лечения ({linkedSchemes.length})</h4>
-                  {linkedSchemes.map((s) => (
-                    <button type="button" key={s.id} className="home-draft-item" onClick={() => onOpenScheme?.(s.id)}>
+                  <h4>Пакеты ({linkedPacks.length})</h4>
+                  {linkedPacks.map((s) => (
+                    <div key={s.id} className="home-draft-item">
                       <strong>{s.name}</strong>
-                    </button>
+                    </div>
                   ))}
-                  {linkedSchemes.length === 0 && <p className="empty-hint">Пока нет.</p>}
+                  {linkedPacks.length === 0 && <p className="empty-hint">Пока нет.</p>}
                 </div>
 
                 <div className="mkb10-cross-block">

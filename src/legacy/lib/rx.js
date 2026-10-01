@@ -69,8 +69,23 @@ export function asMkb(raw) {
   }
 }
 
+function asPhase(raw) {
+  const items = (raw?.items || raw?.drugs || []).map(asPackItem).filter(Boolean)
+  return { name: String(raw?.name || '').trim(), items }
+}
+
+function asSubtype(raw) {
+  return {
+    name: String(raw?.name || '').trim(),
+    phases: (raw?.phases || []).map(asPhase),
+  }
+}
+
 export function asPack(raw) {
   if (!raw || typeof raw !== 'object') return raw
+  const nonDrugTherapy = String(raw.nonDrugTherapy || '').trim()
+  const source = String(raw.source || '').trim()
+  const sourceYear = String(raw.sourceYear || '').trim()
   return {
     ...raw,
     id: String(raw.id || ''),
@@ -80,6 +95,62 @@ export function asPack(raw) {
     mkb10Codes: asMkbList(raw.mkb10Codes),
     studyTriggers: Array.isArray(raw.studyTriggers) ? raw.studyTriggers : [],
     items: (raw.items || []).map(asPackItem).filter(Boolean),
+    phases: Array.isArray(raw.phases) ? raw.phases.map(asPhase) : [],
+    subtypes: Array.isArray(raw.subtypes) ? raw.subtypes.map(asSubtype) : [],
+    activeSubtype: Number(raw.activeSubtype) || 0,
+    redFlags: String(raw.redFlags || '').trim(),
+    nonDrugTherapy,
+    nonDrugOn: raw.nonDrugOn != null ? !!raw.nonDrugOn : !!nonDrugTherapy,
+    source,
+    sourceYear,
+    sourceOn: raw.sourceOn != null ? !!raw.sourceOn : !!(source || sourceYear),
+    fromSchemeId: raw.fromSchemeId || '',
+  }
+}
+
+function schemePhase(phase) {
+  return {
+    name: String(phase?.name || '').trim(),
+    items: (phase?.drugs || phase?.items || [])
+      .map((drug) => {
+        const line = asRx({ ...drug, fromDb: true })
+        return line.text ? { ...line, subs: [], studyTriggers: [] } : null
+      })
+      .filter(Boolean),
+  }
+}
+
+/** Старая схема становится пакетом. Идентификатор стабильный, повтор не плодит копию. */
+export function packFromScheme(scheme) {
+  const subtypes = (scheme?.subtypes || []).filter((s) => s && ((s.phases || []).length || s.name))
+  const mapped = subtypes.map((s) => ({
+    name: String(s.name || '').trim(),
+    phases: (s.phases || []).map(schemePhase),
+  }))
+  const phases = mapped.length ? [] : (scheme?.phases || []).map(schemePhase)
+  const visible = mapped.length ? mapped[0]?.phases || [] : phases
+  const nonDrugTherapy = String(scheme?.nonDrugTherapy || '').trim()
+  const source = String(scheme?.source || '').trim()
+  const sourceYear = String(scheme?.sourceYear || '').trim()
+  return {
+    id: `scheme-${scheme.id}`,
+    fromSchemeId: scheme.id,
+    name: String(scheme?.name || '').trim(),
+    category: String(scheme?.category || '').trim(),
+    note: '',
+    mkb10Codes: asMkbList(scheme?.mkb10Codes),
+    studyTriggers: [],
+    items: visible.flatMap((p) => p.items || []),
+    phases,
+    subtypes: mapped,
+    activeSubtype: 0,
+    redFlags: String(scheme?.redFlags || '').trim(),
+    nonDrugTherapy,
+    nonDrugOn: !!nonDrugTherapy,
+    source,
+    sourceYear,
+    sourceOn: !!(source || sourceYear),
+    updatedAt: scheme?.updatedAt || Date.now(),
   }
 }
 
