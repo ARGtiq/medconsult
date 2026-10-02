@@ -337,10 +337,11 @@ export function RecommendationsBlock({
       <StudyDrugHints studies={session.studies} selected={session.recommendations} onAdd={addRecommendation} />
       {session.recommendations.length > 0 && (
         <>
-          <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+          <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править · ⋮⋮ перетащить</div>
           <EditableChips
             lines
             removable
+            reorder
             items={session.recommendations}
             onChange={(next) => store.renameList("recommendations", next)}
           />

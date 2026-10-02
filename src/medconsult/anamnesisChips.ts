@@ -240,13 +240,19 @@ function ruCount(n: number, one: string, few: string, many: string) {
 }
 
 function span(amount: string, unit: AnamnesisDraft["unit"]) {
-  const n = parseInt(amount, 10);
+  const raw = amount.trim().replace(".", ",");
+  const n = Number(raw.replace(",", "."));
   if (!Number.isFinite(n) || n <= 0 || !unit) return "";
-  if (unit === "hours") return `${n} ${ruCount(n, "час", "часа", "часов")}`;
-  if (unit === "days") return `${n} ${ruCount(n, "день", "дня", "дней")}`;
-  if (unit === "weeks") return `${n} ${ruCount(n, "неделю", "недели", "недель")}`;
-  if (unit === "months") return `${n} ${ruCount(n, "месяц", "месяца", "месяцев")}`;
-  return `${n} ${ruCount(n, "год", "года", "лет")}`;
+  const shown = raw.replace(/,0+$/, "").replace(/,$/, "");
+  const forms = {
+    hours: ["час", "часа", "часов"],
+    days: ["день", "дня", "дней"],
+    weeks: ["неделю", "недели", "недель"],
+    months: ["месяц", "месяца", "месяцев"],
+    years: ["год", "года", "лет"],
+  }[unit];
+  if (!Number.isInteger(n)) return `${shown} ${unit === "weeks" ? "недели" : forms[1]}`;
+  return `${shown} ${ruCount(n, forms[0], forms[1], forms[2])}`;
 }
 
 export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {

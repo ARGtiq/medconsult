@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import {
@@ -29,14 +29,17 @@ export function EditableChips({
   onChange,
   lines,
   removable,
+  reorder,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
   lines?: boolean;
   removable?: boolean;
+  reorder?: boolean;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
+  const [over, setOver] = useState<number | null>(null);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -51,6 +54,32 @@ export function EditableChips({
     else copy[edit] = next;
     onChange(copy);
     setEdit(null);
+  }
+
+  function startDrag(e: ReactPointerEvent<HTMLButtonElement>, from: number) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const h = 32;
+    let to = from;
+    setOver(from);
+    function move(ev: PointerEvent) {
+      to = Math.max(0, Math.min(items.length - 1, from + Math.round((ev.clientY - startY) / h)));
+      setOver(to);
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setOver(null);
+      if (to === from) return;
+      const next = [...items];
+      const [row] = next.splice(from, 1);
+      next.splice(to, 0, row);
+      onChange(next);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   }
 
   return (
@@ -79,8 +108,19 @@ export function EditableChips({
         ) : (
           <span
             key={`${t}-${i}`}
-            className={`${lines ? "flex w-full items-start gap-1 rounded-md px-2 py-1 text-sm" : "inline-flex items-center gap-0.5"} ${chipClass(true, false, drugMarked(t))}`}
+            className={`${lines ? "flex w-full items-start gap-1 rounded-md px-2 py-1 text-sm" : "inline-flex items-center gap-0.5"} ${chipClass(true, false, drugMarked(t))} ${over === i ? "ring-2 ring-teal" : ""}`}
           >
+            {reorder ? (
+              <button
+                type="button"
+                title="Перетащить"
+                aria-label="Перетащить"
+                onPointerDown={(e) => startDrag(e, i)}
+                className="cursor-grab touch-none px-0.5 text-mute select-none"
+              >
+                ⋮⋮
+              </button>
+            ) : null}
             <button
               type="button"
               title="Нажми — править как текст"

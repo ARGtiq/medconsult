@@ -54,7 +54,7 @@ function ChipRow({
   const shown = value || fallback;
   return (
     <div className="mt-1">
-      <div className="text-xs font-semibold text-ink">{label}</div>
+      {label ? <div className="text-xs font-semibold text-ink">{label}</div> : null}
       <div className="mt-1 flex flex-wrap gap-1">
         {options.map((o) => (
           <button
@@ -376,30 +376,93 @@ function PresetPicker({
 
 function VitaeSection({
   id,
+  title,
   omitted,
   onOmit,
   children,
 }: {
   id: string;
+  title: string;
   omitted: boolean;
   onOmit: (id: string, hide: boolean) => void;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(true);
   if (omitted) return null;
   return (
-    <div className="group relative pr-5">
-      <button
-        type="button"
-        title="убрать пункт"
-        aria-label="убрать пункт"
-        onClick={() => onOmit(id, true)}
-        className="absolute top-1.5 right-0 z-[1] flex size-[16px] items-center justify-center rounded bg-danger-soft text-[10px] font-bold text-danger opacity-70 md:opacity-0 md:group-hover:opacity-100"
-      >
-        ×
-      </button>
-      {children}
+    <div className="group relative">
+      <div className="mt-1.5 flex items-center gap-1 pr-5">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-left text-xs font-semibold text-ink"
+          aria-expanded={open}
+        >
+          <span className="mr-1 text-mute">{open ? "▾" : "▸"}</span>
+          {title}
+        </button>
+        <button
+          type="button"
+          title="убрать пункт"
+          aria-label="убрать пункт"
+          onClick={() => onOmit(id, true)}
+          className="ml-auto flex size-[16px] items-center justify-center rounded bg-danger-soft text-[10px] font-bold text-danger opacity-70 md:opacity-0 md:group-hover:opacity-100"
+        >
+          ×
+        </button>
+      </div>
+      {open ? children : null}
     </div>
   );
+}
+
+function allergyGroups(): string[] {
+  const labels: string[] = [];
+  for (const g of Object.values(DRUG_GROUPS) as { label?: string }[]) {
+    const label = (g.label || "").trim();
+    if (label) labels.push(label);
+  }
+  try {
+    Object.values(legacy.getCustomGroups() || {}).forEach((g) => {
+      const label = String((g as { label?: string }).label || "").trim();
+      if (label && !labels.some((x) => x.toLowerCase() === label.toLowerCase())) labels.push(label);
+    });
+  } catch {
+    /* */
+  }
+  return labels;
+}
+
+function GroupMarks({ selected, onToggle }: { selected: string[]; onToggle: (name: string) => void }) {
+  const groups = useMemo(() => allergyGroups(), []);
+  if (!groups.length) return null;
+  return (
+    <div className="mt-1">
+      <div className="text-[10px] tracking-wide text-mute uppercase">группы</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {groups.map((g) => {
+          const on = selected.some((s) => s.toLowerCase() === g.toLowerCase());
+          return (
+            <button
+              key={g}
+              type="button"
+              onClick={() => onToggle(g)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                on ? "bg-teal-soft font-medium text-teal" : "border border-dashed border-line bg-paper text-ink-soft"
+              }`}
+            >
+              {g}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function toggleNamed(items: string[], name: string) {
+  const has = items.some((s) => s.toLowerCase() === name.toLowerCase());
+  return has ? items.filter((s) => s.toLowerCase() !== name.toLowerCase()) : [...items, name];
 }
 
 function BlockLabel({ label, hint }: { label: string; hint?: string }) {
@@ -422,16 +485,21 @@ function VitaeField({
   dim?: boolean;
   onLabel?: () => void;
 }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div className={`mt-1.5 rounded-md border border-line bg-paper px-2 py-1 ${dim ? "opacity-50" : ""}`}>
-      {onLabel ? (
-        <button type="button" className="text-xs leading-none font-medium text-ink-soft" onClick={onLabel}>
+    <div className={`mt-1.5 rounded-md border border-line bg-paper px-2 py-1 ${dim && open ? "opacity-50" : ""}`}>
+      <div className="flex items-center gap-2">
+        <button type="button" className="text-left text-xs leading-none font-medium text-ink-soft" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          <span className="mr-1">{open ? "▾" : "▸"}</span>
           {label}
         </button>
-      ) : (
-        <div className="text-xs leading-none font-medium text-ink-soft">{label}</div>
-      )}
-      <div className="mt-1 text-sm leading-snug text-ink">{children}</div>
+        {onLabel ? (
+          <button type="button" className="text-[10px] text-teal" onClick={onLabel}>
+            {dim ? "в текст" : "в тексте"}
+          </button>
+        ) : null}
+      </div>
+      {open ? <div className="mt-1 text-sm leading-snug text-ink">{children}</div> : null}
     </div>
   );
 }
@@ -463,8 +531,8 @@ function ChipList({
     `rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"}`;
   return (
     <div className="mt-1">
-      <div className="text-xs font-semibold text-ink">{label}</div>
-      <div className="mt-1 flex flex-wrap gap-1">
+      {label ? <div className="text-xs font-semibold text-ink">{label}</div> : null}
+      <div className={`flex flex-wrap gap-1 ${label ? "mt-1" : ""}`}>
         <button
           type="button"
           className={chip(!open)}
@@ -517,6 +585,7 @@ function ChipList({
           </div>
         </div>
       ) : null}
+      {allergy ? <GroupMarks selected={items} onToggle={(name) => { setAdding(true); onChange(toggleNamed(items, name)); }} /> : null}
     </div>
   );
 }
@@ -564,6 +633,7 @@ function CardFill({
         placeholder={placeholder}
         emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
       />
+      {allergy ? <GroupMarks selected={items} onToggle={(name) => onChange(toggleNamed(items, name))} /> : null}
     </VitaeField>
   );
 }
@@ -627,9 +697,19 @@ export function AnamnesisDisease({
         </button>
         <input
           value={d.amount}
-          onChange={(e) => patch({ amount: e.target.value.replace(/\D/g, "").slice(0, 3), onset: "" })}
-          placeholder="N"
-          className="w-12 rounded-md border border-line bg-paper px-1.5 py-0.5 text-sm tabular-nums"
+          onChange={(e) => {
+            const v = e.target.value.replace(".", ",");
+            const clean = v.replace(/[^\d,]/g, "");
+            const cut = clean.indexOf(",");
+            const amount =
+              cut === -1
+                ? clean.slice(0, 4)
+                : `${clean.slice(0, cut).slice(0, 3)},${clean.slice(cut + 1).replace(/,/g, "").slice(0, 2)}`;
+            patch({ amount, onset: "" });
+          }}
+          placeholder="1,5"
+          inputMode="decimal"
+          className="w-16 rounded-md border border-line bg-paper px-1.5 py-0.5 text-sm tabular-nums"
         />
         {(
           [
@@ -786,6 +866,7 @@ export function AnamnesisVitae({
 }) {
   const d = useMemo(() => normalizeVitae(draft), [draft]);
   const patch = (p: Partial<VitaeDraft>) => onDraft({ ...d, ...p });
+  const [closedHeads, setClosedHeads] = useState<Set<string>>(() => new Set());
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
@@ -928,22 +1009,50 @@ export function AnamnesisVitae({
 
   if (tpl && mode !== "chips" && mode !== "text") {
     const shown = visibleVitaeFields(tpl, fields);
+    const blocks: { head: (typeof shown)[number] | null; fields: typeof shown }[] = [];
+    for (const f of shown) {
+      if (f.kind === "heading") blocks.push({ head: f, fields: [] });
+      else {
+        if (!blocks.length) blocks.push({ head: null, fields: [] });
+        blocks[blocks.length - 1].fields.push(f);
+      }
+    }
     return (
       <div>
         {picker}
-        {shown.map((f) =>
-          f.kind === "heading" ? (
-            <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
-              {f.label}
+        {blocks.map((block, i) => {
+          const closed = !!(block.head && closedHeads.has(block.head.key));
+          return (
+            <div key={block.head?.key || `b${i}`}>
+              {block.head ? (
+                <button
+                  type="button"
+                  className="mt-2 text-left text-xs font-medium text-ink-soft"
+                  aria-expanded={!closed}
+                  onClick={() =>
+                    setClosedHeads((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(block.head!.key)) next.delete(block.head!.key);
+                      else next.add(block.head!.key);
+                      return next;
+                    })
+                  }
+                >
+                  <span className="mr-1">{closed ? "▸" : "▾"}</span>
+                  {block.head.label}
+                </button>
+              ) : null}
+              {!closed &&
+                block.fields.map((f) => (
+                  <VitaeField key={f.key} label={f.label} dim={f.optional && fields[`__on_${f.key}`] !== "1"} onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}>
+                    {(!f.optional || fields[`__on_${f.key}`] === "1") && (
+                      <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
+                    )}
+                  </VitaeField>
+                ))}
             </div>
-          ) : (
-            <VitaeField key={f.key} label={f.label} dim={f.optional && fields[`__on_${f.key}`] !== "1"} onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}>
-              {(!f.optional || fields[`__on_${f.key}`] === "1") && (
-                <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
-              )}
-            </VitaeField>
-          ),
-        )}
+          );
+        })}
         {cardFields}
         <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
       </div>
@@ -953,9 +1062,9 @@ export function AnamnesisVitae({
   return (
     <div>
       {picker}
-      <VitaeSection id="development" omitted={omitted("development")} onOmit={setOmit}>
+      <VitaeSection id="development" title="развитие" omitted={omitted("development")} onOmit={setOmit}>
       <ChipRow
-        label="развитие"
+        label=""
         value={d.development}
         fallback="normal"
         onChange={(id) =>
@@ -979,9 +1088,9 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="occupation" omitted={omitted("occupation")} onOmit={setOmit}>
+      <VitaeSection id="occupation" title="профвредности" omitted={omitted("occupation")} onOmit={setOmit}>
       <ChipRow
-        label="профвредности"
+        label=""
         value={d.occupation}
         fallback="denies"
         onChange={(id) =>
@@ -1005,7 +1114,7 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="habits" omitted={omitted("habits")} onOmit={setOmit}>
+      <VitaeSection id="habits" title="вредные привычки" omitted={omitted("habits")} onOmit={setOmit}>
       <ChipRow
         label="курение"
         value={d.smoke}
@@ -1035,9 +1144,9 @@ export function AnamnesisVitae({
         ]}
       />
       </VitaeSection>
-      <VitaeSection id="work" omitted={omitted("work")} onOmit={setOmit}>
+      <VitaeSection id="work" title="работа" omitted={omitted("work")} onOmit={setOmit}>
         <ChipRow
-          label="работа"
+          label=""
           value={d.employment}
           fallback="works"
           onChange={(id) => patch({ employment: id as VitaeDraft["employment"] })}
@@ -1099,9 +1208,9 @@ export function AnamnesisVitae({
           </>
         )}
       </VitaeSection>
-      <VitaeSection id="disability" omitted={omitted("disability")} onOmit={setOmit}>
+      <VitaeSection id="disability" title="инвалидность" omitted={omitted("disability")} onOmit={setOmit}>
         <ChipRow
-          label="инвалидность"
+          label=""
           value={d.disability}
           fallback="no"
           onChange={(id) => patch({ disability: id as VitaeDraft["disability"] })}
@@ -1150,9 +1259,9 @@ export function AnamnesisVitae({
           </>
         )}
       </VitaeSection>
-      <VitaeSection id="past" omitted={omitted("past")} onOmit={setOmit}>
+      <VitaeSection id="past" title="перенесённые заболевания" omitted={omitted("past")} onOmit={setOmit}>
       <ChipRow
-        label="перенесённые заболевания"
+        label=""
         value={d.pastIllness}
         fallback="typical"
         onChange={(id) =>
@@ -1178,9 +1287,9 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="infections" omitted={omitted("infections")} onOmit={setOmit}>
+      <VitaeSection id="infections" title="туберкулёз, гепатиты, вен. заб." omitted={omitted("infections")} onOmit={setOmit}>
       <ChipRow
-        label="туберкулёз, гепатиты, вен. заб."
+        label=""
         value={d.infections}
         fallback="denies"
         onChange={(id) =>
@@ -1204,9 +1313,9 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="heritage" omitted={omitted("heritage")} onOmit={setOmit}>
+      <VitaeSection id="heritage" title="наследственность" omitted={omitted("heritage")} onOmit={setOmit}>
       <ChipRow
-        label="наследственность"
+        label=""
         value={d.heritage}
         fallback="clear"
         onChange={(id) =>
@@ -1230,26 +1339,26 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="allergy" omitted={omitted("allergy")} onOmit={setOmit}>
+      <VitaeSection id="allergy" title="аллергия" omitted={omitted("allergy")} onOmit={setOmit}>
       <ChipList
-        label="аллергия"
+        label=""
         items={session.allergies || []}
         allergy
         placeholder="аллерген + Enter"
         onChange={(allergies) => setCard({ allergies })}
       />
       </VitaeSection>
-      <VitaeSection id="meds" omitted={omitted("meds")} onOmit={setOmit}>
+      <VitaeSection id="meds" title="принимает постоянно" omitted={omitted("meds")} onOmit={setOmit}>
       <ChipList
-        label="принимает постоянно"
+        label=""
         items={session.currentMedications || []}
         placeholder="препарат + Enter"
         onChange={(currentMedications) => setCard({ currentMedications })}
       />
       </VitaeSection>
-      <VitaeSection id="surgery" omitted={omitted("surgery")} onOmit={setOmit}>
+      <VitaeSection id="surgery" title="операции" omitted={omitted("surgery")} onOmit={setOmit}>
       <ChipRow
-        label="операции"
+        label=""
         value={d.surgery}
         fallback="none"
         onChange={(id) =>
@@ -1273,9 +1382,9 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      <VitaeSection id="transfusion" omitted={omitted("transfusion")} onOmit={setOmit}>
+      <VitaeSection id="transfusion" title="гемотрансфузии" omitted={omitted("transfusion")} onOmit={setOmit}>
       <ChipRow
-        label="гемотрансфузии"
+        label=""
         value={d.transfusion}
         fallback="denies"
         onChange={(id) =>
