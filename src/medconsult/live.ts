@@ -559,6 +559,8 @@ export function drugLine(d: { name: string; dose?: string; dosage?: string; freq
   return rxText(d);
 }
 
+export type DrugRegimen = { label: string; dosage: string; frequency: string; duration: string };
+
 export type DrugRecord = {
   name: string;
   dose: string;
@@ -568,6 +570,7 @@ export type DrugRecord = {
   brandNames?: string;
   group?: string;
   mkb10Codes?: string;
+  regimens?: DrugRegimen[];
 };
 
 export function liveDrugRecords(): DrugRecord[] {
@@ -578,6 +581,17 @@ export function liveDrugRecords(): DrugRecord[] {
       const dosage = String(d.dosage || "").trim();
       const frequency = String(d.frequency || "").trim();
       const duration = String(d.duration || "").trim();
+      const rawRegs = Array.isArray((d as { regimens?: DrugRegimen[] }).regimens)
+        ? (d as { regimens: DrugRegimen[] }).regimens
+        : [];
+      const regimens = rawRegs
+        .map((r) => ({
+          label: String(r?.label || "").trim(),
+          dosage: String(r?.dosage || "").trim(),
+          frequency: String(r?.frequency || "").trim(),
+          duration: String(r?.duration || "").trim(),
+        }))
+        .filter((r) => r.label || r.dosage || r.frequency || r.duration);
       const cat = DRUGS.find((x) => x.name.toLowerCase() === String(d.name).toLowerCase());
       const dose = [dosage, frequency, duration].filter(Boolean).join(" ") || cat?.dose || "";
       fromDb.push({
@@ -589,6 +603,7 @@ export function liveDrugRecords(): DrugRecord[] {
         brandNames: d.brandNames,
         group: d.group,
         mkb10Codes: d.mkb10Codes,
+        regimens,
       });
     });
   } catch {
@@ -703,6 +718,54 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
       });
   }
   return hits.slice(0, 24);
+}
+
+export type DrugVariant = {
+  dosage: string;
+  frequency: string;
+  duration: string;
+  label: string;
+  detail: string;
+};
+
+/** Схемы препарата: доза, кратность, курс. Если в карточке их нет — одна строка из старой схемы. */
+export function variantsOf(name: string): DrugVariant[] {
+  const key = name.trim().toLowerCase();
+  if (!key) return [];
+  const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === key);
+  if (!rec) return [];
+  const regs = rec.regimens || [];
+  if (regs.length) {
+    return regs.map((r) => {
+      const scheme = [r.dosage, r.label].filter(Boolean).join(" ");
+      return {
+        dosage: r.dosage,
+        frequency: r.frequency,
+        duration: r.duration,
+        label: r.label,
+        detail: [r.frequency, scheme, r.duration].filter(Boolean).join(" · "),
+      };
+    });
+  }
+  if (rec.dosage || rec.frequency || rec.duration) {
+    const scheme = [rec.dosage, rec.frequency, rec.duration].filter(Boolean).join(" · ");
+    return [{ dosage: rec.dosage || "", frequency: rec.frequency || "", duration: rec.duration || "", label: "", detail: scheme }];
+  }
+  if (rec.dose) return [{ dosage: rec.dose, frequency: "", duration: "", label: "", detail: rec.dose }];
+  return [];
+}
+
+export function dosesForDrug(name: string): { value: string; label: string }[] {
+  const seen = new Set<string>();
+  const out: { value: string; label: string }[] = [];
+  for (const v of variantsOf(name)) {
+    const value = v.dosage.trim();
+    if (!value || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    const extra = [v.frequency, v.label, v.duration].filter(Boolean).join(" · ");
+    out.push({ value, label: extra || value });
+  }
+  return out;
 }
 
 export type AllergyHit = { id: string; label: string; hint: string; name: string };

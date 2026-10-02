@@ -6,6 +6,8 @@ export type TypeaheadItem = {
   id: string;
   label: string;
   hint?: string;
+  /** Вторая строка мельче: кратность и схема. */
+  detail?: string;
   name?: string;
 };
 
@@ -23,6 +25,7 @@ export function Typeahead({
   clearOnPick = true,
   autoFocus,
   inline,
+  focusNonce = 0,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -39,6 +42,8 @@ export function Typeahead({
   autoFocus?: boolean;
   /** Список под полем, а не поверх страницы. Для окна Ctrl+K. */
   inline?: boolean;
+  /** Увеличьте число, чтобы вернуть курсор в поле. */
+  focusNonce?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -50,6 +55,11 @@ export function Typeahead({
   useEffect(() => {
     setIdx(0);
   }, [items, value]);
+
+  useEffect(() => {
+    if (!focusNonce) return;
+    inputRef.current?.focus();
+  }, [focusNonce]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -144,7 +154,7 @@ export function Typeahead({
               <li key={it.id} role="presentation">
                 <div
                   data-idx={i}
-                  className={`flex w-full items-center gap-1.5 px-2 py-1.5 text-sm ${
+                  className={`flex w-full items-start gap-1.5 px-2 py-1.5 text-sm ${
                     i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
                   } ${marked ? "border-l-2 border-l-teal" : ""}`}
                 >
@@ -156,15 +166,18 @@ export function Typeahead({
                     onMouseEnter={() => setIdx(i)}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(it)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 flex-col items-start text-left"
                   >
-                    <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                    <span className="w-full truncate">{it.label}</span>
+                    {it.detail && (
+                      <span className="w-full truncate text-[11px] leading-tight font-normal !text-mute">{it.detail}</span>
+                    )}
+                  </button>
                     {it.hint && (
-                      <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
+                      <span className="mt-0.5 shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
                         {it.hint}
                       </span>
                     )}
-                  </button>
                   {marked ? <InfoDot query={it.name || it.label} /> : null}
                 </div>
               </li>

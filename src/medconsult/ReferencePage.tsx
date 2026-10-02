@@ -2,6 +2,7 @@ import LegacyReference from "@/legacy/components/ReferencePage";
 import "@/legacy/legacy.css";
 import { AppShell } from "./AppShell";
 import { DrugsReference } from "./DrugsReference";
+import { GuidelinesReference } from "./GuidelinesReference";
 import { RecPacksReference } from "./RecPacksReference";
 import { TemplatesEditor } from "./TemplatesEditor";
 
@@ -17,6 +18,9 @@ export function ReferencePage() {
             <DrugsReference initialSub={props?.initialSub} initialItemId={props?.initialItemId} />
           )}
           recPacksContent={() => <RecPacksReference />}
+          guidelinesContent={(props: { initialItemId?: string | null }) => (
+            <GuidelinesReference initialItemId={props?.initialItemId} />
+          )}
         />
       </div>
     </AppShell>

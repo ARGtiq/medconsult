@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import GuidelinesPage from './GuidelinesPage'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import Mkb10Page from './Mkb10Page'
 import { DiseasesPage } from '../../medconsult/DiseasesPage'
@@ -12,7 +11,7 @@ function startTab(initialTab) {
   return initialTab || 'mkb'
 }
 
-function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksContent }) {
+function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksContent, guidelinesContent }) {
   const [sub, setSub] = useState(
     initialTab === 'schemes' || initialTab === 'packs' ? 'packs' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
   )
@@ -33,14 +32,14 @@ function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksCont
           Пакеты рекомендаций
         </button>
       </div>
-      {sub === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
+      {sub === 'guidelines' && (guidelinesContent ? guidelinesContent({ initialItemId: initialTab === 'guidelines' ? initialItemId : null }) : <p className="empty-hint">Нет редактора клинреков.</p>)}
       {sub === 'drugs' && (drugsContent ? drugsContent(drugsProps) : <p className="empty-hint">Нет редактора лекарств.</p>)}
       {sub === 'packs' && (recPacksContent ? recPacksContent() : <p className="empty-hint">Нет редактора пакетов.</p>)}
     </div>
   )
 }
 
-export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent }) {
+export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent }) {
   const [tab, setTab] = useState(startTab(initialTab))
 
   return (
@@ -79,7 +78,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
       {tab === 'appointments' && (
-        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} recPacksContent={recPacksContent} />
+        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} recPacksContent={recPacksContent} guidelinesContent={guidelinesContent} />
       )}
       {tab === 'print' && <PrintTemplatesTab />}
     </div>

@@ -1,9 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ToggleChips } from "./EditableChip";
-import { searchDrugs, studyDrugHints } from "./live";
-import { Typeahead } from "./Typeahead";
+import { dosesForDrug, drugLine, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
 
@@ -39,6 +39,13 @@ export function StudyDrugHints({
   );
 }
 
+function courseText(raw: string) {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^\d+$/.test(t)) return `${t} дн`;
+  return t;
+}
+
 function DrugSearch({
   diagnosisCode,
   selected,
@@ -49,25 +56,156 @@ function DrugSearch({
   onAdd: (line: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const [name, setName] = useState("");
+  const [dosage, setDosage] = useState("");
+  const [frequency, setFrequency] = useState("");
+  const [days, setDays] = useState("");
+  const [focusDose, setFocusDose] = useState(0);
+  const [focusName, setFocusName] = useState(0);
+  const doseRef = useRef<HTMLInputElement>(null);
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
-  const items = hits
-    .filter((h) => !selected.includes(h.line))
-    .map((h) => ({ id: h.name + h.via + h.line, label: h.line, hint: h.hint || h.via, name: h.name }));
+  const items = useMemo(() => {
+    const out: (TypeaheadItem & { dosage: string; frequency: string; duration: string })[] = [];
+    for (const h of hits) {
+      const vars = variantsOf(h.name);
+      const rows = vars.length ? vars : [{ dosage: "", frequency: "", duration: "", label: "", detail: h.hint }];
+      rows.forEach((v, i) => {
+        const line = drugLine({ name: h.name, dosage: v.dosage, frequency: v.frequency, duration: v.duration });
+        if (selected.includes(line)) return;
+        out.push({
+          id: `${h.name}|${h.via}|${i}|${v.dosage}|${v.frequency}|${v.duration}`,
+          label: h.name,
+          detail: v.detail || undefined,
+          hint: h.via,
+          name: h.name,
+          dosage: v.dosage,
+          frequency: v.frequency,
+          duration: v.duration,
+        });
+      });
+    }
+    return out;
+  }, [hits, selected]);
+  const doses = useMemo(() => dosesForDrug(name), [name]);
+
+  useEffect(() => {
+    if (!focusDose) return;
+    doseRef.current?.focus();
+    doseRef.current?.select();
+  }, [focusDose]);
+
+  function fill(next: { name: string; dosage?: string; frequency?: string; duration?: string }) {
+    setName(next.name);
+    setQ(next.name);
+    setDosage(next.dosage || "");
+    setFrequency(next.frequency || "");
+    setDays(next.duration || "");
+    setFocusDose((n) => n + 1);
+  }
+
+  function onDose(v: string) {
+    setDosage(v);
+    const matches = variantsOf(name).filter((x) => x.dosage === v);
+    if (matches.length === 1) {
+      if (matches[0].frequency) setFrequency(matches[0].frequency);
+      if (matches[0].duration) setDays(matches[0].duration);
+    }
+  }
+
+  function commit() {
+    const drug = (name || q).trim();
+    const duration = courseText(days);
+    const line = drugLine({
+      name: drug,
+      dosage: dosage.trim(),
+      frequency: frequency.trim(),
+      duration,
+    });
+    if (!line) return;
+    onAdd(line);
+    setQ("");
+    setName("");
+    setDosage("");
+    setFrequency("");
+    setDays("");
+    setFocusName((n) => n + 1);
+  }
+
+  function onFieldKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+  }
+
+  const field = "w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm";
 
   return (
     <div className="mt-1">
-      <Typeahead
-        value={q}
-        onChange={setQ}
-        items={items}
-        onPick={(it) => onAdd(it.label)}
-        onSubmitCustom={(raw) => onAdd(raw)}
-        placeholder="ДВ, торговое, группа, МКБ…  ↑↓ Enter"
-        emptyHint="Нет в справочнике. Enter — вставить как есть. i — карточка, если в базе"
-      />
-      {!q.trim() && !diagnosisCode && (
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.9fr)_4.5rem]">
+        <Typeahead
+          value={q}
+          onChange={(v) => {
+            setQ(v);
+            if (v.trim().toLowerCase() !== name.trim().toLowerCase()) setName("");
+          }}
+          items={items}
+          clearOnPick={false}
+          focusNonce={focusName}
+          onPick={(it) => {
+            const row = items.find((x) => x.id === it.id);
+            fill({
+              name: it.name || it.label,
+              dosage: row?.dosage,
+              frequency: row?.frequency,
+              duration: row?.duration,
+            });
+          }}
+          onSubmitCustom={(raw) => fill({ name: raw })}
+          placeholder="Препарат  ↑↓ Enter"
+          emptyHint="Нет в справочнике. Enter — к дозе, ещё Enter вставит"
+        />
+        <input
+          ref={doseRef}
+          value={dosage}
+          onChange={(e) => onDose(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="доза"
+          aria-label="Доза"
+          list={doses.length ? "rx-dose-list" : undefined}
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="кратность"
+          aria-label="Кратность"
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={days}
+          onChange={(e) => setDays(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="дней"
+          aria-label="Дней приёма"
+          className={field}
+          autoComplete="off"
+          inputMode="numeric"
+        />
+      </div>
+      {doses.length > 0 && (
+        <datalist id="rx-dose-list">
+          {doses.map((d) => (
+            <option key={d.value} value={d.value} label={d.label} />
+          ))}
+        </datalist>
+      )}
+      {!q.trim() && !diagnosisCode && !name && (
         <p className="mt-1.5 text-xs text-mute">
-          Справочник не вываливается целиком. Найди препарат или поставь диагноз — подтянутся схема и клинрек.
+          Название, затем доза. Enter вставляет. Tab — кратность, ещё раз — дни.
         </p>
       )}
       {!q.trim() && !!diagnosisCode && hits.length > 0 && (
