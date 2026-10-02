@@ -1,0 +1,3 @@
+.legacy-surface .study-list-tabs { flex-wrap: wrap; }
+.legacy-surface .study-list-tabs button { padding: 6px 12px; font-size: 12.5px; }
+.legacy-surface .study-list-count { margin-left: 4px; font-weight: 650; opacity: 0.75; }

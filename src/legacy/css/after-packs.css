@@ -1,0 +1,500 @@
+
+.legacy-surface .drug-regimen-row { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.legacy-surface .drug-regimen-label { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.legacy-surface .drug-regimen-fields { display: flex; gap: 6px; flex-wrap: wrap; }
+.legacy-surface .drug-regimen-fields input { flex: 1; min-width: 110px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; }
+
+.legacy-surface .regimen-picker {
+  background: var(--teal-soft);
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.legacy-surface .regimen-picker-label { font-size: 12.5px; font-weight: 600; color: var(--teal); }
+.legacy-surface .regimen-picker-option {
+  text-align: left;
+  border: 1px solid #cfe0da;
+  background: white;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.legacy-surface .regimen-picker-option:hover { background: var(--paper); }
+
+.legacy-surface .scheme-search-block {
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+  background: var(--panel);
+}
+.legacy-surface .scheme-search-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.legacy-surface .scheme-search-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.legacy-surface .scheme-search-result {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+.legacy-surface .scheme-search-result:first-of-type { border-top: none; margin-top: 0; }
+.legacy-surface .scheme-search-result-title { font-weight: 600; font-size: 13.5px; }
+
+.legacy-surface .drug-form-field-with-ai { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.legacy-surface .drug-form-field-with-ai .auto-resize-textarea { width: 100%; }
+
+.legacy-surface .drug-form-groups-field { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
+.legacy-surface .drug-groups-preview { display: flex; flex-wrap: wrap; gap: 5px; }
+.legacy-surface .drug-group-pill {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legacy-surface .drug-group-pill.official { background: var(--teal-soft); color: var(--teal); border-color: #cfe0da; }
+.legacy-surface .drug-group-pill-tag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.75;
+}
+
+.legacy-surface .drug-db-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+}
+.legacy-surface .drug-db-filters select {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  background: white;
+}
+@keyframes wizard-pulse {
+  0%, 100% { outline-color: var(--teal); }
+  50% { outline-color: rgba(15, 110, 95, 0.35); }
+}
+
+.legacy-surface .guideline-hub-box { max-width: min(640px, calc(100vw - 32px)); }
+.legacy-surface .guideline-hub-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.legacy-surface .guideline-hub-section:last-child { border-bottom: none; margin-bottom: 0; }
+.legacy-surface .guideline-hub-section-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.legacy-surface .section-clear-btn {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.7;
+}
+.legacy-surface .section-clear-btn:hover { opacity: 1; color: var(--red); }
+
+.legacy-surface .section-duration-row { margin-bottom: 12px; }
+.legacy-surface .section-duration-row label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.legacy-surface .section-duration-row input {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+  flex: 1;
+  max-width: 260px;
+}
+
+.legacy-surface .guideline-drugs-investigations {
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.legacy-surface .patients-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.legacy-surface .patients-sidebar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.legacy-surface .patients-search {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.legacy-surface .patients-list { display: flex; flex-direction: column; gap: 2px; max-height: 70vh; overflow-y: auto; }
+.legacy-surface .patients-list-item {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.legacy-surface .patients-list-item:hover { background: var(--paper); }
+.legacy-surface .patients-list-item.active { background: var(--teal); color: white; }
+
+.legacy-surface .patients-detail {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.legacy-surface .patients-detail-header { display: flex; align-items: baseline; gap: 12px; }
+.legacy-surface .patients-detail-header h3 { margin: 0; font-family: var(--font-display); }
+.legacy-surface .patients-age-badge { font-size: 12.5px; color: var(--ink-soft); }
+
+.legacy-surface .patients-field-row { display: flex; align-items: center; gap: 12px; }
+.legacy-surface .patients-field-row label { width: 140px; font-size: 12.5px; color: var(--ink-soft); flex-shrink: 0; }
+.legacy-surface .patients-field-row input { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13.5px; flex: 1; }
+.legacy-surface .patients-field-value { cursor: pointer; font-size: 13.5px; }
+.legacy-surface .patients-field-value:hover { text-decoration: underline; color: var(--teal); }
+
+.legacy-surface .visit-search-block { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+
+.legacy-surface .unlock-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+}
+.legacy-surface .unlock-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+.legacy-surface .unlock-box .brand { justify-content: center; margin-bottom: 16px; }
+.legacy-surface .unlock-box h3 { margin: 0 0 6px; font-family: var(--font-display); }
+.legacy-surface .unlock-box form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.legacy-surface .unlock-box input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+}
+.legacy-surface .unlock-pin-input { letter-spacing: 6px; font-size: 20px; }
+.legacy-surface .unlock-switch-mode {
+  border: none;
+  background: none;
+  color: var(--teal);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 10px;
+}
+
+.legacy-surface .clinical-lock-pin-block {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.legacy-surface .clinical-lock-pin-block h5 { margin: 0 0 8px; font-size: 13px; }
+
+.legacy-surface .clinical-lock-settings { display: flex; flex-direction: column; gap: 10px; }
+.legacy-surface .clinical-lock-form { display: flex; flex-direction: column; gap: 8px; max-width: 300px; }
+.legacy-surface .clinical-lock-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.legacy-surface .clinical-lock-enabled-block { display: flex; flex-direction: column; gap: 8px; }
+.legacy-surface .clinical-lock-actions { display: flex; gap: 8px; }
+
+.legacy-surface .drug-brandnames-row { margin-top: 4px; font-size: 12px; }
+.legacy-surface .drug-brandnames-value {
+  cursor: pointer;
+  color: var(--teal);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legacy-surface .drug-brandnames-remove {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.legacy-surface .drug-brandnames-add {
+  border: 1px dashed var(--line);
+  background: none;
+  color: var(--ink-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.legacy-surface .suggestions-diagnosis-history { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+
+.legacy-surface .duration-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.legacy-surface .duration-picker-amount {
+  width: 90px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+}
+.legacy-surface .duration-picker-unit {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13.5px;
+  background: white;
+}
+.legacy-surface .duration-picker-preview { font-size: 12px; color: var(--ink-soft); }
+
+.legacy-surface .field-preview-block-alt { background: rgba(15, 110, 95, 0.03); border-radius: 8px; }
+
+.legacy-surface .patient-details-spoiler { margin-bottom: 14px; }
+.legacy-surface .patient-details-spoiler summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+  padding: 4px 0;
+  list-style: none;
+}
+.legacy-surface .patient-details-spoiler summary::-webkit-details-marker { display: none; }
+.legacy-surface .patient-details-spoiler summary::before { content: '▸ '; color: var(--teal); }
+.legacy-surface .patient-details-spoiler[open] summary::before { content: '▾ '; }
+.legacy-surface .patient-details-spoiler .visit-top-row { margin-top: 10px; }
+
+.legacy-surface .anamnesis-freetext-block { margin-top: 10px; }
+.legacy-surface .anamnesis-freetext-block label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.legacy-surface .anamnesis-freetext-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.legacy-surface .pending-investigations-block {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.legacy-surface .pending-investigations-label { font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; }
+
+.legacy-surface .guideline-scenario-block { margin-bottom: 8px; }
+.legacy-surface .guideline-scenario-name { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+.legacy-surface .guideline-drug-buttons { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.legacy-surface .guideline-drug-btn {
+  border: 1px dashed #6b5fa8;
+  background: #f4f1fb;
+  color: #6b5fa8;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.legacy-surface .guideline-drug-btn:hover { background: #e9e3f7; }
+
+.legacy-surface .tab-more-select {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.legacy-surface .visit-history-card .btn-small { margin-top: 8px; }
+
+
+.legacy-surface .chip-default-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.legacy-surface .chip-default-toggle input { width: 14px; height: 14px; }
+
+.legacy-surface .modifier-group-default-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px dashed var(--amber);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--amber-soft);
+}
+
+.legacy-surface .selected-chip {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legacy-surface .selected-chip:hover { border-color: var(--teal); }
+
+.legacy-surface .selected-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.legacy-surface .freeform-textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.legacy-surface .textarea-with-voice { display: flex; gap: 6px; align-items: flex-start; }
+.legacy-surface .textarea-with-voice .freeform-textarea { flex: 1; }
+
+.legacy-surface .draft-banner {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.legacy-surface .draft-banner button {
+  border: 1px solid var(--amber);
+  background: none;
+  color: var(--amber);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.legacy-surface .preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.legacy-surface .preset-bar-label { font-size: 12.5px; color: var(--ink-soft); }
+.legacy-surface .preset-pill-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.legacy-surface .preset-pill {
+  border: 1px solid var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.legacy-surface .preset-remove {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+.legacy-surface .visit-actions-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.legacy-surface .visit-history-card.clickable { cursor: pointer; }
+.legacy-surface .visit-history-card.clickable:hover { border-color: var(--teal); }
+.legacy-surface .visit-history-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+.legacy-surface .section-text-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.legacy-surface .section-select-input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+}
+
+.legacy-surface .checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.legacy-surface .checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.legacy-surface .checkbox-item input { width: 16px; height: 16px; }
+
