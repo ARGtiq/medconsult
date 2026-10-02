@@ -478,7 +478,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         {brandError && <div className="ai-error">{brandError}</div>}
         <div className="drug-form-row">
           <select
-            aria-label="Лекарственная форма"
+            aria-label="Форма"
+            title="Форма"
             value={form.form || DEFAULT_DRUG_FORM}
             onChange={(e) => setForm({ ...form, form: e.target.value })}
           >

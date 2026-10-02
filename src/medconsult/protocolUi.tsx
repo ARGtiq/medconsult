@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, DRUG_FORMS, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -59,7 +59,6 @@ function DrugSearch({
 }) {
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
-  const [form, setForm] = useState(DEFAULT_DRUG_FORM);
   const [dosage, setDosage] = useState("");
   const [brand, setBrand] = useState("");
   const [frequency, setFrequency] = useState("");
@@ -122,7 +121,6 @@ function DrugSearch({
   function reset() {
     setQ("");
     setName("");
-    setForm(DEFAULT_DRUG_FORM);
     setDosage("");
     setBrand("");
     setFrequency("");
@@ -137,7 +135,7 @@ function DrugSearch({
     const picked = (extra?.brand ?? "").trim();
     return formatDrugMention({
       name: drug,
-      form: (extra?.form || rec?.form || DEFAULT_DRUG_FORM).trim(),
+      form: (rec?.form || DEFAULT_DRUG_FORM).trim(),
       brandNames: picked || rec?.brandNames,
       composition: rec?.composition,
       dosage: extra?.dosage,
@@ -147,10 +145,8 @@ function DrugSearch({
   }
 
   function insertNow(drugName: string) {
-    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drugName.trim().toLowerCase());
     const v = variantsOf(drugName)[0];
     const line = lineFor(drugName, {
-      form: rec?.form || DEFAULT_DRUG_FORM,
       dosage: v?.dosage,
       frequency: v?.frequency,
       duration: v?.duration,
@@ -161,12 +157,10 @@ function DrugSearch({
   }
 
   function load(drugName: string) {
-    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drugName.trim().toLowerCase());
     const vars = variantsOf(drugName);
     const only = vars.length === 1 ? vars[0] : undefined;
     setName(drugName);
     setQ(drugName);
-    setForm(rec?.form || DEFAULT_DRUG_FORM);
     setBrand("");
     setDosage(only?.dosage || "");
     setFrequency(only?.frequency || "");
@@ -177,7 +171,6 @@ function DrugSearch({
   function commit() {
     const drug = (name || q).trim();
     const line = lineFor(drug, {
-      form,
       brand,
       dosage: dosage.trim(),
       frequency: frequency.trim(),
@@ -208,19 +201,7 @@ function DrugSearch({
 
   return (
     <div className="mt-1">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[4.2rem_minmax(0,1.3fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]">
-        <select
-          value={form}
-          onChange={(e) => setForm(e.target.value)}
-          aria-label="Форма"
-          className={field}
-        >
-          {(DRUG_FORMS.includes(form) ? DRUG_FORMS : [form, ...DRUG_FORMS]).map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]">
         <Typeahead
           value={q}
           onChange={(v) => {
