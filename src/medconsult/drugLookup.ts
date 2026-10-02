@@ -1,6 +1,5 @@
-import { DRUG_GROUPS, getBuiltinGroupMeta } from "@/legacy/data/drugSafety";
+import { getBuiltinGroupMeta } from "@/legacy/data/drugSafety";
 import { store } from "@/legacy/lib/store";
-import { DRUGS } from "./data/catalog";
 
 export type DrugCardInfo = {
   name: string;
@@ -56,7 +55,7 @@ function closeMatch(a: string, b: string) {
 }
 
 function groups(): Record<string, GroupDef> {
-  const all: Record<string, GroupDef> = { ...(DRUG_GROUPS as Record<string, GroupDef>) };
+  const all: Record<string, GroupDef> = {};
   try {
     Object.entries(store.getCustomGroups() || {}).forEach(([k, g]) => {
       if (g?.label) all[k] = { label: g.label, drugs: g.drugs || [] };
@@ -123,12 +122,31 @@ function dbRows(): DbRow[] {
   }
 }
 
+function bestDb(raw: string, rows: DbRow[]): DbRow | undefined {
+  const low = norm(raw);
+  if (low.length < 2) return undefined;
+  const sorted = rows
+    .filter((d) => (d.name || "").trim())
+    .slice()
+    .sort((a, b) => (b.name || "").length - (a.name || "").length);
+  const byName = sorted.find((d) => low.includes(norm(d.name || "")));
+  if (byName) return byName;
+  return sorted.find((d) =>
+    (d.brandNames || "")
+      .split(/[,;]/)
+      .map((s) => norm(s))
+      .some((b) => b.length >= 3 && low.includes(b)),
+  );
+}
+
 export function lookupDrug(raw: string): DrugCardInfo | null {
   const opts = candidates(raw);
-  if (!opts.length) return null;
-
   const rows = dbRows();
+  const embedded = bestDb(raw, rows);
+  if (!opts.length && !embedded) return null;
+
   const dbHit =
+    embedded ||
     rows.find((d) => opts.some((c) => closeMatch(d.name || "", c))) ||
     rows.find((d) =>
       opts.some((c) =>
@@ -140,9 +158,7 @@ export function lookupDrug(raw: string): DrugCardInfo | null {
       ),
     );
 
-  const catHit = DRUGS.find((d) => opts.some((c) => closeMatch(d.name, c)));
-
-  let name = dbHit?.name || catHit?.name || "";
+  let name = dbHit?.name || "";
   if (!name) {
     for (const c of opts) {
       const g = groupOf(c);
@@ -162,18 +178,18 @@ export function lookupDrug(raw: string): DrugCardInfo | null {
   const info: DrugCardInfo = {
     name,
     inDatabase,
-    dosage: dbHit?.dosage || catHit?.dose || "",
+    dosage: dbHit?.dosage || "",
     frequency: dbHit?.frequency || "",
     duration: dbHit?.duration || "",
     brandNames: dbHit?.brandNames || "",
     group: dbHit?.group || gm?.group || "",
-    mkb10Codes: dbHit?.mkb10Codes || catHit?.codes.join(", ") || gm?.mkb10Codes || "",
+    mkb10Codes: dbHit?.mkb10Codes || gm?.mkb10Codes || "",
     sideEffects: dbHit?.sideEffects || gm?.sideEffects || "",
     contraindications: dbHit?.contraindications || gm?.contraindications || "",
     interactions: dbHit?.interactions || "",
     monitoring: dbHit?.monitoring || "",
     evidenceLevel: dbHit?.evidenceLevel || "",
-    note: catHit?.note || "",
+    note: "",
     crossAllergyNote: gm?.crossAllergyNote || "",
   };
 

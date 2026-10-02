@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { store as legacy } from "@/legacy/lib/store";
-import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import {
   composeAnamnesis,
   composeVitae,
@@ -21,7 +20,6 @@ import {
 } from "./anamnesisChips";
 import { useTemplates, addSurgeryPreset, type VitaePreset } from "./data/templates";
 import { diseaseHasBody, findDisease, rememberDisease, type Disease } from "./diseases";
-import { DRUGS } from "./data/catalog";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchAllergy, searchDrugs } from "./live";
 import { useAppStore } from "./store";
@@ -103,9 +101,6 @@ function drugNameOnly(raw: string) {
 function groupKnown(name: string) {
   const n = name.trim().toLowerCase();
   if (!n) return false;
-  for (const g of Object.values(DRUG_GROUPS) as { label?: string }[]) {
-    if ((g.label || "").trim().toLowerCase() === n) return true;
-  }
   try {
     return Object.values(legacy.getCustomGroups() || {}).some(
       (g) => String((g as { label?: string }).label || "").trim().toLowerCase() === n,
@@ -128,7 +123,6 @@ function ensureGroup(name: string) {
 function drugKnown(name: string) {
   const n = name.trim().toLowerCase();
   if (!n) return false;
-  if (DRUGS.some((d) => d.name.toLowerCase() === n)) return true;
   try {
     return !!legacy.getDrugInfo(name);
   } catch {
@@ -427,10 +421,6 @@ function VitaeSection({
 
 function allergyGroups(): string[] {
   const labels: string[] = [];
-  for (const g of Object.values(DRUG_GROUPS) as { label?: string }[]) {
-    const label = (g.label || "").trim();
-    if (label) labels.push(label);
-  }
   try {
     Object.values(legacy.getCustomGroups() || {}).forEach((g) => {
       const label = String((g as { label?: string }).label || "").trim();
@@ -615,7 +605,9 @@ function ChipList({
           </div>
         </div>
       ) : null}
-      {allergy ? <GroupMarks selected={items} onToggle={(name) => { setAdding(true); onChange(toggleNamed(items, name)); }} /> : null}
+      {allergy && open ? (
+        <GroupMarks selected={items} onToggle={(name) => { setAdding(true); onChange(toggleNamed(items, name)); }} />
+      ) : null}
     </div>
   );
 }
@@ -635,6 +627,8 @@ function CardFill({
 }) {
   const [q, setQ] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const open = !allergy || items.length > 0 || adding;
   const hits = useMemo(() => {
     if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
     if (allergy) return searchAllergy(q);
@@ -650,27 +644,51 @@ function CardFill({
       else if (drugKnown(name)) rememberDrug(name);
     }
     if (!items.includes(name)) onChange([...items, name]);
+    setAdding(true);
     setQ("");
     setPending(null);
   }
+  const chip = (on: boolean) =>
+    `rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"}`;
   return (
     <VitaeField label={label}>
-      <EditableChips items={items} onChange={onChange} />
-      <Typeahead
-        value={q}
-        onChange={setQ}
-        items={hits}
-        onPick={(it) => commitNamed(it.name || it.label)}
-        onSubmitCustom={(raw) => {
-          const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase() || (h.name || "").toLowerCase() === raw.toLowerCase());
-          if (hit || groupKnown(raw) || drugKnown(raw)) commitNamed(hit?.name || raw);
-          else setPending(raw);
-        }}
-        placeholder={placeholder}
-        emptyHint={q.trim().length >= 2 ? "Enter — выбрать, что это" : undefined}
-      />
-      {pending ? <SaveKind name={pending} onPick={(kind) => commitNamed(pending, kind)} /> : null}
-      {allergy ? <GroupMarks selected={items} onToggle={(name) => onChange(toggleNamed(items, name))} /> : null}
+      {allergy ? (
+        <div className="mb-1 flex flex-wrap gap-1">
+          <button
+            type="button"
+            className={chip(!open)}
+            onClick={() => {
+              setAdding(false);
+              if (items.length) onChange([]);
+            }}
+          >
+            отрицает
+          </button>
+          <button type="button" className={chip(open)} onClick={() => setAdding(true)}>
+            есть
+          </button>
+        </div>
+      ) : null}
+      {open ? (
+        <>
+          <EditableChips items={items} onChange={onChange} />
+          <Typeahead
+            value={q}
+            onChange={setQ}
+            items={hits}
+            onPick={(it) => commitNamed(it.name || it.label)}
+            onSubmitCustom={(raw) => {
+              const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase() || (h.name || "").toLowerCase() === raw.toLowerCase());
+              if (hit || groupKnown(raw) || drugKnown(raw)) commitNamed(hit?.name || raw);
+              else setPending(raw);
+            }}
+            placeholder={placeholder}
+            emptyHint={q.trim().length >= 2 ? "Enter — выбрать, что это" : undefined}
+          />
+          {pending ? <SaveKind name={pending} onPick={(kind) => commitNamed(pending, kind)} /> : null}
+          {allergy ? <GroupMarks selected={items} onToggle={(name) => onChange(toggleNamed(items, name))} /> : null}
+        </>
+      ) : null}
     </VitaeField>
   );
 }

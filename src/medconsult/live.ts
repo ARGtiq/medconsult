@@ -1,12 +1,14 @@
 import { rxText } from "@/legacy/lib/rx";
 import { store } from "@/legacy/lib/store";
 import { explicitChips } from "@/legacy/lib/guidelineChips";
-import { DRUG_GROUPS } from "@/legacy/data/drugSafety";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
-import { COMPLAINTS, DRUGS, ICD, complaintsForCode, guidelineForCode } from "./data/catalog";
+import { COMPLAINTS, ICD, complaintsForCode } from "./data/catalog";
 import { getComplaintPresets, getComplaintTemplates, type ComplaintTemplate } from "./data/templates";
 import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal } from "./data/studies";
 import type { StudyDef, StudyEntry, StudyField } from "./types";
+
+export const DRUG_FORMS = ["таб.", "капс.", "супп.", "р-р", "амп.", "мазь", "крем", "гель", "капли", "спрей", "порошок", "сироп", "сусп."];
+export const DEFAULT_DRUG_FORM = "таб.";
 
 export function liveIcd(): { code: string; title: string }[] {
   try {
@@ -74,11 +76,7 @@ export function liveDrugs(): { name: string; dose: string }[] {
 }
 
 export function liveDrugsMerged(): { name: string; dose: string }[] {
-  const live = liveDrugs();
-  const seed = DRUGS.map((d) => ({ name: d.name, dose: d.dose }));
-  if (!live.length) return seed;
-  const names = new Set(live.map((d) => d.name.toLowerCase()));
-  return [...live, ...seed.filter((d) => !names.has(d.name.toLowerCase()))];
+  return liveDrugs();
 }
 
 export function liveGuidelines(): Record<string, unknown>[] {
@@ -138,15 +136,7 @@ export function compactGuideline(code: string): CompactGuideline | null {
       complaints: picture,
     };
   }
-  const seed = guidelineForCode(code);
-  if (!seed) return null;
-  return {
-    id: seed.id,
-    title: seed.title,
-    scenarios: seed.scenarios,
-    recs: seed.recs,
-    complaints: seed.complaints,
-  };
+  return null;
 }
 
 export function liveComplaints(): string[] {
@@ -680,8 +670,7 @@ export function liveDrugRecords(): DrugRecord[] {
           duration: String(r?.duration || "").trim(),
         }))
         .filter((r) => r.label || r.dosage || r.frequency || r.duration);
-      const cat = DRUGS.find((x) => x.name.toLowerCase() === String(d.name).toLowerCase());
-      const dose = [dosage, frequency, duration].filter(Boolean).join(" ") || cat?.dose || "";
+      const dose = [dosage, frequency, duration].filter(Boolean).join(" ");
       fromDb.push({
         name: d.name,
         dose,
@@ -699,11 +688,6 @@ export function liveDrugRecords(): DrugRecord[] {
   } catch {
     /* */
   }
-  const names = new Set(fromDb.map((d) => d.name.toLowerCase()));
-  for (const d of DRUGS) {
-    if (names.has(d.name.toLowerCase())) continue;
-    fromDb.push({ name: d.name, dose: d.dose, mkb10Codes: d.codes.join(", ") });
-  }
   return fromDb;
 }
 
@@ -715,10 +699,7 @@ export type DrugHit = {
 };
 
 function groupCatalog(): { label: string; drugs: string[] }[] {
-  const list: { label: string; drugs: string[] }[] = Object.values(DRUG_GROUPS).map((g) => ({
-    label: g.label,
-    drugs: g.drugs || [],
-  }));
+  const list: { label: string; drugs: string[] }[] = [];
   try {
     Object.values(store.getCustomGroups() || {}).forEach((g) => {
       if (g?.label) list.push({ label: g.label, drugs: g.drugs || [] });

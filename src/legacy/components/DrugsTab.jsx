@@ -10,6 +10,7 @@ import { parseDrugGroups } from '../data/drugSafety'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import DrugGroupsInput from './DrugGroupsInput'
 import { showToast } from '../lib/toast'
+import { DEFAULT_DRUG_FORM, DRUG_FORMS } from '../../medconsult/live'
 
 const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
 
@@ -27,7 +28,7 @@ function blankForm() {
     sideEffects: '',
     group: '',
     brandNames: '',
-    form: '',
+    form: DEFAULT_DRUG_FORM,
     composition: '',
     interactions: '',
     contraindications: '',
@@ -476,11 +477,15 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         </div>
         {brandError && <div className="ai-error">{brandError}</div>}
         <div className="drug-form-row">
-          <input
-            placeholder="Форма: табл., капсулы"
-            value={form.form || ''}
+          <select
+            aria-label="Лекарственная форма"
+            value={form.form || DEFAULT_DRUG_FORM}
             onChange={(e) => setForm({ ...form, form: e.target.value })}
-          />
+          >
+            {(DRUG_FORMS.includes(form.form) || !form.form ? DRUG_FORMS : [form.form, ...DRUG_FORMS]).map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
           <input
             placeholder="Состав, если несколько ДВ: пинен + камфен + …"
             value={form.composition || ''}

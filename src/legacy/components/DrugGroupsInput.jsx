@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react'
 import { store } from '../lib/store'
-import { DRUG_GROUPS, parseDrugGroups } from '../data/drugSafety'
+import { parseDrugGroups } from '../data/drugSafety'
 
 function allGroupLabels() {
   const labels = new Set()
-  Object.values(DRUG_GROUPS).forEach((g) => g.label && labels.add(g.label))
   Object.values(store.getCustomGroups() || {}).forEach((g) => g.label && labels.add(g.label))
   Object.values(store.getDrugInfoAll() || {}).forEach((d) => {
     parseDrugGroups(d.group).forEach((g) => labels.add(g.label))

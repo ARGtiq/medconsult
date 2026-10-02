@@ -32,7 +32,7 @@ export function Typeahead({
   value: string;
   onChange: (v: string) => void;
   items: TypeaheadItem[];
-  onPick: (item: TypeaheadItem) => void;
+  onPick: (item: TypeaheadItem, how?: "click" | "enter" | "tab") => void;
   onSubmitCustom?: (raw: string) => void;
   placeholder?: string;
   idleLabel?: ReactNode;
@@ -95,8 +95,8 @@ export function Typeahead({
     el?.scrollIntoView({ block: "nearest" });
   }, [idx, open]);
 
-  function pick(item: TypeaheadItem) {
-    onPick(item);
+  function pick(item: TypeaheadItem, how: "click" | "enter" | "tab" = "click") {
+    onPick(item, how);
     if (clearOnPick) onChange("");
     setOpen(false);
   }
@@ -116,20 +116,20 @@ export function Typeahead({
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      if (open && items[idx]) pick(items[idx]);
+      if (open && items[idx]) pick(items[idx], "enter");
       else if (value.trim() && onSubmitCustom) {
         onSubmitCustom(value.trim());
         if (clearOnPick) onChange("");
         setOpen(false);
       } else if (items[idx]) {
         setOpen(true);
-        pick(items[idx]);
+        pick(items[idx], "enter");
       }
       return;
     }
     if (e.key === "Tab" && open && items[idx]) {
       e.preventDefault();
-      pick(items[idx]);
+      pick(items[idx], "tab");
       return;
     }
     if (e.key === "Escape") setOpen(false);

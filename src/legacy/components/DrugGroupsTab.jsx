@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { DRUG_GROUPS, CROSS_REACTIVITY, getBuiltinGroupMeta } from '../data/drugSafety'
+import { DRUG_GROUPS, getBuiltinGroupMeta } from '../data/drugSafety'
 import { describeDrugGroup } from '../lib/openrouter'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import FloatingField from './FloatingField'
 import { showToast } from '../lib/toast'
+import DrugsTab from './DrugsTab'
 
 const GROUP_FILL_FIELDS = ['description', 'crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
 
@@ -24,12 +25,10 @@ export default function DrugGroupsTab() {
   const [labelError, setLabelError] = useState(false)
   const [describing, setDescribing] = useState(false)
   const [describeError, setDescribeError] = useState('')
+  const [editingDrug, setEditingDrug] = useState(null)
   useEscapeToClose(() => setFormOpen(false), formOpen)
 
-  const allGroupOptions = [
-    ...Object.entries(DRUG_GROUPS).map(([key, g]) => ({ key, label: g.label })),
-    ...Object.entries(customGroups).map(([key, g]) => ({ key, label: g.label })),
-  ]
+  const allGroupOptions = Object.entries(customGroups).map(([key, g]) => ({ key, label: g.label }))
 
   function refreshCross() {
     setCrossList(store.getCrossReactivity())
@@ -186,15 +185,12 @@ export default function DrugGroupsTab() {
     })
   }
 
-  const staticEntries = Object.entries(DRUG_GROUPS)
   const customEntries = Object.entries(customGroups)
 
   return (
     <div className="settings-tab">
       <p className="settings-note">
-        Группы используются для автоматической подстановки аналогов и локальной проверки перекрёстной аллергии на приёме.
-        У встроенных групп список препаратов задан в коде (чтобы не ломать логику замены на аналог) — но клинические
-        заметки (побочки, противопоказания, МКБ-10) можно дополнить здесь. Свои группы — полностью редактируемые.
+        Группы нужны для аналогов и проверки перекрёстной аллергии. Встроенных групп нет — добавляйте свои.
       </p>
 
       <button type="button" className="btn-primary" onClick={startNew}>
@@ -222,12 +218,9 @@ export default function DrugGroupsTab() {
             disabled={!!editingStaticKey}
           />
         </div>
-        {!form.key && !editingStaticKey && (
+        {!form.key && !editingStaticKey && Object.keys(customGroups).length > 0 && (
           <select value={form.basedOn} onChange={(e) => applyBasedOn(e.target.value)}>
             <option value="">Начать с чистого листа</option>
-            {Object.entries(DRUG_GROUPS).map(([key, g]) => (
-              <option key={key} value={key}>На основе: {g.label}</option>
-            ))}
             {Object.entries(customGroups).map(([key, g]) => (
               <option key={key} value={`__custom__${key}`}>На основе: {g.label}</option>
             ))}
@@ -240,6 +233,18 @@ export default function DrugGroupsTab() {
           rows={2}
           disabled={!!editingStaticKey}
         />
+        {form.drugsText.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean).length > 0 && (
+          <div>
+            <div className="scenarios-block-label">Препараты группы — клик открывает карточку</div>
+            <div className="drug-form-row" style={{ flexWrap: 'wrap' }}>
+              {form.drugsText.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean).map((name) => (
+                <button type="button" key={name} className="btn-secondary btn-small" onClick={() => setEditingDrug(name)}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="drug-form-field-with-ai">
           <AutoResizeTextarea
             placeholder="Полное текстовое описание группы"
@@ -289,35 +294,7 @@ export default function DrugGroupsTab() {
       )}
 
       <div className="drug-db-list">
-        <h4>Группы лекарств ({staticEntries.length + customEntries.length})</h4>
-        {staticEntries.map(([key, g]) => {
-          const override = store.getGroupMeta(key) || {}
-          const builtin = getBuiltinGroupMeta(key) || {}
-          const meta = {
-            description: override.description ?? builtin.description,
-            crossAllergyNote: override.crossAllergyNote ?? builtin.crossAllergyNote,
-            sideEffects: override.sideEffects ?? builtin.sideEffects,
-            contraindications: override.contraindications ?? builtin.contraindications,
-            mkb10Codes: override.mkb10Codes ?? builtin.mkb10Codes,
-          }
-          return (
-            <div key={key} className="drug-db-card">
-              <div className="drug-db-card-top">
-                <strong className="drug-db-card-name" onClick={() => editStaticGroup(key)} title="Нажми, чтобы отредактировать заметки">
-                  {g.label}
-                </strong>
-                <span className="drug-db-group">встроенная</span>
-              </div>
-              <FillProgressBar item={meta} fields={GROUP_FILL_FIELDS} />
-              <div className="drug-db-line">Препараты: {g.drugs.join(', ')}</div>
-              {meta.description && <div className="drug-db-line">{meta.description}</div>}
-              {meta.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {meta.crossAllergyNote}</div>}
-              {meta.sideEffects && <div className="drug-db-line">Побочные: {meta.sideEffects}</div>}
-              {meta.contraindications && <div className="drug-db-line">Противопоказания: {meta.contraindications}</div>}
-              {meta.mkb10Codes && <div className="drug-db-line">МКБ-10: {meta.mkb10Codes}</div>}
-            </div>
-          )
-        })}
+        <h4>Группы лекарств ({customEntries.length})</h4>
         {customEntries.map(([key, g]) => (
           <div key={key} className="drug-db-card">
             <div className="drug-db-card-top">
@@ -336,7 +313,7 @@ export default function DrugGroupsTab() {
             {g.mkb10Codes && <div className="drug-db-line">МКБ-10: {g.mkb10Codes}</div>}
           </div>
         ))}
-        {staticEntries.length + customEntries.length === 0 && <p className="empty-hint">Пока нет групп.</p>}
+        {customEntries.length === 0 && <p className="empty-hint">Пока нет групп. Добавьте свою.</p>}
       </div>
 
       <div className="cross-reactivity-block">
@@ -345,16 +322,6 @@ export default function DrugGroupsTab() {
           Работает как полноценная проверка на приёме: если у пациента аллергия на препарат из группы A,
           а назначается препарат из группы B, и здесь есть связка A↔B — появится предупреждение при добавлении препарата.
         </p>
-
-        <div className="drug-db-list">
-          <h4>Встроенная (нередактируемая)</h4>
-          {CROSS_REACTIVITY.map((c, i) => (
-            <div key={i} className="cross-pair-card">
-              <strong>{groupLabel(c.groups[0])} ↔ {groupLabel(c.groups[1])}</strong>
-              <div className="drug-db-line">{c.note}</div>
-            </div>
-          ))}
-        </div>
 
         <form className="cross-form" onSubmit={saveCross}>
           <div className="drug-form-row">
@@ -393,6 +360,7 @@ export default function DrugGroupsTab() {
           {crossList.length === 0 && <p className="empty-hint">Пока нет своих связок.</p>}
         </div>
       </div>
+      {editingDrug ? <DrugsTab editorOnly initialItemId={editingDrug} onClose={() => setEditingDrug(null)} /> : null}
     </div>
   )
 }

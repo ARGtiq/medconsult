@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, dosesForDrug, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, DRUG_FORMS, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -59,7 +59,9 @@ function DrugSearch({
 }) {
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
+  const [form, setForm] = useState(DEFAULT_DRUG_FORM);
   const [dosage, setDosage] = useState("");
+  const [brand, setBrand] = useState("");
   const [frequency, setFrequency] = useState("");
   const [days, setDays] = useState("");
   const [focusDose, setFocusDose] = useState(0);
@@ -67,36 +69,49 @@ function DrugSearch({
   const doseRef = useRef<HTMLInputElement>(null);
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
   const items = useMemo(() => {
-    const out: (TypeaheadItem & { dosage: string; frequency: string; duration: string })[] = [];
+    const out: TypeaheadItem[] = [];
     for (const h of hits) {
+      const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === h.name.toLowerCase());
       const vars = variantsOf(h.name);
-      const rows = vars.length ? vars : [{ dosage: "", frequency: "", duration: "", label: "", detail: h.hint }];
-      rows.forEach((v, i) => {
-        const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === h.name.toLowerCase());
-        const mention = formatDrugMention({
-          name: h.name,
-          form: rec?.form,
-          brandNames: rec?.brandNames,
-          composition: rec?.composition,
-          dosage: v.dosage,
-          frequency: v.frequency,
-          duration: v.duration,
-        });
-        if (selected.includes(mention.text)) return;
-        out.push({
-          id: `${h.name}|${h.via}|${i}|${v.dosage}|${v.frequency}|${v.duration}`,
-          label: mention.text,
-          hint: h.via,
-          name: h.name,
-          dosage: v.dosage,
-          frequency: v.frequency,
-          duration: v.duration,
-        });
+      const mention = formatDrugMention({
+        name: h.name,
+        form: rec?.form || DEFAULT_DRUG_FORM,
+        brandNames: rec?.brandNames,
+        composition: rec?.composition,
+      });
+      const primary = vars[0];
+      const one = vars.length <= 1;
+      const full = formatDrugMention({
+        name: h.name,
+        form: rec?.form || DEFAULT_DRUG_FORM,
+        brandNames: rec?.brandNames,
+        composition: rec?.composition,
+        dosage: one ? primary?.dosage : "",
+        frequency: one ? primary?.frequency : "",
+        duration: one ? primary?.duration : "",
+      }).text;
+      if (one && selected.includes(full)) continue;
+      out.push({
+        id: `${h.name}|${h.via}`,
+        label: mention.text,
+        detail:
+          vars.length > 1
+            ? "несколько доз"
+            : [primary?.dosage, primary?.frequency, primary?.duration].filter(Boolean).join(" · ") || undefined,
+        hint: h.via,
+        name: h.name,
       });
     }
     return out;
   }, [hits, selected]);
   const doses = useMemo(() => dosesForDrug(name), [name]);
+  const brandOptions = useMemo(() => {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
+    return (rec?.brandNames || "")
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, [name]);
 
   useEffect(() => {
     if (!focusDose) return;
@@ -104,13 +119,73 @@ function DrugSearch({
     doseRef.current?.select();
   }, [focusDose]);
 
-  function fill(next: { name: string; dosage?: string; frequency?: string; duration?: string }) {
-    setName(next.name);
-    setQ(next.name);
-    setDosage(next.dosage || "");
-    setFrequency(next.frequency || "");
-    setDays(next.duration || "");
+  function reset() {
+    setQ("");
+    setName("");
+    setForm(DEFAULT_DRUG_FORM);
+    setDosage("");
+    setBrand("");
+    setFrequency("");
+    setDays("");
+    setFocusName((n) => n + 1);
+  }
+
+  function lineFor(drugName: string, extra?: { form?: string; brand?: string; dosage?: string; frequency?: string; duration?: string }) {
+    const drug = drugName.trim();
+    if (!drug) return "";
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drug.toLowerCase());
+    const picked = (extra?.brand ?? "").trim();
+    return formatDrugMention({
+      name: drug,
+      form: (extra?.form || rec?.form || DEFAULT_DRUG_FORM).trim(),
+      brandNames: picked || rec?.brandNames,
+      composition: rec?.composition,
+      dosage: extra?.dosage,
+      frequency: extra?.frequency,
+      duration: extra?.duration,
+    }).text;
+  }
+
+  function insertNow(drugName: string) {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drugName.trim().toLowerCase());
+    const v = variantsOf(drugName)[0];
+    const line = lineFor(drugName, {
+      form: rec?.form || DEFAULT_DRUG_FORM,
+      dosage: v?.dosage,
+      frequency: v?.frequency,
+      duration: v?.duration,
+    });
+    if (!line) return;
+    onAdd(line);
+    reset();
+  }
+
+  function load(drugName: string) {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drugName.trim().toLowerCase());
+    const vars = variantsOf(drugName);
+    const only = vars.length === 1 ? vars[0] : undefined;
+    setName(drugName);
+    setQ(drugName);
+    setForm(rec?.form || DEFAULT_DRUG_FORM);
+    setBrand("");
+    setDosage(only?.dosage || "");
+    setFrequency(only?.frequency || "");
+    setDays(only?.duration || "");
     setFocusDose((n) => n + 1);
+  }
+
+  function commit() {
+    const drug = (name || q).trim();
+    const line = lineFor(drug, {
+      form,
+      brand,
+      dosage: dosage.trim(),
+      frequency: frequency.trim(),
+      duration: courseText(days),
+    });
+    if (!line) return;
+    onAdd(line);
+    reset();
   }
 
   function onDose(v: string) {
@@ -120,29 +195,6 @@ function DrugSearch({
       if (matches[0].frequency) setFrequency(matches[0].frequency);
       if (matches[0].duration) setDays(matches[0].duration);
     }
-  }
-
-  function commit() {
-    const drug = (name || q).trim();
-    const duration = courseText(days);
-    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drug.toLowerCase());
-    const line = formatDrugMention({
-      name: drug,
-      form: rec?.form,
-      brandNames: rec?.brandNames,
-      composition: rec?.composition,
-      dosage: dosage.trim(),
-      frequency: frequency.trim(),
-      duration,
-    }).text;
-    if (!line) return;
-    onAdd(line);
-    setQ("");
-    setName("");
-    setDosage("");
-    setFrequency("");
-    setDays("");
-    setFocusName((n) => n + 1);
   }
 
   function onFieldKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -156,7 +208,19 @@ function DrugSearch({
 
   return (
     <div className="mt-1">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.9fr)_4.5rem]">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[4.2rem_minmax(0,1.3fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]">
+        <select
+          value={form}
+          onChange={(e) => setForm(e.target.value)}
+          aria-label="Форма"
+          className={field}
+        >
+          {(DRUG_FORMS.includes(form) ? DRUG_FORMS : [form, ...DRUG_FORMS]).map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
         <Typeahead
           value={q}
           onChange={(v) => {
@@ -166,18 +230,14 @@ function DrugSearch({
           items={items}
           clearOnPick={false}
           focusNonce={focusName}
-          onPick={(it) => {
-            const row = items.find((x) => x.id === it.id);
-            fill({
-              name: it.name || it.label,
-              dosage: row?.dosage,
-              frequency: row?.frequency,
-              duration: row?.duration,
-            });
+          onPick={(it, how) => {
+            const drug = it.name || it.label;
+            if (how === "enter") insertNow(drug);
+            else load(drug);
           }}
-          onSubmitCustom={(raw) => fill({ name: raw })}
-          placeholder="Препарат  ↑↓ Enter"
-          emptyHint="Нет в справочнике. Enter — к дозе, ещё Enter вставит"
+          onSubmitCustom={(raw) => insertNow(raw)}
+          placeholder="МНН  Enter вставит"
+          emptyHint="Нет в справочнике. Enter вставит как есть"
           wrapLabels
         />
         <input
@@ -188,6 +248,16 @@ function DrugSearch({
           placeholder="доза"
           aria-label="Доза"
           list={doses.length ? "rx-dose-list" : undefined}
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="торговое"
+          aria-label="Торговое название"
+          list={brandOptions.length ? "rx-brand-list" : undefined}
           className={field}
           autoComplete="off"
         />
@@ -204,11 +274,10 @@ function DrugSearch({
           value={days}
           onChange={(e) => setDays(e.target.value)}
           onKeyDown={onFieldKey}
-          placeholder="дней"
-          aria-label="Дней приёма"
+          placeholder="курс"
+          aria-label="Курс"
           className={field}
           autoComplete="off"
-          inputMode="numeric"
         />
       </div>
       {doses.length > 0 && (
@@ -218,9 +287,48 @@ function DrugSearch({
           ))}
         </datalist>
       )}
+      {brandOptions.length > 0 && (
+        <datalist id="rx-brand-list">
+          {brandOptions.map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
+      )}
+      {name && doses.length > 1 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {doses.map((d) => (
+            <button
+              key={d.value}
+              type="button"
+              onClick={() => onDose(d.value)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                dosage === d.value ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+            >
+              {d.value}
+            </button>
+          ))}
+        </div>
+      )}
+      {name && brandOptions.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {brandOptions.map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => setBrand(brand === b ? "" : b)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                brand === b ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+      )}
       {!q.trim() && !diagnosisCode && !name && (
         <p className="mt-1.5 text-xs text-mute">
-          Название, затем доза. Enter вставляет. Tab — кратность, ещё раз — дни.
+          Одно лекарство в списке. Enter вставляет сразу. Tab или клик — доза, торговое, кратность, курс.
         </p>
       )}
       {!q.trim() && !!diagnosisCode && hits.length > 0 && (
