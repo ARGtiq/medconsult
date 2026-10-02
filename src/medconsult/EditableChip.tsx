@@ -24,22 +24,41 @@ function chipClass(on: boolean, dashed?: boolean, marked?: boolean) {
     : "rounded-full border border-line bg-paper px-2 py-0.5 text-xs";
 }
 
+export function ParenText({ text }: { text: string }) {
+  const m = text.match(/^([^(]*?)\s*(\([^)]*\))([\s\S]*)$/);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      {m[1]}
+      <span className="text-[11px] font-normal text-mute"> {m[2]}</span>
+      {m[3]}
+    </>
+  );
+}
+
 export function EditableChips({
   items,
   onChange,
   lines,
   removable,
   reorder,
+  markParen,
+  analogsOf,
+  onInsertAfter,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
   lines?: boolean;
   removable?: boolean;
   reorder?: boolean;
+  markParen?: boolean;
+  analogsOf?: (line: string) => string[];
+  onInsertAfter?: (index: number, line: string) => void;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [over, setOver] = useState<number | null>(null);
+  const [analogsAt, setAnalogsAt] = useState<number | null>(null);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -106,8 +125,8 @@ export function EditableChips({
             }
           />
         ) : (
+          <div key={`${t}-${i}`} className={lines ? "flex flex-col gap-1" : "contents"}>
           <span
-            key={`${t}-${i}`}
             className={`${lines ? "flex w-full items-start gap-1 rounded-md px-2 py-1 text-sm" : "inline-flex items-center gap-0.5"} ${chipClass(true, false, drugMarked(t))} ${over === i ? "ring-2 ring-teal" : ""}`}
           >
             {reorder ? (
@@ -130,8 +149,17 @@ export function EditableChips({
                 setDraft(t);
               }}
             >
-              {t}
+              {markParen ? <ParenText text={t} /> : t}
             </button>
+            {analogsOf && onInsertAfter ? (
+              <button
+                type="button"
+                className="shrink-0 text-[10px] text-teal"
+                onClick={() => setAnalogsAt(analogsAt === i ? null : i)}
+              >
+                аналоги
+              </button>
+            ) : null}
             <InfoDot query={t} />
             {removable && (
               <button
@@ -144,6 +172,28 @@ export function EditableChips({
               </button>
             )}
           </span>
+          {analogsAt === i && analogsOf && onInsertAfter ? (
+            <div className="flex flex-col gap-1 pl-4">
+              {analogsOf(t).length ? (
+                analogsOf(t).map((line) => (
+                  <button
+                    key={line}
+                    type="button"
+                    className="text-left text-xs text-teal"
+                    onClick={() => {
+                      onInsertAfter(i, line);
+                      setAnalogsAt(null);
+                    }}
+                  >
+                    <ParenText text={line} />
+                  </button>
+                ))
+              ) : (
+                <div className="text-[11px] text-mute">В этой группе других препаратов нет. Группа задаётся в карточке.</div>
+              )}
+            </div>
+          ) : null}
+          </div>
         ),
       )}
     </div>

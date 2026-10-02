@@ -27,6 +27,8 @@ function blankForm() {
     sideEffects: '',
     group: '',
     brandNames: '',
+    form: '',
+    composition: '',
     interactions: '',
     contraindications: '',
     monitoring: '',
@@ -473,6 +475,18 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
           </button>
         </div>
         {brandError && <div className="ai-error">{brandError}</div>}
+        <div className="drug-form-row">
+          <input
+            placeholder="Форма: табл., капсулы"
+            value={form.form || ''}
+            onChange={(e) => setForm({ ...form, form: e.target.value })}
+          />
+          <input
+            placeholder="Состав, если несколько ДВ: пинен + камфен + …"
+            value={form.composition || ''}
+            onChange={(e) => setForm({ ...form, composition: e.target.value })}
+          />
+        </div>
 
         <div className="drug-form-field-with-ai">
           <AutoResizeTextarea
@@ -632,6 +646,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
                 </>
               )}
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
+              {d.form && <div className="drug-db-line">Форма: {d.form}</div>}
+              {d.composition && <div className="drug-db-line">Состав: {d.composition}</div>}
               {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
               {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}
               {(d.studyTriggers || []).map((t, i) => {

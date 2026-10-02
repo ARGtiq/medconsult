@@ -483,14 +483,16 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
       ]
         .filter(Boolean)
         .join(", ");
-      const line = scheme
-        ? [drug.name, drug.dosage, scheme].filter(Boolean).join(" ")
-        : drugLine({
-            name: drug.name,
-            dosage: drug.dosage,
-            frequency: drug.frequency,
-            duration: drug.duration,
-          });
+      const extra = drug as { form?: string; brandNames?: string; composition?: string };
+      const line = formatDrugMention({
+        name: drug.name,
+        form: extra.form,
+        brandNames: extra.brandNames,
+        composition: extra.composition,
+        dosage: drug.dosage,
+        frequency: scheme || drug.frequency,
+        duration: scheme ? "" : drug.duration,
+      }).text;
       out.push({ id: `${drug.name}|${hits.join("|")}`, name: drug.name, line, why: hits.join("; ") });
     }
   }
@@ -559,6 +561,90 @@ export function drugLine(d: { name: string; dose?: string; dosage?: string; freq
   return rxText(d);
 }
 
+export type DrugMention = { head: string; paren: string; text: string };
+
+/** Строка назначения: форма и название, в скобках торговые или состав. */
+export function formatDrugMention(d: {
+  name: string;
+  form?: string;
+  brandNames?: string;
+  composition?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+}): DrugMention {
+  const name = d.name.trim();
+  const form = (d.form || "").trim();
+  const parts = (d.composition || "")
+    .split("+")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const brands = (d.brandNames || "")
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const tail = [d.dosage, d.frequency, d.duration].map((s) => (s || "").trim()).filter(Boolean).join(" - ");
+  let head = "";
+  let paren = "";
+  if (parts.length > 1) {
+    head = [form, name ? `«${name}»` : ""].filter(Boolean).join(" ");
+    paren = parts.join(" + ");
+  } else {
+    head = [form, name].filter(Boolean).join(" ");
+    if (brands.length > 1) paren = `${brands.join(", ")} и др. аналоги`;
+    else if (brands.length === 1) paren = brands[0];
+    else if (parts.length === 1) paren = parts[0];
+  }
+  const text = [head, paren ? `(${paren})` : "", tail].filter(Boolean).join(" ");
+  return { head: head || name, paren, text: text || name };
+}
+
+export function analogsOf(lineOrName: string): { name: string; line: string }[] {
+  const raw = lineOrName.trim();
+  if (!raw) return [];
+  const records = liveDrugRecords();
+  const low = raw.toLowerCase();
+  const rec =
+    records.find((d) => d.name.toLowerCase() === low) ||
+    records
+      .slice()
+      .sort((a, b) => b.name.length - a.name.length)
+      .find((d) => d.name && low.includes(d.name.toLowerCase()));
+  const key = (rec?.name || raw).toLowerCase();
+  const seen = new Set<string>();
+  const out: { name: string; line: string }[] = [];
+  const push = (n: string) => {
+    const k = n.trim().toLowerCase();
+    if (!k || k === key || seen.has(k)) return;
+    seen.add(k);
+    const hit = records.find((d) => d.name.toLowerCase() === k);
+    const v = variantsOf(n)[0];
+    out.push({
+      name: n,
+      line: formatDrugMention({
+        name: n,
+        form: hit?.form,
+        brandNames: hit?.brandNames,
+        composition: hit?.composition,
+        dosage: v?.dosage,
+        frequency: v?.frequency,
+        duration: v?.duration,
+      }).text,
+    });
+  };
+  if (rec?.group) {
+    const g = rec.group.toLowerCase();
+    records.forEach((d) => {
+      if ((d.group || "").toLowerCase() === g) push(d.name);
+    });
+  }
+  for (const g of groupCatalog()) {
+    if (!(g.drugs || []).some((n) => n.toLowerCase() === key)) continue;
+    g.drugs.forEach(push);
+  }
+  return out.slice(0, 12);
+}
+
 export type DrugRegimen = { label: string; dosage: string; frequency: string; duration: string };
 
 export type DrugRecord = {
@@ -568,6 +654,8 @@ export type DrugRecord = {
   frequency?: string;
   duration?: string;
   brandNames?: string;
+  composition?: string;
+  form?: string;
   group?: string;
   mkb10Codes?: string;
   regimens?: DrugRegimen[];
@@ -601,6 +689,8 @@ export function liveDrugRecords(): DrugRecord[] {
         frequency,
         duration,
         brandNames: d.brandNames,
+        composition: String((d as { composition?: string }).composition || "").trim(),
+        form: String((d as { form?: string }).form || "").trim(),
         group: d.group,
         mkb10Codes: d.mkb10Codes,
         regimens,

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
-import { EditableChips, ToggleChips } from "./EditableChip";
-import { dosesForDrug, drugLine, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
+import { analogsOf, dosesForDrug, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -30,7 +30,9 @@ export function StudyDrugHints({
             onClick={() => onAdd(h.line)}
             className="rounded-lg border border-dashed border-teal/40 bg-paper px-2 py-1 text-left text-xs text-teal"
           >
-            <span className="font-medium">{h.line}</span>
+            <span className="font-medium">
+              <ParenText text={h.line} />
+            </span>
             <span className="mt-0.5 block text-[10px] text-mute">{h.why}</span>
           </button>
         ))}
@@ -70,12 +72,20 @@ function DrugSearch({
       const vars = variantsOf(h.name);
       const rows = vars.length ? vars : [{ dosage: "", frequency: "", duration: "", label: "", detail: h.hint }];
       rows.forEach((v, i) => {
-        const line = drugLine({ name: h.name, dosage: v.dosage, frequency: v.frequency, duration: v.duration });
-        if (selected.includes(line)) return;
+        const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === h.name.toLowerCase());
+        const mention = formatDrugMention({
+          name: h.name,
+          form: rec?.form,
+          brandNames: rec?.brandNames,
+          composition: rec?.composition,
+          dosage: v.dosage,
+          frequency: v.frequency,
+          duration: v.duration,
+        });
+        if (selected.includes(mention.text)) return;
         out.push({
           id: `${h.name}|${h.via}|${i}|${v.dosage}|${v.frequency}|${v.duration}`,
-          label: h.name,
-          detail: v.detail || undefined,
+          label: mention.text,
           hint: h.via,
           name: h.name,
           dosage: v.dosage,
@@ -115,12 +125,16 @@ function DrugSearch({
   function commit() {
     const drug = (name || q).trim();
     const duration = courseText(days);
-    const line = drugLine({
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drug.toLowerCase());
+    const line = formatDrugMention({
       name: drug,
+      form: rec?.form,
+      brandNames: rec?.brandNames,
+      composition: rec?.composition,
       dosage: dosage.trim(),
       frequency: frequency.trim(),
       duration,
-    });
+    }).text;
     if (!line) return;
     onAdd(line);
     setQ("");
@@ -164,6 +178,7 @@ function DrugSearch({
           onSubmitCustom={(raw) => fill({ name: raw })}
           placeholder="Препарат  ↑↓ Enter"
           emptyHint="Нет в справочнике. Enter — к дозе, ещё Enter вставит"
+          wrapLabels
         />
         <input
           ref={doseRef}
@@ -342,8 +357,16 @@ export function RecommendationsBlock({
             lines
             removable
             reorder
+            markParen
             items={session.recommendations}
             onChange={(next) => store.renameList("recommendations", next)}
+            analogsOf={(line) => analogsOf(line).map((a) => a.line)}
+            onInsertAfter={(index, line) => {
+              if (session.recommendations.includes(line)) return;
+              const next = [...session.recommendations];
+              next.splice(index + 1, 0, line);
+              store.renameList("recommendations", next);
+            }}
           />
         </>
       )}

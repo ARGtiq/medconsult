@@ -23,6 +23,8 @@ declare module "@/legacy/lib/store" {
         frequency?: string;
         duration?: string;
         brandNames?: string;
+        form?: string;
+        composition?: string;
         group?: string;
         mkb10Codes?: string;
         sideEffects?: string;
@@ -46,6 +48,8 @@ declare module "@/legacy/lib/store" {
       monitoring?: string;
       evidenceLevel?: string;
     } | null;
+    saveDrugInfo: (info: { name: string; form?: string; composition?: string; brandNames?: string; group?: string }) => void;
+    saveCustomGroup: (key: string, group: { label?: string; drugs?: string[] }) => void;
     getGroupMeta: (key: string) => {
       sideEffects?: string;
       contraindications?: string;

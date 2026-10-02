@@ -559,6 +559,7 @@ const VITAE_SEED = {
     referenceNotes: '',
     template: [
       'Физическое и умственное развитие в детском и юношеском возрасте {development}.',
+      '{workLine}',
       'Профессиональные вредности: {occupation}.',
       'Вредные привычки: {smoke}, {alcohol}.',
       'Перенесённые заболевания: {past}.',
@@ -566,13 +567,17 @@ const VITAE_SEED = {
       '{infections}',
       'Наследственность: {heritage}.',
       'Аллергические реакции: {allergy}.',
-      '{workLine}',
       '{disabilityLine}',
       '{surgery}',
       '{transfusion}',
     ].join('\n'),
     fields: [
       { key: 'development', label: 'развитие', kind: 'text', defaultValue: 'без особенностей' },
+      { key: 'employment', label: 'работает', kind: 'select', options: ['да', 'нет'], defaultValue: 'да' },
+      { key: 'workplace', label: 'место работы', kind: 'text', showIf: { field: 'employment', values: ['да', 'работает'] }, optional: true },
+      { key: 'jobTitle', label: 'должность', kind: 'text', showIf: { field: 'employment', values: ['да', 'работает'] }, optional: true },
+      { key: 'notWorkReason', label: 'причина', kind: 'select', options: ['пенсионер', 'студент', 'декрет', 'безработный', 'ухаживает за ребёнком'], showIf: { field: 'employment', values: ['нет', 'не работает'] } },
+      { key: 'notWorkText', label: 'своя причина', kind: 'text', showIf: { field: 'employment', values: ['нет', 'не работает'] } },
       { key: 'occupation', label: 'профвредности', kind: 'text', defaultValue: 'отрицает' },
       { key: 'smoke', label: 'курение', kind: 'text', defaultValue: 'не курит' },
       { key: 'alcohol', label: 'алкоголь', kind: 'text', defaultValue: 'алкоголь отрицает' },
@@ -581,11 +586,6 @@ const VITAE_SEED = {
       { key: 'heritage', label: 'наследственность', kind: 'text', defaultValue: 'не отягощена' },
       { key: 'surgery', label: 'операции', kind: 'text', defaultValue: 'Операций не было' },
       { key: 'transfusion', label: 'гемотрансфузии', kind: 'text', defaultValue: 'Гемотрансфузии: отрицает' },
-      { key: 'employment', label: 'работа', kind: 'select', options: ['работает', 'не работает'], defaultValue: 'работает' },
-      { key: 'workplace', label: 'место работы', kind: 'text', showIf: { field: 'employment', values: ['работает'] }, optional: true },
-      { key: 'jobTitle', label: 'должность', kind: 'text', showIf: { field: 'employment', values: ['работает'] }, optional: true },
-      { key: 'notWorkReason', label: 'причина', kind: 'select', options: ['пенсионер', 'студент', 'декрет', 'безработный', 'ухаживает за ребёнком'], showIf: { field: 'employment', values: ['не работает'] } },
-      { key: 'notWorkText', label: 'своя причина', kind: 'text', showIf: { field: 'employment', values: ['не работает'] } },
       { key: 'disability', label: 'инвалидность', kind: 'select', options: ['нет', 'да'], defaultValue: 'нет' },
       { key: 'disabilityGroup', label: 'группа', kind: 'select', options: ['I', 'II', 'III'], showIf: { field: 'disability', values: ['да'] } },
       { key: 'disabilityCause', label: 'причина инвалидности', kind: 'select', options: ['общее заболевание', 'трудовое увечье', 'профзаболевание', 'с детства', 'военная травма'], defaultValue: 'общее заболевание', showIf: { field: 'disability', values: ['да'] } },
@@ -618,6 +618,47 @@ function ensureVitaeTemplates() {
     if (std.template && !std.template.includes('{workLine}')) {
       std.template = std.template.replace('{surgery}', '{workLine}\n{disabilityLine}\n{surgery}')
       changed = true
+    }
+    if (std.template && std.template.includes('{workLine}') && !std.template.includes('{development}.\n{workLine}')) {
+      std.template = std.template.replace('\n{workLine}\n', '\n').replace('{development}.', '{development}.\n{workLine}')
+      changed = true
+    }
+    const workKeys = ['employment', 'workplace', 'jobTitle', 'notWorkReason', 'notWorkText']
+    const fields = std.fields || []
+    const devAt = fields.findIndex((f) => f.key === 'development')
+    if (devAt >= 0 && fields[devAt + 1]?.key !== 'employment' && fields.some((f) => f.key === 'employment')) {
+      const work = workKeys.map((k) => fields.find((f) => f.key === k)).filter(Boolean)
+      const rest = fields.filter((f) => !workKeys.includes(f.key))
+      const at = rest.findIndex((f) => f.key === 'development')
+      rest.splice(at + 1, 0, ...work)
+      std.fields = rest
+      const emp = std.fields.find((f) => f.key === 'employment')
+      if (emp) emp.label = 'работает'
+      changed = true
+    }
+    const empNow = (std.fields || []).find((f) => f.key === 'employment')
+    if (empNow) {
+      if (empNow.label !== 'работает') {
+        empNow.label = 'работает'
+        changed = true
+      }
+      if ((empNow.options || []).join('|') === 'работает|не работает') {
+        empNow.options = ['да', 'нет']
+        if (!empNow.defaultValue || empNow.defaultValue === 'работает') empNow.defaultValue = 'да'
+        changed = true
+      }
+    }
+    for (const f of std.fields || []) {
+      const vals = f.showIf && f.showIf.values
+      if (!vals) continue
+      if ((f.key === 'workplace' || f.key === 'jobTitle') && vals.includes('работает') && !vals.includes('да')) {
+        f.showIf.values = [...vals, 'да']
+        changed = true
+      }
+      if ((f.key === 'notWorkReason' || f.key === 'notWorkText') && vals.includes('не работает') && !vals.includes('нет')) {
+        f.showIf.values = [...vals, 'нет']
+        changed = true
+      }
     }
     if (changed) writeAll(state)
   }

@@ -15,13 +15,13 @@ import {
   HERITAGE_PRESETS,
   TRANSFUSION_PRESETS,
   RELATED_PRESETS,
-  VITAE_LINES,
   type AnamnesisDraft,
   type VitaeDraft,
   type VitaeItem,
 } from "./anamnesisChips";
 import { useTemplates, addSurgeryPreset, type VitaePreset } from "./data/templates";
 import { diseaseHasBody, findDisease, rememberDisease, type Disease } from "./diseases";
+import { DRUGS } from "./data/catalog";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchAllergy, searchDrugs } from "./live";
 import { useAppStore } from "./store";
@@ -125,12 +125,34 @@ function ensureGroup(name: string) {
   }
 }
 
-function rememberAllergyItem(name: string, hint?: string) {
-  if (hint === "группа" || groupKnown(name)) {
-    ensureGroup(name);
-    return;
+function drugKnown(name: string) {
+  const n = name.trim().toLowerCase();
+  if (!n) return false;
+  if (DRUGS.some((d) => d.name.toLowerCase() === n)) return true;
+  try {
+    return !!legacy.getDrugInfo(name);
+  } catch {
+    return false;
   }
-  rememberDrug(name);
+}
+
+function SaveKind({ name, onPick }: { name: string; onPick: (kind: "drug" | "group" | "text") => void }) {
+  return (
+    <div className="mt-1 rounded-md border border-line bg-paper px-2 py-1">
+      <div className="text-[11px] text-ink-soft">«{name}» нет в базе. Что это?</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <button type="button" className="rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal" onClick={() => onPick("drug")}>
+          препарат
+        </button>
+        <button type="button" className="rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal" onClick={() => onPick("group")}>
+          группа
+        </button>
+        <button type="button" className="rounded-full border border-line px-2 py-0.5 text-[11px]" onClick={() => onPick("text")}>
+          только сюда
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function rememberDrug(raw: string) {
@@ -387,31 +409,18 @@ function VitaeSection({
   onOmit: (id: string, hide: boolean) => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
-  if (omitted) return null;
   return (
-    <div className="group relative">
-      <div className="mt-1.5 flex items-center gap-1 pr-5">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="text-left text-xs font-semibold text-ink"
-          aria-expanded={open}
-        >
-          <span className="mr-1 text-mute">{open ? "▾" : "▸"}</span>
-          {title}
-        </button>
-        <button
-          type="button"
-          title="убрать пункт"
-          aria-label="убрать пункт"
-          onClick={() => onOmit(id, true)}
-          className="ml-auto flex size-[16px] items-center justify-center rounded bg-danger-soft text-[10px] font-bold text-danger opacity-70 md:opacity-0 md:group-hover:opacity-100"
-        >
-          ×
-        </button>
-      </div>
-      {open ? children : null}
+    <div className={omitted ? "opacity-60" : ""}>
+      <button
+        type="button"
+        onClick={() => onOmit(id, !omitted)}
+        title={omitted ? "Вернуть в протокол" : "Скрыть в протоколе"}
+        className={`mt-1.5 text-left text-xs font-semibold ${omitted ? "text-mute line-through" : "text-ink"}`}
+      >
+        {title}
+        {omitted ? " · нет в протоколе" : ""}
+      </button>
+      {children}
     </div>
   );
 }
@@ -477,21 +486,29 @@ function BlockLabel({ label, hint }: { label: string; hint?: string }) {
 function VitaeField({
   label,
   children,
+  omitted,
+  onToggleOmit,
   dim,
   onLabel,
 }: {
   label: string;
   children: ReactNode;
+  omitted?: boolean;
+  onToggleOmit?: () => void;
   dim?: boolean;
   onLabel?: () => void;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <div className={`mt-1.5 rounded-md border border-line bg-paper px-2 py-1 ${dim && open ? "opacity-50" : ""}`}>
+    <div className={`mt-1.5 rounded-md border border-line bg-paper px-2 py-1 ${omitted || dim ? "opacity-60" : ""}`}>
       <div className="flex items-center gap-2">
-        <button type="button" className="text-left text-xs leading-none font-medium text-ink-soft" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-          <span className="mr-1">{open ? "▾" : "▸"}</span>
+        <button
+          type="button"
+          className={`text-left text-xs leading-none font-medium ${omitted ? "text-mute line-through" : "text-ink-soft"}`}
+          onClick={onToggleOmit}
+          title={omitted ? "Вернуть в протокол" : "Скрыть в протоколе"}
+        >
           {label}
+          {omitted ? " · нет в протоколе" : ""}
         </button>
         {onLabel ? (
           <button type="button" className="text-[10px] text-teal" onClick={onLabel}>
@@ -499,7 +516,7 @@ function VitaeField({
           </button>
         ) : null}
       </div>
-      {open ? <div className="mt-1 text-sm leading-snug text-ink">{children}</div> : null}
+      <div className="mt-1 text-sm leading-snug text-ink">{children}</div>
     </div>
   );
 }
@@ -519,6 +536,7 @@ function ChipList({
 }) {
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
   const open = items.length > 0 || adding;
   const hits = useMemo(() => {
     if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
@@ -527,6 +545,18 @@ function ChipList({
       .slice(0, 10)
       .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
   }, [allergy, q]);
+  function commitNamed(name: string, kind?: "drug" | "group" | "text") {
+    if (kind === "drug") rememberDrug(name);
+    else if (kind === "group") ensureGroup(name);
+    else if (kind !== "text") {
+      if (groupKnown(name)) ensureGroup(name);
+      else if (drugKnown(name)) rememberDrug(name);
+    }
+    setAdding(true);
+    if (!items.includes(name)) onChange([...items, name]);
+    setQ("");
+    setPending(null);
+  }
   const chip = (on: boolean) =>
     `rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"}`;
   return (
@@ -566,22 +596,22 @@ function ChipList({
               value={q}
               onChange={setQ}
               items={hits}
-              onPick={(it) => {
-                const name = it.name || it.label;
-                if (allergy && it.hint === "группа") ensureGroup(name);
-                if (!items.includes(name)) onChange([...items, name]);
-                if (allergy && it.hint !== "группа") rememberDrug(name);
-              }}
+              onPick={(it) => commitNamed(it.name || it.label)}
               onSubmitCustom={(raw) => {
-                const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase());
-                if (allergy && (hit?.hint === "группа" || (!hit && !groupKnown(raw)))) ensureGroup(raw);
-                if (!items.includes(raw)) onChange([...items, raw]);
-                if (allergy && hit && hit.hint !== "группа") rememberDrug(raw);
+                const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase() || (h.name || "").toLowerCase() === raw.toLowerCase());
+                if (hit || groupKnown(raw) || drugKnown(raw)) commitNamed(hit?.name || raw);
+                else setPending(raw);
               }}
               placeholder={placeholder}
-              emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
+              emptyHint={q.trim().length >= 2 ? "Enter — выбрать, что это" : undefined}
               inputClassName="w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
             />
+            {pending ? (
+              <SaveKind
+                name={pending}
+                onPick={(kind) => commitNamed(pending, kind)}
+              />
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -604,6 +634,7 @@ function CardFill({
   placeholder: string;
 }) {
   const [q, setQ] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
   const hits = useMemo(() => {
     if (q.trim().length < 2) return [] as { id: string; label: string; hint?: string; name?: string }[];
     if (allergy) return searchAllergy(q);
@@ -611,6 +642,17 @@ function CardFill({
       .slice(0, 10)
       .map((h) => ({ id: h.name + h.via, label: h.name, hint: h.via, name: h.name }));
   }, [allergy, q]);
+  function commitNamed(name: string, kind?: "drug" | "group" | "text") {
+    if (kind === "drug") rememberDrug(name);
+    else if (kind === "group") ensureGroup(name);
+    else if (kind !== "text") {
+      if (groupKnown(name)) ensureGroup(name);
+      else if (drugKnown(name)) rememberDrug(name);
+    }
+    if (!items.includes(name)) onChange([...items, name]);
+    setQ("");
+    setPending(null);
+  }
   return (
     <VitaeField label={label}>
       <EditableChips items={items} onChange={onChange} />
@@ -618,21 +660,16 @@ function CardFill({
         value={q}
         onChange={setQ}
         items={hits}
-        onPick={(it) => {
-          const name = it.name || it.label;
-          if (allergy && it.hint === "группа") ensureGroup(name);
-          if (!items.includes(name)) onChange([...items, name]);
-          if (allergy && it.hint !== "группа") rememberDrug(name);
-        }}
+        onPick={(it) => commitNamed(it.name || it.label)}
         onSubmitCustom={(raw) => {
-          const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase());
-          if (allergy && (hit?.hint === "группа" || (!hit && !groupKnown(raw)))) ensureGroup(raw);
-          if (!items.includes(raw)) onChange([...items, raw]);
-          if (allergy && hit && hit.hint !== "группа") rememberDrug(raw);
+          const hit = hits.find((h) => h.label.toLowerCase() === raw.toLowerCase() || (h.name || "").toLowerCase() === raw.toLowerCase());
+          if (hit || groupKnown(raw) || drugKnown(raw)) commitNamed(hit?.name || raw);
+          else setPending(raw);
         }}
         placeholder={placeholder}
-        emptyHint={q.trim().length >= 2 ? "Enter — как есть" : undefined}
+        emptyHint={q.trim().length >= 2 ? "Enter — выбрать, что это" : undefined}
       />
+      {pending ? <SaveKind name={pending} onPick={(kind) => commitNamed(pending, kind)} /> : null}
       {allergy ? <GroupMarks selected={items} onToggle={(name) => onChange(toggleNamed(items, name))} /> : null}
     </VitaeField>
   );
@@ -753,7 +790,24 @@ export function AnamnesisDisease({
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => patch({ relatedOtherOn: !d.relatedOtherOn })}
+          className={`rounded-full px-2 py-0.5 text-xs ${
+            d.relatedOtherOn ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+          }`}
+        >
+          другое
+        </button>
       </div>
+      {d.relatedOtherOn && (
+        <input
+          value={d.relatedOther}
+          onChange={(e) => patch({ relatedOther: e.target.value })}
+          placeholder="с чем связывает"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+        />
+      )}
       <ChipRow
         label="лечение"
         value={d.treated}
@@ -866,7 +920,6 @@ export function AnamnesisVitae({
 }) {
   const d = useMemo(() => normalizeVitae(draft), [draft]);
   const patch = (p: Partial<VitaeDraft>) => onDraft({ ...d, ...p });
-  const [closedHeads, setClosedHeads] = useState<Set<string>>(() => new Set());
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
@@ -917,11 +970,6 @@ export function AnamnesisVitae({
   function setCard(patch: { allergies?: string[]; currentMedications?: string[] }) {
     const allergies = patch.allergies ?? session.allergies ?? [];
     const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
-    allergies.forEach((name) => {
-      if (groupKnown(name)) ensureGroup(name);
-      else rememberDrug(name);
-    });
-    currentMedications.forEach(rememberDrug);
     const nextCtx = { allergies, medications: currentMedications };
     const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
     setSession({
@@ -988,7 +1036,6 @@ export function AnamnesisVitae({
     else set.delete(id);
     patch({ omit: [...set] });
   };
-  const hiddenLines = VITAE_LINES.filter((l) => omitted(l.id));
 
   if (!chipMode) {
     return (
@@ -1009,50 +1056,43 @@ export function AnamnesisVitae({
 
   if (tpl && mode !== "chips" && mode !== "text") {
     const shown = visibleVitaeFields(tpl, fields);
-    const blocks: { head: (typeof shown)[number] | null; fields: typeof shown }[] = [];
-    for (const f of shown) {
-      if (f.kind === "heading") blocks.push({ head: f, fields: [] });
-      else {
-        if (!blocks.length) blocks.push({ head: null, fields: [] });
-        blocks[blocks.length - 1].fields.push(f);
-      }
-    }
+    const omittedField = (key: string) => fields[`__omit_${key}`] === "1";
     return (
       <div>
         {picker}
-        {blocks.map((block, i) => {
-          const closed = !!(block.head && closedHeads.has(block.head.key));
-          return (
-            <div key={block.head?.key || `b${i}`}>
-              {block.head ? (
-                <button
-                  type="button"
-                  className="mt-2 text-left text-xs font-medium text-ink-soft"
-                  aria-expanded={!closed}
-                  onClick={() =>
-                    setClosedHeads((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(block.head!.key)) next.delete(block.head!.key);
-                      else next.add(block.head!.key);
-                      return next;
-                    })
-                  }
-                >
-                  <span className="mr-1">{closed ? "▸" : "▾"}</span>
-                  {block.head.label}
-                </button>
-              ) : null}
-              {!closed &&
-                block.fields.map((f) => (
-                  <VitaeField key={f.key} label={f.label} dim={f.optional && fields[`__on_${f.key}`] !== "1"} onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}>
-                    {(!f.optional || fields[`__on_${f.key}`] === "1") && (
-                      <FieldControl boxed f={f} value={fields[f.key] || ""} onChange={(v) => writeField(f.key, v)} />
-                    )}
-                  </VitaeField>
-                ))}
+        {shown.map((f) =>
+          f.kind === "heading" ? (
+            <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
+              {f.label}
             </div>
-          );
-        })}
+          ) : (
+            <VitaeField
+              key={f.key}
+              label={f.label}
+              omitted={omittedField(f.key)}
+              onToggleOmit={() => writeField(`__omit_${f.key}`, omittedField(f.key) ? "" : "1")}
+              dim={f.optional && fields[`__on_${f.key}`] !== "1"}
+              onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}
+            >
+              {(!f.optional || fields[`__on_${f.key}`] === "1") && (
+                <FieldControl
+                  boxed
+                  f={f}
+                  value={
+                    f.key === "employment"
+                      ? fields[f.key] === "не работает"
+                        ? "нет"
+                        : fields[f.key] === "работает"
+                          ? "да"
+                          : fields[f.key] || ""
+                      : fields[f.key] || ""
+                  }
+                  onChange={(v) => writeField(f.key, v)}
+                />
+              )}
+            </VitaeField>
+          ),
+        )}
         {cardFields}
         <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
       </div>
@@ -1087,6 +1127,70 @@ export function AnamnesisVitae({
           }
         />
       )}
+      </VitaeSection>
+      <VitaeSection id="work" title="работает" omitted={omitted("work")} onOmit={setOmit}>
+        <ChipRow
+          label=""
+          value={d.employment}
+          fallback="works"
+          onChange={(id) => patch({ employment: id as VitaeDraft["employment"] })}
+          options={[
+            { id: "works", text: "да" },
+            { id: "off", text: "нет" },
+          ]}
+        />
+        {(d.employment || "works") !== "off" && (
+          <>
+            <div className={`mt-1 ${d.workplaceOn ? "" : "opacity-50"}`}>
+              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ workplaceOn: !d.workplaceOn })}>
+                место работы
+              </button>
+              {d.workplaceOn && (
+                <input
+                  value={d.workplace}
+                  onChange={(e) => patch({ workplace: e.target.value })}
+                  placeholder="где работает"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              )}
+            </div>
+            <div className={`mt-1 ${d.jobOn ? "" : "opacity-50"}`}>
+              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ jobOn: !d.jobOn })}>
+                должность
+              </button>
+              {d.jobOn && (
+                <input
+                  value={d.jobTitle}
+                  onChange={(e) => patch({ jobTitle: e.target.value })}
+                  placeholder="должность"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+              )}
+            </div>
+          </>
+        )}
+        {d.employment === "off" && (
+          <>
+            <ChipRow
+              label="причина"
+              value={d.notWorkReason}
+              onChange={(id) => patch({ notWorkReason: id })}
+              options={[
+                { id: "пенсионер", text: "пенсионер" },
+                { id: "студент", text: "студент" },
+                { id: "декрет", text: "декрет" },
+                { id: "безработный", text: "безработный" },
+                { id: "ухаживает за ребёнком", text: "ухаживает за ребёнком" },
+              ]}
+            />
+            <input
+              value={d.notWorkText}
+              onChange={(e) => patch({ notWorkText: e.target.value })}
+              placeholder="своя причина"
+              className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            />
+          </>
+        )}
       </VitaeSection>
       <VitaeSection id="occupation" title="профвредности" omitted={omitted("occupation")} onOmit={setOmit}>
       <ChipRow
@@ -1143,70 +1247,6 @@ export function AnamnesisVitae({
           { id: "yes", text: "употребляет" },
         ]}
       />
-      </VitaeSection>
-      <VitaeSection id="work" title="работа" omitted={omitted("work")} onOmit={setOmit}>
-        <ChipRow
-          label=""
-          value={d.employment}
-          fallback="works"
-          onChange={(id) => patch({ employment: id as VitaeDraft["employment"] })}
-          options={[
-            { id: "works", text: "работает" },
-            { id: "off", text: "не работает" },
-          ]}
-        />
-        {(d.employment || "works") !== "off" && (
-          <>
-            <div className={`mt-1 ${d.workplaceOn ? "" : "opacity-50"}`}>
-              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ workplaceOn: !d.workplaceOn })}>
-                место работы
-              </button>
-              {d.workplaceOn && (
-                <input
-                  value={d.workplace}
-                  onChange={(e) => patch({ workplace: e.target.value })}
-                  placeholder="где работает"
-                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-                />
-              )}
-            </div>
-            <div className={`mt-1 ${d.jobOn ? "" : "opacity-50"}`}>
-              <button type="button" className="text-xs text-ink-soft" onClick={() => patch({ jobOn: !d.jobOn })}>
-                должность
-              </button>
-              {d.jobOn && (
-                <input
-                  value={d.jobTitle}
-                  onChange={(e) => patch({ jobTitle: e.target.value })}
-                  placeholder="должность"
-                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-                />
-              )}
-            </div>
-          </>
-        )}
-        {d.employment === "off" && (
-          <>
-            <ChipRow
-              label="причина"
-              value={d.notWorkReason}
-              onChange={(id) => patch({ notWorkReason: id })}
-              options={[
-                { id: "пенсионер", text: "пенсионер" },
-                { id: "студент", text: "студент" },
-                { id: "декрет", text: "декрет" },
-                { id: "безработный", text: "безработный" },
-                { id: "ухаживает за ребёнком", text: "ухаживает за ребёнком" },
-              ]}
-            />
-            <input
-              value={d.notWorkText}
-              onChange={(e) => patch({ notWorkText: e.target.value })}
-              placeholder="своя причина"
-              className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            />
-          </>
-        )}
       </VitaeSection>
       <VitaeSection id="disability" title="инвалидность" omitted={omitted("disability")} onOmit={setOmit}>
         <ChipRow
@@ -1408,23 +1448,6 @@ export function AnamnesisVitae({
         />
       )}
       </VitaeSection>
-      {hiddenLines.length > 0 && (
-        <div className="mt-2">
-          <div className="text-[10px] tracking-wide text-mute uppercase">убранные пункты</div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {hiddenLines.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                onClick={() => setOmit(l.id, false)}
-                className="rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-xs text-teal"
-              >
-                + {l.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} preview={false} />
     </div>
   );

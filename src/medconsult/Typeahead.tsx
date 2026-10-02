@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
+import { ParenText } from "./EditableChip";
 
 export type TypeaheadItem = {
   id: string;
@@ -26,6 +27,7 @@ export function Typeahead({
   autoFocus,
   inline,
   focusNonce = 0,
+  wrapLabels,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -44,6 +46,8 @@ export function Typeahead({
   inline?: boolean;
   /** Увеличьте число, чтобы вернуть курсор в поле. */
   focusNonce?: number;
+  /** Назначения: строка с скобками переносится, а не обрезается. */
+  wrapLabels?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -168,7 +172,9 @@ export function Typeahead({
                     onClick={() => pick(it)}
                     className="flex min-w-0 flex-1 flex-col items-start text-left"
                   >
-                    <span className="w-full truncate">{it.label}</span>
+                    <span className={wrapLabels ? "w-full whitespace-normal" : "w-full truncate"}>
+                      <ParenText text={it.label} />
+                    </span>
                     {it.detail && (
                       <span className="w-full truncate text-[11px] leading-tight font-normal !text-mute">{it.detail}</span>
                     )}

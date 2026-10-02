@@ -67,15 +67,19 @@ export function fillVitaeTemplate(
   const seeded = applyConditionalDefaults(asStudy, rawFields || {});
   const fields = applyComputed(asStudy, seeded);
   const date = new Date().toISOString().slice(0, 10);
-  let text = fillStudyTemplate(asStudy, { date, fields });
+  const omit = Object.keys(fields)
+    .filter((k) => k.startsWith("__omit_") && fields[k] === "1")
+    .map((k) => k.slice("__omit_".length));
+  let text = fillStudyTemplate(asStudy, { date, fields, omit });
   const meds = (ctx?.medications || []).map((s) => s.trim()).filter(Boolean);
   const allergy = (ctx?.allergies || []).map((s) => s.trim()).filter(Boolean);
   const tpl = def.template || "";
   text = text.replaceAll("{meds}", meds.length ? meds.join(", ") : "отрицает").replaceAll("{medications}", meds.length ? meds.join(", ") : "отрицает");
   text = text.replaceAll("{allergy}", allergy.length ? allergy.join(", ") : "отрицает");
   const reason = (fields.notWorkText || fields.notWorkReason || "").trim();
-  const workLine =
-    fields.employment === "не работает"
+  const workLine = omit.includes("employment")
+    ? ""
+    : fields.employment === "не работает" || fields.employment === "нет"
       ? `Не работает${reason ? ` (${reason})` : ""}.`
       : [
           "Работает",
@@ -85,8 +89,9 @@ export function fillVitaeTemplate(
           .filter(Boolean)
           .join(", ")
           .replace("Работает, ", "Работает, ") + ".";
-  const disabilityLine =
-    fields.disability === "да"
+  const disabilityLine = omit.includes("disability")
+    ? ""
+    : fields.disability === "да"
       ? `Инвалидность: ${fields.disabilityGroup || "группа не указана"} группа, ${fields.disabilityCause || "общее заболевание"}.`
       : "Инвалидности нет.";
   text = text.replaceAll("{workLine}", workLine.endsWith("..") ? workLine.slice(0, -1) : workLine).replaceAll("{disabilityLine}", disabilityLine);
@@ -94,6 +99,11 @@ export function fillVitaeTemplate(
   if (!tpl.includes("{meds}") && !tpl.includes("{medications}") && meds.length) {
     text = `${text}\nПринимаемые лекарства: ${meds.join(", ")}.`.trim();
   }
+  text = text
+    .split("\n")
+    .map((line) => line.replace(/\s{2,}/g, " ").trim())
+    .filter((line) => line && !/^[^:]{0,80}:\s*\.?$/.test(line) && line !== ".")
+    .join("\n");
   return text;
 }
 

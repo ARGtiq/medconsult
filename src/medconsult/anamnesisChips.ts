@@ -8,6 +8,8 @@ export type AnamnesisDraft = {
   drugs: string[];
   effect: "" | "none" | "temp" | "full" | "worse";
   related: string[];
+  relatedOther: string;
+  relatedOtherOn: boolean;
 };
 
 export type VitaeItem = {
@@ -137,9 +139,9 @@ export type VitaeContext = {
 
 export const VITAE_LINES: { id: string; label: string }[] = [
   { id: "development", label: "развитие" },
+  { id: "work", label: "работает" },
   { id: "occupation", label: "профвредности" },
   { id: "habits", label: "вредные привычки" },
-  { id: "work", label: "работа" },
   { id: "disability", label: "инвалидность" },
   { id: "past", label: "перенесённые заболевания" },
   { id: "meds", label: "лекарства" },
@@ -159,6 +161,8 @@ export const emptyAnamnesis = (): AnamnesisDraft => ({
   drugs: [],
   effect: "",
   related: [],
+  relatedOther: "",
+  relatedOtherOn: false,
 });
 
 export const emptyVitae = (): VitaeDraft => ({
@@ -228,6 +232,8 @@ export function normalizeAnamnesis(d?: Partial<AnamnesisDraft> | null): Anamnesi
     ...(d || {}),
     drugs: d?.drugs || [],
     related: d?.related || [],
+    relatedOther: d?.relatedOther || "",
+    relatedOtherOn: !!d?.relatedOtherOn,
   };
 }
 
@@ -261,7 +267,8 @@ export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
   const howLong = span(d.amount, d.unit);
   if (d.onset === "chronic") parts.push("Болеет давно");
   else if (howLong) parts.push(`Болеет ${howLong}`);
-  if (d.related.length) parts.push(`связывает с ${d.related.join(", ")}`);
+  const related = [...d.related, d.relatedOtherOn ? d.relatedOther.trim() : ""].filter(Boolean);
+  if (related.length) parts.push(`связывает с ${related.join(", ")}`);
   if (d.treated === "no") parts.push("Не лечился");
   if (d.treated === "yes") {
     const drugs = d.drugs.filter(Boolean).join(", ");
@@ -405,9 +412,9 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
   const omit = new Set(d.omit || []);
   const lines: [string, string][] = [
     ["development", development],
+    ["work", work],
     ["occupation", occupation],
     ["habits", habits],
-    ["work", work],
     ["disability", disability],
     ["past", past],
     ["meds", meds],
