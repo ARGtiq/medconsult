@@ -20,6 +20,9 @@ export function Typeahead({
   disabled,
   emptyHint,
   inputClassName,
+  clearOnPick = true,
+  autoFocus,
+  inline,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -31,6 +34,11 @@ export function Typeahead({
   disabled?: boolean;
   emptyHint?: ReactNode;
   inputClassName?: string;
+  /** Жалобы и лекарства очищают строку после выбора. Код МКБ остаётся в поле. */
+  clearOnPick?: boolean;
+  autoFocus?: boolean;
+  /** Список под полем, а не поверх страницы. Для окна Ctrl+K. */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -75,7 +83,7 @@ export function Typeahead({
 
   function pick(item: TypeaheadItem) {
     onPick(item);
-    onChange("");
+    if (clearOnPick) onChange("");
     setOpen(false);
   }
 
@@ -97,7 +105,7 @@ export function Typeahead({
       if (open && items[idx]) pick(items[idx]);
       else if (value.trim() && onSubmitCustom) {
         onSubmitCustom(value.trim());
-        onChange("");
+        if (clearOnPick) onChange("");
         setOpen(false);
       } else if (items[idx]) {
         setOpen(true);
@@ -115,6 +123,57 @@ export function Typeahead({
 
   const showList = open && (items.length > 0 || (!!value.trim() && !!emptyHint));
   const showIdle = !value && !!idleLabel && !focused;
+
+  const list = (
+    <div
+      ref={listRef}
+      style={inline ? { maxHeight: 320 } : { top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
+      className={
+        inline
+          ? "mt-1 overflow-auto rounded-md border border-line bg-surface shadow-lg"
+          : "fixed z-[80] overflow-auto rounded-md border border-line bg-surface shadow-lg"
+      }
+    >
+      {items.length === 0 && emptyHint ? (
+        <div className="px-2 py-1.5 text-xs text-mute">{emptyHint}</div>
+      ) : (
+        <ul role="listbox">
+          {items.map((it, i) => {
+            const marked = drugMarked(it.name || it.label);
+            return (
+              <li key={it.id} role="presentation">
+                <div
+                  data-idx={i}
+                  className={`flex w-full items-center gap-1.5 px-2 py-1.5 text-sm ${
+                    i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
+                  } ${marked ? "border-l-2 border-l-teal" : ""}`}
+                >
+                  <button
+                    type="button"
+                    id={`ta-opt-${i}`}
+                    role="option"
+                    aria-selected={i === idx}
+                    onMouseEnter={() => setIdx(i)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pick(it)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                    {it.hint && (
+                      <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
+                        {it.hint}
+                      </span>
+                    )}
+                  </button>
+                  {marked ? <InfoDot query={it.name || it.label} /> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="relative">
@@ -138,6 +197,7 @@ export function Typeahead({
         placeholder={showIdle ? "" : placeholder}
         className={inputClassName || `w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm ${showIdle ? "text-transparent caret-ink" : ""}`}
         autoComplete="off"
+        autoFocus={autoFocus}
         role="combobox"
         aria-expanded={showList}
         aria-activedescendant={showList ? `ta-opt-${idx}` : undefined}
@@ -147,55 +207,7 @@ export function Typeahead({
           {idleLabel}
         </span>
       )}
-      {showList &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={listRef}
-            style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
-            className="fixed z-[80] overflow-auto rounded-md border border-line bg-surface shadow-lg"
-          >
-            {items.length === 0 && emptyHint ? (
-              <div className="px-2 py-1.5 text-xs text-mute">{emptyHint}</div>
-            ) : (
-              <ul role="listbox">
-                {items.map((it, i) => {
-                  const marked = drugMarked(it.name || it.label);
-                  return (
-                    <li key={it.id} role="presentation">
-                      <div
-                        data-idx={i}
-                        className={`flex w-full items-center gap-1.5 px-2 py-1.5 text-sm ${
-                          i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
-                        } ${marked ? "border-l-2 border-l-teal" : ""}`}
-                      >
-                        <button
-                          type="button"
-                          id={`ta-opt-${i}`}
-                          role="option"
-                          aria-selected={i === idx}
-                          onMouseEnter={() => setIdx(i)}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => pick(it)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                          {it.hint && (
-                            <span className="shrink-0 rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">
-                              {it.hint}
-                            </span>
-                          )}
-                        </button>
-                        {marked ? <InfoDot query={it.name || it.label} /> : null}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>,
-          document.body,
-        )}
+      {showList && (inline || typeof document === "undefined" ? list : createPortal(list, document.body))}
     </div>
   );
 }

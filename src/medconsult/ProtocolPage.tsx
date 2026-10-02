@@ -23,6 +23,7 @@ import {
   findComplaintVariant,
   suggestComplaints,
   liveIcdMerged,
+  searchIcd,
   findStudyByChip,
   getStudyLive,
 } from "./live";
@@ -589,6 +590,33 @@ export function ProtocolPage() {
   })();
   const tailOrder = packOrder ? Math.max(0, ...packOrder.map((_, i) => i * 10)) + 15 : 70;
 
+  const diagnosisItems = useMemo(() => {
+    const q = session.diagnosisCode.trim();
+    if (!q) return [];
+    const hits = searchIcd(q, 12).map((h) => ({ id: h.code, label: h.title, hint: h.code }));
+    const exact = hits.some((h) => h.id.toUpperCase() === q.toUpperCase());
+    if (exact) return hits;
+    return [{ id: "__as_is__", label: q, hint: "как есть" }, ...hits];
+  }, [session.diagnosisCode]);
+
+  function commitDiagnosis(raw: string, picked?: { code: string; title: string }) {
+    const prev = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
+    const title = session.diagnosisTitle.trim();
+    const keepCustom = !!title && title !== (prev?.title || "");
+    if (picked) {
+      setSession({
+        diagnosisCode: picked.code,
+        diagnosisTitle: keepCustom ? session.diagnosisTitle : picked.title,
+      });
+      return;
+    }
+    const hit = icd.find((i) => i.code.toUpperCase() === raw.trim().toUpperCase());
+    setSession({
+      diagnosisCode: hit ? hit.code : raw,
+      diagnosisTitle: hit && !keepCustom ? hit.title : session.diagnosisTitle,
+    });
+  }
+
   const diagnosisBlock = (session.mode !== "document" || want("diagnosis")) ? (
     <Sec
       id="diagnosis"
@@ -601,22 +629,19 @@ export function ProtocolPage() {
       {session.diagnosisCode ? (
         <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Код МКБ</div>
       ) : null}
-      <input
-        list="icd-list"
+      <Typeahead
         value={session.diagnosisCode}
-        onChange={(e) => {
-          const raw = e.target.value.trim();
-          const hit = icd.find((i) => i.code.toUpperCase() === raw.toUpperCase());
-          const prev = icd.find((i) => i.code.toUpperCase() === session.diagnosisCode.trim().toUpperCase());
-          const title = session.diagnosisTitle.trim();
-          const keepCustom = !!title && title !== (prev?.title || "");
-          setSession({
-            diagnosisCode: hit ? hit.code : e.target.value,
-            diagnosisTitle: hit && !keepCustom ? hit.title : session.diagnosisTitle,
-          });
+        onChange={commitDiagnosis}
+        items={diagnosisItems}
+        clearOnPick={false}
+        onPick={(it) => {
+          if (it.id === "__as_is__") commitDiagnosis(it.label);
+          else commitDiagnosis(it.id, { code: it.id, title: it.label });
         }}
-        className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        placeholder="Код МКБ"
+        onSubmitCustom={(raw) => commitDiagnosis(raw)}
+        placeholder="Код или название МКБ  ↑↓ Enter"
+        emptyHint={session.diagnosisCode.trim() ? "Enter — оставить как есть" : undefined}
+        inputClassName="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
       />
       {codeHit ? (
         <p className="mt-1 mb-1 text-xs leading-snug text-ink-soft">
@@ -625,13 +650,6 @@ export function ProtocolPage() {
       ) : (
         <div className="mb-1" />
       )}
-      <datalist id="icd-list">
-        {icd.slice(0, 400).map((i) => (
-          <option key={i.code} value={i.code}>
-            {i.title}
-          </option>
-        ))}
-      </datalist>
       {session.diagnosisTitle ? (
         <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Формулировка</div>
       ) : null}
