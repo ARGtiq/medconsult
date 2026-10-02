@@ -1,6 +1,7 @@
 import LegacyReference from "@/legacy/components/ReferencePage";
 import "@/legacy/legacy.css";
 import { AppShell } from "./AppShell";
+import { DrugsReference } from "./DrugsReference";
 import { TemplatesEditor } from "./TemplatesEditor";
 
 export function ReferencePage() {
@@ -11,6 +12,9 @@ export function ReferencePage() {
           blocksContent={<TemplatesEditor layer="blocks" />}
           packsContent={<TemplatesEditor layer="packs" />}
           globalContent={<TemplatesEditor layer="global" />}
+          drugsContent={(props: { initialSub?: "drugs" | "groups"; initialItemId?: string | null }) => (
+            <DrugsReference initialSub={props?.initialSub} initialItemId={props?.initialItemId} />
+          )}
         />
       </div>
     </AppShell>

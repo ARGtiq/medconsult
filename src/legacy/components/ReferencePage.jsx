@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import GuidelinesPage from './GuidelinesPage'
-import DrugsTab from './DrugsTab'
-import DrugGroupsTab from './DrugGroupsTab'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import RecPacksTab from './RecPacksTab'
 import Mkb10Page from './Mkb10Page'
@@ -15,10 +13,14 @@ function startTab(initialTab) {
   return initialTab || 'mkb'
 }
 
-function AppointmentsHub({ initialTab, initialItemId }) {
+function AppointmentsHub({ initialTab, initialItemId, drugsContent }) {
   const [sub, setSub] = useState(
     initialTab === 'schemes' || initialTab === 'packs' ? 'packs' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
   )
+  const drugsProps = {
+    initialSub: initialTab === 'groups' ? 'groups' : 'drugs',
+    initialItemId: initialTab === 'drugs' ? initialItemId : null,
+  }
   return (
     <div>
       <div className="settings-tabs">
@@ -33,33 +35,13 @@ function AppointmentsHub({ initialTab, initialItemId }) {
         </button>
       </div>
       {sub === 'guidelines' && <GuidelinesPage initialItemId={initialTab === 'guidelines' ? initialItemId : null} />}
-      {sub === 'drugs' && (
-        <DrugsHub initialSub={initialTab === 'groups' ? 'groups' : 'drugs'} initialItemId={initialTab === 'drugs' ? initialItemId : null} />
-      )}
+      {sub === 'drugs' && (drugsContent ? drugsContent(drugsProps) : <p className="empty-hint">Нет редактора лекарств.</p>)}
       {sub === 'packs' && <RecPacksTab />}
     </div>
   )
 }
 
-function DrugsHub({ initialSub, initialItemId }) {
-  const [sub, setSub] = useState(initialSub === 'groups' ? 'groups' : 'drugs')
-  return (
-    <div>
-      <div className="settings-tabs">
-        <button type="button" className={sub === 'drugs' ? 'active' : ''} onClick={() => setSub('drugs')}>
-          Препараты
-        </button>
-        <button type="button" className={sub === 'groups' ? 'active' : ''} onClick={() => setSub('groups')}>
-          Группы
-        </button>
-      </div>
-      {sub === 'drugs' && <DrugsTab initialItemId={initialItemId} />}
-      {sub === 'groups' && <DrugGroupsTab />}
-    </div>
-  )
-}
-
-export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent }) {
+export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent }) {
   const [tab, setTab] = useState(startTab(initialTab))
 
   return (
@@ -97,7 +79,9 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
-      {tab === 'appointments' && <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} />}
+      {tab === 'appointments' && (
+        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} />
+      )}
       {tab === 'print' && <PrintTemplatesTab />}
     </div>
   )
