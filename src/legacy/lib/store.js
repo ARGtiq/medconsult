@@ -237,17 +237,46 @@ function itemHit(raw, q) {
   )
 }
 
+function attachPackRefs(state, pack) {
+  const rows = []
+  const take = (item, title) => {
+    const name = String(item?.name || '').trim()
+    if (!name) return
+    rows.push({ name, title: title || name, dosage: item.dosage || '', frequency: item.frequency || '', duration: item.duration || '' })
+  }
+  ;(pack.phases || []).forEach((phase) => (phase.items || []).forEach((item) => take(item, phase.name || item.name)))
+  ;(pack.subtypes || []).forEach((sub) =>
+    (sub.phases || []).forEach((phase) => (phase.items || []).forEach((item) => take(item, sub.name || phase.name || item.name))),
+  )
+  if (!rows.length) (pack.items || []).forEach((item) => take(item, item.name))
+  state.drugDatabase = state.drugDatabase || {}
+  let added = false
+  rows.forEach((row) => {
+    const drug = state.drugDatabase[row.name.toLowerCase()]
+    if (!drug) return
+    const refs = drug.packRefs || []
+    if (refs.some((r) => r.packId === pack.id)) return
+    drug.packRefs = [...refs, { packId: pack.id, packName: pack.name, title: row.title, dosage: row.dosage, frequency: row.frequency, duration: row.duration }]
+    added = true
+  })
+  return added
+}
+
 function absorbSchemes(state) {
   state.recommendationPacks = state.recommendationPacks || {}
   state.skippedSchemeIds = state.skippedSchemeIds || []
   const skipped = new Set(state.skippedSchemeIds)
   const taken = new Set(Object.values(state.recommendationPacks).map((p) => p?.fromSchemeId).filter(Boolean))
   let changed = false
+  Object.values(state.recommendationPacks).forEach((pack) => {
+    if (pack?.fromSchemeId && attachPackRefs(state, pack)) changed = true
+  })
   Object.values(state.treatmentSchemes || {}).forEach((scheme) => {
     if (!scheme?.id || taken.has(scheme.id) || skipped.has(scheme.id)) return
     const id = `scheme-${scheme.id}`
     if (state.recommendationPacks[id]) return
     state.recommendationPacks[id] = packFromScheme(scheme)
+    attachPackRefs(state, state.recommendationPacks[id])
     changed = true
   })
   if (changed) writeAll(state)

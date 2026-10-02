@@ -985,7 +985,9 @@
   color: #8b909a;
 }
 .legacy-surface .pack-depend { margin-top: 2px; }
-.legacy-surface .pack-phase { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.legacy-surface .pack-phase-label { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.legacy-surface .pack-redflag { margin-left: 6px; color: #9a3412; font-size: 11px; }
+.legacy-surface .pack-source, .pack-source { display: block; margin-top: 4px; font-size: 11px; color: var(--muted, #6b7280); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .legacy-surface .pack-subtypes { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 .legacy-surface .pack-subtype { display: flex; align-items: center; gap: 6px; }
 .legacy-surface .pack-subtype.is-on input[type='text'], .legacy-surface .pack-subtype.is-on input:not([type]) { border-color: var(--teal); }

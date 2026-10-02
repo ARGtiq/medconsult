@@ -1,7 +1,6 @@
 import { Copy, Plus, Printer, Eraser } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
-import TreatmentSchemeSearch from "@/legacy/components/TreatmentSchemeSearch";
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/openrouter";
@@ -418,7 +417,7 @@ export function ProtocolPage() {
       ${blocks
         .map(
           (b) =>
-            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text).replace(/\n/g, "<br/>")}</div></div>`,
+            `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text).replace(/\n/g, "<br/>").replace(/(^|<br\/>)(Источник: [^<]*)/g, '$1<span class="pack-source">$2</span>')}</div></div>`,
         )
         .join("")}
     `;
@@ -1207,20 +1206,13 @@ export function ProtocolPage() {
             <div className="legacy-surface klinrek-slot mt-2">{klinrekPanel("recs")}</div>
           )}
           <div className="legacy-surface mt-2 flex flex-wrap items-start gap-2">
-            <TreatmentSchemeSearch
-              diagnosisText={diagnosisText}
-              onApplyPhase={(phaseDrugs: { name?: string; dosage?: string; dose?: string; frequency?: string; duration?: string }[]) => {
-                phaseDrugs.forEach(insertDrug);
-                store.setToast("Фаза схемы добавлена");
-              }}
-            />
             <RecPackSearch
               diagnosisText={diagnosisText}
               onApply={(lines: string[]) => {
                 lines.forEach((line) => {
                   if (line && !session.recommendations.includes(line)) addRecommendation(line);
                 });
-                store.setToast("Пакет рекомендаций добавлен");
+                store.setToast("Пакет добавлен");
               }}
             />
           </div>
@@ -1449,11 +1441,27 @@ export function ProtocolPage() {
 
 function ProtocolText({ text }: { text: string }) {
   if (!hasMarkup(text)) {
-    return <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>;
+    return (
+      <div className="text-sm leading-relaxed whitespace-pre-wrap">
+        {text.split("\n").map((line, i) =>
+          line.startsWith("Источник:") ? (
+            <span key={i} className="mt-1 block text-[11px] text-mute">
+              {line}
+              {"\n"}
+            </span>
+          ) : (
+            <span key={i}>
+              {line}
+              {i < text.split("\n").length - 1 ? "\n" : ""}
+            </span>
+          ),
+        )}
+      </div>
+    );
   }
   return (
     <div
-      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_.pack-source]:mt-1 [&_.pack-source]:block [&_.pack-source]:text-[11px] [&_.pack-source]:text-mute [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
       dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
     />
   );

@@ -46,42 +46,89 @@ function itemBlock(item) {
   return [`* ${item.text}`, ...item.subs.map((s) => `  * ${subLine(s)}`)].join('\n')
 }
 
+function phasesOf(pack, subtypeIdx) {
+  if (pack.subtypes?.length) {
+    const sub = pack.subtypes[Math.min(subtypeIdx, pack.subtypes.length - 1)] || pack.subtypes[0]
+    return sub?.phases || []
+  }
+  if (pack.phases?.length) return pack.phases
+  return [{ name: '', items: pack.items || [] }]
+}
+
+function packExtras(pack) {
+  const lines = []
+  if (pack.nonDrugOn && String(pack.nonDrugTherapy || '').trim()) lines.push(String(pack.nonDrugTherapy).trim())
+  if (pack.sourceOn && (String(pack.source || '').trim() || String(pack.sourceYear || '').trim())) {
+    lines.push(`Источник: ${[pack.source, pack.sourceYear].map((s) => String(s || '').trim()).filter(Boolean).join(', ')}`)
+  }
+  return lines
+}
+
 function PackBody({ pack, onApply }) {
-  const rows = (pack.items || []).map(packItem).filter((it) => it.text)
+  const [subtypeIdx, setSubtypeIdx] = useState(pack.activeSubtype || 0)
+  const phases = phasesOf(pack, subtypeIdx)
+    .map((phase) => ({ name: phase.name || '', items: (phase.items || []).map(packItem).filter((it) => it.text) }))
+    .filter((phase) => phase.name || phase.items.length)
+  const extras = packExtras(pack)
+  const allLines = [...phases.flatMap((phase) => phase.items.map(itemBlock)), ...extras]
   return (
     <div className="pack-spoiler-body">
       {(pack.category || '').trim() && <div className="guideline-panel-text-muted">{pack.category}</div>}
-      {(pack.mkb10Codes || []).length > 0 && (
-        <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>
-      )}
+      {(pack.mkb10Codes || []).length > 0 && <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>}
       {(pack.note || '').trim() && <div className="guideline-panel-text-muted">{pack.note}</div>}
-      {rows.map((item) => (
-        <div key={item.text} style={{ marginTop: 6 }}>
-          <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => onApply([itemBlock(item)])}>
-            + {item.text}
-          </button>
-          {item.subs.length > 0 && (
-            <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
-              {item.subs.map((sub) => {
-                const line = subLine(sub)
-                const name = typeof sub === 'string' ? '' : String(sub.name || '').trim()
-                const meta = typeof sub === 'string' ? '' : [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
-                return (
-                  <button type="button" key={line} className="suggestion-pill" title="Только этот подпункт" onClick={() => onApply([line])}>
-                    + {name || line}
-                    {meta ? <span className="pack-drug-meta">{meta}</span> : null}
-                  </button>
-                )
-              })}
+      {(pack.redFlags || '').trim() && <div className="guideline-redflags">{pack.redFlags}</div>}
+      {(pack.subtypes || []).length > 1 && (
+        <div className="pack-subtypes">
+          {pack.subtypes.map((sub, i) => (
+            <label key={i} className={`pack-subtype${i === subtypeIdx ? ' is-on' : ''}`}>
+              <input type="radio" name={`pack-sub-${pack.id}`} checked={i === subtypeIdx} onChange={() => setSubtypeIdx(i)} />
+              <span>{sub.name || `подтип ${i + 1}`}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {phases.map((phase, pi) => (
+        <div key={`${phase.name}-${pi}`} className="pack-phase">
+          {phase.name && <div className="pack-phase-label">{phase.name}</div>}
+          {phase.items.map((item) => (
+            <div key={item.text} style={{ marginTop: 6 }}>
+              <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => onApply([itemBlock(item)])}>
+                + {item.text}
+              </button>
+              {item.subs.length > 0 && (
+                <div className="guideline-complaint-suggestions" style={{ marginTop: 4 }}>
+                  {item.subs.map((sub) => {
+                    const line = subLine(sub)
+                    const name = typeof sub === 'string' ? '' : String(sub.name || '').trim()
+                    const meta = typeof sub === 'string' ? '' : [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
+                    return (
+                      <button type="button" key={line} className="suggestion-pill" title="Только этот подпункт" onClick={() => onApply([line])}>
+                        + {name || line}
+                        {meta ? <span className="pack-drug-meta">{meta}</span> : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       ))}
-      {rows.length > 0 && (
+      {pack.nonDrugOn && String(pack.nonDrugTherapy || '').trim() && (
+        <button type="button" className="suggestion-pill" onClick={() => onApply([String(pack.nonDrugTherapy).trim()])}>
+          + {pack.nonDrugTherapy}
+        </button>
+      )}
+      {extras.some((line) => line.startsWith('Источник:')) && (
+        <button type="button" className="pack-source" onClick={() => onApply(extras.filter((line) => line.startsWith('Источник:')))}>
+          {extras.find((line) => line.startsWith('Источник:'))}
+        </button>
+      )}
+      {allLines.length > 0 && (
         <button
           type="button"
           className="btn-secondary btn-small"
-          onClick={() => onApply([...rows.map(itemBlock), (pack.note || '').trim()].filter(Boolean))}
+          onClick={() => onApply([...allLines, (pack.note || '').trim()].filter(Boolean))}
         >
           добавить все
         </button>
@@ -96,6 +143,7 @@ function PackSpoiler({ pack, pinned, onApply }) {
     <div className={`pack-spoiler${pinned ? ' is-pinned' : ''}${open ? ' is-open' : ''}`}>
       <button type="button" className="pack-spoiler-head" onClick={() => setOpen((v) => !v)}>
         <span>{open ? '▾' : '▸'} {pack.name}</span>
+        {pack.redFlags ? <span className="pack-redflag" title={pack.redFlags}>красные флаги</span> : null}
         {pinned && <span className="scheme-match-badge">по диагнозу</span>}
       </button>
       {open && <PackBody pack={pack} onApply={onApply} />}
@@ -131,7 +179,7 @@ export default function RecPackSearch({ diagnosisText, onApply }) {
   if (!open) {
     return (
       <button type="button" className="scheme-search-trigger" onClick={() => setOpen(true)}>
-        Пакеты рекомендаций
+        Пакеты
         {matching.length > 0 && (
           <span className="scheme-match-badge" title={matching.map((p) => p.name).join(', ')}>
             есть подходящий: {matching[0].name}

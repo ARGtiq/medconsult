@@ -10,7 +10,7 @@ import GuidelineHub, { GuidelineHubPanel } from './GuidelineHub'
 import { getGuidelineHubMode } from '../lib/uiPrefs'
 import { isWizardButtonHidden } from '../lib/uiPrefs'
 import WizardModal from './WizardModal'
-import TreatmentSchemeSearch from './TreatmentSchemeSearch'
+import RecPackSearch from './RecPackSearch'
 import VoiceInputButton from './VoiceInputButton'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import AutoWidthInput from './AutoWidthInput'
@@ -694,9 +694,16 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
                     onInsertInvestigation={insertGuidelineInvestigation}
                     onInsertDrug={(drug) => insertGuidelineDrugSingle(section.id, drug)}
                   />
-                  <TreatmentSchemeSearch
+                  <RecPackSearch
                     diagnosisText={sectionValues[diagnosisSectionId]}
-                    onApplyPhase={(drugs) => drugs.forEach((d) => insertGuidelineDrugSingle(section.id, d))}
+                    onApply={(lines) => {
+                      lines.forEach((line) => {
+                        const text = String(line || '').trim()
+                        if (!text || text.startsWith('Источник:')) return
+                        const known = Object.values(store.getDrugInfoAll() || {}).find((d) => text.toLowerCase().startsWith(String(d.name || '').trim().toLowerCase()))
+                        insertGuidelineDrugSingle(section.id, known ? { name: known.name, dosage: known.dosage } : { name: text })
+                      })
+                    }}
                   />
                 </>
               )}
