@@ -5,6 +5,8 @@ import {
   saveTemplates,
   seedTemplates,
   STD_DOC_BLOCKS,
+  complaintOptionSubs,
+  complaintOptionText,
   type ComplaintTemplate,
   type DocKind,
   type GlobalTemplate,
@@ -1290,7 +1292,9 @@ function ComplaintDictEditor({
 }) {
   const [draft, setDraft] = useState("");
   const [optDraft, setOptDraft] = useState<Record<number, string>>({});
+  const [subDraft, setSubDraft] = useState<Record<string, string>>({});
   const [openOpt, setOpenOpt] = useState<number | null>(null);
+  const [openSub, setOpenSub] = useState<string | null>(null);
   const shown = items.map((it, i) => ({ it, i }));
 
   function patch(i: number, next: ComplaintTemplate) {
@@ -1302,17 +1306,34 @@ function ComplaintDictEditor({
     if (!t) return;
     const cur = items[i];
     if (!cur) return;
-    const options = cur.options || [];
-    if (options.some((o) => o.toLowerCase() === t.toLowerCase())) return;
-    patch(i, { ...cur, options: [...options, t] });
+    const options = (cur.options || []).map((o) => ({ text: complaintOptionText(o), options: complaintOptionSubs(o) }));
+    if (options.some((o) => o.text.toLowerCase() === t.toLowerCase())) return;
+    patch(i, { ...cur, options: [...options, { text: t }] });
     setOptDraft((d) => ({ ...d, [i]: "" }));
+  }
+
+  function addSub(i: number, option: string, raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    const cur = items[i];
+    if (!cur) return;
+    const options = (cur.options || []).map((o) => ({ text: complaintOptionText(o), options: complaintOptionSubs(o) }));
+    patch(i, {
+      ...cur,
+      options: options.map((o) => {
+        if (o.text.toLowerCase() !== option.toLowerCase()) return o;
+        if ((o.options || []).some((s) => s.toLowerCase() === t.toLowerCase())) return o;
+        return { ...o, options: [...(o.options || []), t] };
+      }),
+    });
+    setSubDraft((d) => ({ ...d, [`${i}:${option}`]: "" }));
   }
 
   return (
     <div>
       <p className="mb-2 text-xs text-ink-soft">
-        Словарь жалоб. «+опция» — уточнения чипами под пунктом (справа / слева…). В протоколе после выбора жалобы
-        выпадает список, стрелки, пустой пункт = без уточнения.
+        Словарь жалоб. «+опция» — уточнение (справа / слева). «+» на опции — подпункт этой опции. В протоколе они
+        выпадают списком.
       </p>
       <div className="space-y-1.5">
         {shown.map(({ it, i }) => (
@@ -1331,7 +1352,7 @@ function ComplaintDictEditor({
                   let text = `${base} (копия)`;
                   let n = 2;
                   while (items.some((x) => x.text.toLowerCase() === text.toLowerCase())) text = `${base} (копия ${n++})`;
-                  onChange([...items, { text, options: it.options ? [...it.options] : undefined }]);
+                  onChange([...items, { text, options: it.options?.map((o) => ({ text: complaintOptionText(o), options: complaintOptionSubs(o).slice() })) }]);
                 }}
               >
                 копия
@@ -1348,24 +1369,82 @@ function ComplaintDictEditor({
               </button>
             </div>
             {(it.options && it.options.length > 0) || openOpt === i ? (
-              <div className="mt-1 ml-4 flex flex-wrap items-center gap-1 border-l border-line pl-2">
-                {(it.options || []).map((o) => (
-                  <span
-                    key={o}
-                    className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal"
-                  >
-                    {o}
-                    <button
-                      type="button"
-                      className="text-mute"
-                      onClick={() =>
-                        patch(i, { ...it, options: (it.options || []).filter((x) => x !== o) })
-                      }
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+              <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-line pl-2">
+                {(it.options || []).map((raw) => {
+                  const label = complaintOptionText(raw);
+                  const kids = complaintOptionSubs(raw);
+                  const subKey = `${i}:${label}`;
+                  return (
+                    <div key={label}>
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal">
+                        {label}
+                        <button
+                          type="button"
+                          className="text-mute"
+                          title="Подпункт"
+                          onClick={() => setOpenSub((v) => (v === subKey ? null : subKey))}
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          className="text-mute"
+                          onClick={() =>
+                            patch(i, {
+                              ...it,
+                              options: (it.options || []).filter((x) => complaintOptionText(x).toLowerCase() !== label.toLowerCase()),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                      {(kids.length > 0 || openSub === subKey) && (
+                        <div className="mt-0.5 ml-4 flex flex-wrap items-center gap-1 border-l border-line pl-2">
+                          {kids.map((s) => (
+                            <span key={s} className="inline-flex items-center gap-0.5 rounded-full border border-line bg-surface px-2 py-0.5 text-[11px]">
+                              {s}
+                              <button
+                                type="button"
+                                className="text-mute"
+                                onClick={() =>
+                                  patch(i, {
+                                    ...it,
+                                    options: (it.options || []).map((x) => {
+                                      if (complaintOptionText(x).toLowerCase() !== label.toLowerCase()) return x;
+                                      return { text: label, options: complaintOptionSubs(x).filter((k) => k !== s) };
+                                    }),
+                                  })
+                                }
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                          {openSub === subKey ? (
+                            <input
+                              autoFocus
+                              value={subDraft[subKey] || ""}
+                              onChange={(e) => setSubDraft((d) => ({ ...d, [subKey]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addSub(i, label, subDraft[subKey] || "");
+                                }
+                                if (e.key === "Escape") setOpenSub(null);
+                              }}
+                              onBlur={() => {
+                                if ((subDraft[subKey] || "").trim()) addSub(i, label, subDraft[subKey] || "");
+                              }}
+                              placeholder="подпункт + Enter"
+                              className="w-36 rounded-full border border-line bg-surface px-2 py-0.5 text-[11px]"
+                            />
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {openOpt === i ? (
                   <input
                     autoFocus

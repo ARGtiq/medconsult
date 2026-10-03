@@ -61,11 +61,19 @@ export type StudyDef = {
   templateEdited?: boolean;
 };
 
+export type StudyExtra = {
+  id: string;
+  name: string;
+  value: string;
+};
+
 export type StudyInstance = {
   id: string;
   date: string;
   fields: Record<string, string>;
   omit?: string[];
+  /** Свои пункты в конце анализа: название и значение. */
+  extras?: StudyExtra[];
 };
 
 export type StudyEntry = {

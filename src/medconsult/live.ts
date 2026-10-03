@@ -3,7 +3,7 @@ import { store } from "@/legacy/lib/store";
 import { explicitChips } from "@/legacy/lib/guidelineChips";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, ICD, complaintsForCode } from "./data/catalog";
-import { getComplaintPresets, getComplaintTemplates, type ComplaintTemplate } from "./data/templates";
+import { getComplaintPresets, getComplaintTemplates, complaintOptionSubs, complaintOptionText, type ComplaintTemplate } from "./data/templates";
 import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal } from "./data/studies";
 import type { StudyDef, StudyEntry, StudyField } from "./types";
 
@@ -195,24 +195,72 @@ export function composeComplaint(base: string, option?: string) {
   return o ? `${b} ${o}` : b;
 }
 
-/** Several qualifiers on one complaint: «боль в пояснице справа, слева». */
-export function composeComplaintOptions(base: string, options: string[]) {
+/** Several qualifiers on one complaint: «боль в пояснице справа (в пах), слева». */
+export type ComplaintPick = { text: string; children: string[] };
+
+function splitTopLevel(rest: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let depth = 0;
+  for (const ch of rest) {
+    if (ch === "(") depth++;
+    else if (ch === ")" && depth) depth--;
+    else if (ch === "," && depth === 0) {
+      if (buf.trim()) out.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
+
+function pickFromPart(part: string): ComplaintPick {
+  const m = part.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (!m) return { text: part.trim(), children: [] };
+  const children = m[2]
+    .split(/\s*·\s*|,\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return { text: m[1].trim(), children };
+}
+
+export function complaintPicks(variant: string | undefined, base: string): ComplaintPick[] {
+  if (!variant) return [];
   const b = base.trim();
-  const opts = options.map((s) => s.trim()).filter(Boolean);
-  return opts.length ? `${b} ${opts.join(", ")}` : b;
+  if (variant === b) return [];
+  if (!variant.startsWith(b + " ")) return [];
+  return splitTopLevel(variant.slice(b.length + 1)).map(pickFromPart).filter((p) => p.text);
+}
+
+export function composeComplaintPicks(base: string, picks: ComplaintPick[]) {
+  const b = base.trim();
+  const bits = picks
+    .map((p) => {
+      const text = p.text.trim();
+      if (!text) return "";
+      const kids = p.children.map((s) => s.trim()).filter(Boolean);
+      return kids.length ? `${text} (${kids.join(" · ")})` : text;
+    })
+    .filter(Boolean);
+  return bits.length ? `${b} ${bits.join(", ")}` : b;
+}
+
+export function composeComplaintOptions(base: string, options: string[]) {
+  return composeComplaintPicks(
+    base,
+    options.map((text) => ({ text, children: [] })),
+  );
 }
 
 export function complaintOptionsSelected(variant: string | undefined, base: string, options: string[]): string[] {
-  if (!variant) return [];
-  const b = base.trim();
-  if (!variant.startsWith(b + " ")) return [];
-  const rest = variant.slice(b.length + 1).trim();
-  if (!rest) return [];
-  return rest
-    .split(/,\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((part) => options.find((o) => o.toLowerCase() === part.toLowerCase()) || part);
+  return complaintPicks(variant, base).map((p) => options.find((o) => o.toLowerCase() === p.text.toLowerCase()) || p.text);
+}
+
+export function complaintChildrenSelected(variant: string | undefined, base: string, option: string): string[] {
+  const row = complaintPicks(variant, base).find((p) => p.text.toLowerCase() === option.trim().toLowerCase());
+  return row?.children || [];
 }
 
 /** Longest dictionary item that `text` equals or extends with a space + qualifier. */
@@ -229,7 +277,14 @@ export function optionsForComplaint(text: string, templates?: ComplaintTemplate[
   const list = templates || liveComplaintTemplates();
   const key = text.trim().toLowerCase();
   const hit = list.find((c) => c.text.toLowerCase() === key);
-  return hit?.options?.filter(Boolean) || [];
+  return (hit?.options || []).map((o) => complaintOptionText(o)).filter(Boolean);
+}
+
+export function subsForComplaint(base: string, option: string, templates?: ComplaintTemplate[]): string[] {
+  const list = templates || liveComplaintTemplates();
+  const hit = list.find((c) => c.text.toLowerCase() === base.trim().toLowerCase());
+  const row = (hit?.options || []).find((o) => complaintOptionText(o).toLowerCase() === option.trim().toLowerCase());
+  return row ? complaintOptionSubs(row) : [];
 }
 
 export function findComplaintVariant(selected: string[], base: string, templates?: ComplaintTemplate[]): string | undefined {
@@ -974,11 +1029,35 @@ export function learnedDrugs(complaints: string[], code: string): string[] {
   } catch {
     /* */
   }
-  const db = liveDrugsMerged();
-  return [...names]
-    .map((n) => {
-      const hit = db.find((d) => d.name.toLowerCase() === n.toLowerCase());
-      return hit ? drugLine(hit) : "";
-    })
-    .filter(Boolean);
+  const db = liveDrugRecords();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of names) {
+    const low = n.trim().toLowerCase();
+    if (!low) continue;
+    const rec =
+      db.find((d) => d.name.toLowerCase() === low) ||
+      db
+        .filter((d) => {
+          const name = d.name.trim().toLowerCase();
+          return name.length >= 3 && low.includes(name);
+        })
+        .sort((a, b) => b.name.length - a.name.length)[0];
+    if (!rec) continue;
+    const v = variantsOf(rec.name)[0];
+    const text = formatDrugMention({
+      name: rec.name,
+      form: (rec.form || DEFAULT_DRUG_FORM).trim(),
+      brandNames: rec.brandNames,
+      composition: rec.composition,
+      dosage: v?.dosage,
+      frequency: v?.frequency,
+      duration: v?.duration,
+    }).text;
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
 }

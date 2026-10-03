@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import {
+  complaintChildrenSelected,
   complaintOptionsSelected,
   findComplaintVariant,
   liveComplaintTemplates,
   optionsForComplaint,
+  subsForComplaint,
 } from "./live";
 
 function chipClass(on: boolean, dashed?: boolean, marked?: boolean) {
@@ -300,11 +302,13 @@ export function ComplaintOptionMenu({
   state,
   selected,
   onPick,
+  onPickSub,
   onClose,
 }: {
   state: OptionMenuState;
   selected: string[];
   onPick: (option: string) => void;
+  onPickSub: (option: string, child: string) => void;
   onClose: () => void;
 }) {
   const options = optionsForComplaint(state.base);
@@ -386,6 +390,8 @@ export function ComplaintOptionMenu({
       <ul>
         {items.map((opt, i) => {
           const on = !!opt && picked.some((p) => p.toLowerCase() === opt.toLowerCase());
+          const subs = opt ? subsForComplaint(state.base, opt) : [];
+          const kids = opt ? complaintChildrenSelected(findComplaintVariant(selected, state.base), state.base, opt) : [];
           return (
           <li key={opt || "empty"} role="presentation">
             <button
@@ -403,6 +409,27 @@ export function ComplaintOptionMenu({
               <span className="w-3 text-xs">{on ? "✓" : ""}</span>
               {opt || "без уточнения"}
             </button>
+            {on && subs.length ? (
+              <div className="ml-5 border-l border-line pb-1">
+                {subs.map((s) => {
+                  const subOn = kids.some((k) => k.toLowerCase() === s.toLowerCase());
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => onPickSub(opt, s)}
+                      className={`flex w-full items-center gap-2 px-2 py-1 text-left text-xs ${
+                        subOn ? "bg-teal-soft text-teal" : "hover:bg-paper"
+                      }`}
+                    >
+                      <span className="w-3 text-[10px]">{subOn ? "✓" : ""}</span>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </li>
           );
         })}
@@ -422,6 +449,7 @@ export function ComplaintChips({
   selected,
   onToggle,
   onApplyOption,
+  onApplySub,
   setOptionMenu,
   dashed,
 }: {
@@ -429,6 +457,7 @@ export function ComplaintChips({
   selected: string[];
   onToggle: (t: string) => void;
   onApplyOption: (base: string, option: string) => void;
+  onApplySub: (base: string, option: string, child: string) => void;
   setOptionMenu: (s: OptionMenuState | null) => void;
   dashed?: boolean;
 }) {
@@ -487,17 +516,37 @@ export function ComplaintChips({
               ) : null}
             </span>
             {on && opts.length ? (
-              <div className="ml-3 flex flex-wrap gap-0.5">
-                {opts.map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    className={chipClass(picked.some((p) => p.toLowerCase() === o.toLowerCase()), true)}
-                    onClick={() => onApplyOption(t, o)}
-                  >
-                    {o}
-                  </button>
-                ))}
+              <div className="ml-3 flex flex-col gap-0.5">
+                {opts.map((o) => {
+                  const onOpt = picked.some((p) => p.toLowerCase() === o.toLowerCase());
+                  const subs = subsForComplaint(t, o, templates);
+                  const kids = complaintChildrenSelected(variant, t, o);
+                  return (
+                    <div key={o} className="flex flex-col items-start gap-0.5">
+                      <button
+                        type="button"
+                        className={chipClass(onOpt, true)}
+                        onClick={() => onApplyOption(t, o)}
+                      >
+                        {o}
+                      </button>
+                      {onOpt && subs.length ? (
+                        <div className="ml-3 flex flex-wrap gap-0.5">
+                          {subs.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              className={chipClass(kids.some((k) => k.toLowerCase() === s.toLowerCase()), true)}
+                              onClick={() => onApplySub(t, o, s)}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>

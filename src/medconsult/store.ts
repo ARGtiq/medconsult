@@ -7,7 +7,7 @@ import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./d
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
-import { complaintBaseOf, complaintOptionsSelected, composeComplaintOptions, findComplaintVariant, getStudyLive, optionsForComplaint } from "./live";
+import { complaintBaseOf, complaintPicks, composeComplaintPicks, findComplaintVariant, getStudyLive, optionsForComplaint, subsForComplaint, type ComplaintPick } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
 const SESSION_KEY = "medconsult_v2_session";
@@ -381,6 +381,7 @@ type AppStore = {
   toggleBlock: (id: string) => void;
   toggleComplaint: (text: string) => void;
   applyComplaintOption: (base: string, option: string) => void;
+  applyComplaintSub: (base: string, option: string, child: string) => void;
   toggleLocal: (text: string) => void;
   addLocalPhrase: (text: string) => void;
   addRecommendation: (text: string) => void;
@@ -692,15 +693,64 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const catalog = optionsForComplaint(b, templates);
     const { list: source, dirty } = complaintSource(session);
     const existing = findComplaintVariant(source, b, templates);
-    const selected = complaintOptionsSelected(existing, b, catalog);
-    let nextOpts: string[];
-    if (!option) nextOpts = [];
-    else if (selected.some((s) => s.toLowerCase() === option.toLowerCase())) {
-      nextOpts = selected.filter((s) => s.toLowerCase() !== option.toLowerCase());
-    } else nextOpts = [...selected, option];
-    const ordered = catalog.filter((o) => nextOpts.some((s) => s.toLowerCase() === o.toLowerCase()));
-    const extras = nextOpts.filter((s) => !catalog.some((o) => o.toLowerCase() === s.toLowerCase()));
-    const composed = composeComplaintOptions(b, [...ordered, ...extras]);
+    const picks = complaintPicks(existing, b);
+    let nextPicks: ComplaintPick[];
+    if (!option) nextPicks = [];
+    else if (picks.some((p) => p.text.toLowerCase() === option.toLowerCase())) {
+      nextPicks = picks.filter((p) => p.text.toLowerCase() !== option.toLowerCase());
+    } else nextPicks = [...picks, { text: option, children: [] }];
+    const ordered = catalog
+      .map((o) => nextPicks.find((p) => p.text.toLowerCase() === o.toLowerCase()))
+      .filter((p): p is ComplaintPick => !!p);
+    const extras = nextPicks.filter((p) => !catalog.some((o) => o.toLowerCase() === p.text.toLowerCase()));
+    const composed = composeComplaintPicks(b, [...ordered, ...extras]);
+    const complaints = source.filter((c) => c !== existing && c !== b);
+    if (!complaints.includes(composed)) complaints.push(composed);
+    const next = {
+      ...session,
+      complaints,
+      ...(dirty ? { complaintsText: complaints.join(", ") } : {}),
+    };
+    persistSession(next);
+    set({ session: next });
+  },
+
+  applyComplaintSub(base, option, child) {
+    const session = get().session;
+    const templates = (() => {
+      try {
+        return getComplaintTemplates();
+      } catch {
+        return [];
+      }
+    })();
+    const b = base.trim();
+    const opt = option.trim();
+    const kid = child.trim();
+    if (!b || !opt || !kid) return;
+    const catalog = optionsForComplaint(b, templates);
+    const subs = subsForComplaint(b, opt, templates);
+    const { list: source, dirty } = complaintSource(session);
+    const existing = findComplaintVariant(source, b, templates);
+    const picks = complaintPicks(existing, b);
+    const row = picks.find((p) => p.text.toLowerCase() === opt.toLowerCase());
+    let nextPicks: ComplaintPick[];
+    if (!row) {
+      nextPicks = [...picks, { text: opt, children: [kid] }];
+    } else {
+      const has = row.children.some((c) => c.toLowerCase() === kid.toLowerCase());
+      const children = has ? row.children.filter((c) => c.toLowerCase() !== kid.toLowerCase()) : [...row.children, kid];
+      const orderedKids = [
+        ...subs.filter((s) => children.some((c) => c.toLowerCase() === s.toLowerCase())),
+        ...children.filter((c) => !subs.some((s) => s.toLowerCase() === c.toLowerCase())),
+      ];
+      nextPicks = picks.map((p) => (p === row ? { ...p, children: orderedKids } : p));
+    }
+    const ordered = catalog
+      .map((o) => nextPicks.find((p) => p.text.toLowerCase() === o.toLowerCase()))
+      .filter((p): p is ComplaintPick => !!p);
+    const extras = nextPicks.filter((p) => !catalog.some((o) => o.toLowerCase() === p.text.toLowerCase()));
+    const composed = composeComplaintPicks(b, [...ordered, ...extras]);
     const complaints = source.filter((c) => c !== existing && c !== b);
     if (!complaints.includes(composed)) complaints.push(composed);
     const next = {

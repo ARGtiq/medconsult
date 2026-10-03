@@ -207,7 +207,7 @@ function LocalOptionRow({
 
 export function ProtocolPage() {
   const store = useAppStore();
-  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, addRecommendation, applyComplaintOption, addStudy } =
+  const { session, settings, patients, setSession, toggleBlock, toggleComplaint, addRecommendation, applyComplaintOption, applyComplaintSub, addStudy } =
     store;
   const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
@@ -799,6 +799,7 @@ export function ProtocolPage() {
                 onPick={(opt) => {
                   applyComplaintOption(optMenu.base, opt);
                 }}
+                onPickSub={(opt, child) => applyComplaintSub(optMenu.base, opt, child)}
                 onClose={() => setOptMenu(null)}
               />
             ) : null}
@@ -808,6 +809,7 @@ export function ProtocolPage() {
               onToggle={toggleComplaint}
               selected={session.complaints}
               onApplyOption={applyComplaintOption}
+              onApplySub={applyComplaintSub}
               setOptionMenu={setOptMenu}
             />
             <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
@@ -817,6 +819,7 @@ export function ProtocolPage() {
               selected={session.complaints}
               dashed
               onApplyOption={applyComplaintOption}
+              onApplySub={applyComplaintSub}
               setOptionMenu={setOptMenu}
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -845,6 +848,7 @@ export function ProtocolPage() {
                   onToggle={toggleComplaint}
                   selected={session.complaints}
                   onApplyOption={applyComplaintOption}
+              onApplySub={applyComplaintSub}
                   setOptionMenu={setOptMenu}
                 />
               </>

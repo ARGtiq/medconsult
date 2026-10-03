@@ -17,7 +17,7 @@ import {
   liveScales,
   studyMatchesQuery,
 } from "./data/studies";
-import type { StudyDef, StudyEntry, StudyField } from "./types";
+import type { StudyDef, StudyEntry, StudyExtra, StudyField } from "./types";
 import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive, icdMatches } from "./live";
 import { scaleFromStudyKey, studyKeyForScale } from "./data/questionnaires";
@@ -272,6 +272,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       studies: session.studies.map((s) => (s.key === studyKey ? { ...s, ...patch } : s)),
     });
   };
+  const setExtras = (instId: string, extras: StudyExtra[]) => {
+    setSession({
+      studies: session.studies.map((s) =>
+        s.key !== studyKey ? s : { ...s, instances: s.instances.map((i) => (i.id === instId ? { ...i, extras } : i)) },
+      ),
+    });
+  };
   const asText = () => {
     const text = entry.instances
       .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]))
@@ -454,6 +461,56 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 })}
               </div>
               )}
+              <div className="mt-2 space-y-1">
+                {(inst.extras || []).map((ex) => (
+                  <div key={ex.id} className="flex items-center gap-1">
+                    <input
+                      value={ex.name}
+                      placeholder="название"
+                      aria-label="Название пункта"
+                      onChange={(e) =>
+                        setExtras(
+                          inst.id,
+                          (inst.extras || []).map((x) => (x.id === ex.id ? { ...x, name: e.target.value } : x)),
+                        )
+                      }
+                      className="min-w-0 flex-1 rounded border border-line bg-paper px-1.5 py-0.5 text-xs"
+                    />
+                    <input
+                      value={ex.value}
+                      placeholder="значение"
+                      aria-label="Значение пункта"
+                      onChange={(e) =>
+                        setExtras(
+                          inst.id,
+                          (inst.extras || []).map((x) => (x.id === ex.id ? { ...x, value: e.target.value } : x)),
+                        )
+                      }
+                      className="min-w-0 flex-1 rounded border border-line bg-paper px-1.5 py-0.5 text-xs"
+                    />
+                    <button
+                      type="button"
+                      className="px-1 text-xs text-danger"
+                      aria-label="Убрать пункт"
+                      onClick={() => setExtras(inst.id, (inst.extras || []).filter((x) => x.id !== ex.id))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-teal"
+                  onClick={() =>
+                    setExtras(inst.id, [
+                      ...(inst.extras || []),
+                      { id: `ex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, name: "", value: "" },
+                    ])
+                  }
+                >
+                  + свой пункт
+                </button>
+              </div>
               <p className="mt-1 text-[10px] text-mute">Клик по названию пункта скрывает его из протокола. Ещё раз — вернуть.</p>
               {def.referenceNotes && (
                 <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>

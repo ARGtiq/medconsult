@@ -30,11 +30,25 @@ export type VisitPack = {
   localPackIds: string[];
 };
 
-/** Dictionary item: main complaint + optional qualifiers (side, type…). */
-export type ComplaintTemplate = {
+/** Dictionary item: main complaint, qualifiers, and qualifiers of those qualifiers. */
+export type ComplaintOption = {
   text: string;
   options?: string[];
 };
+
+export type ComplaintTemplate = {
+  text: string;
+  options?: ComplaintOption[];
+};
+
+export function complaintOptionText(o: string | ComplaintOption): string {
+  return typeof o === "string" ? o.trim() : (o?.text || "").trim();
+}
+
+export function complaintOptionSubs(o: string | ComplaintOption): string[] {
+  if (!o || typeof o === "string") return [];
+  return (o.options || []).map((s) => String(s).trim()).filter(Boolean);
+}
 
 /** Named paragraph for the objective-status block. */
 export type ObjectiveTemplate = {
@@ -123,7 +137,7 @@ const SEED_COMPLAINT_OPTIONS: Record<string, string[]> = {
 
 export const SEED_COMPLAINTS: ComplaintTemplate[] = COMPLAINTS.map((c) => {
   const options = SEED_COMPLAINT_OPTIONS[c.text];
-  return options ? { text: c.text, options: [...options] } : { text: c.text };
+  return options ? { text: c.text, options: options.map((text) => ({ text })) } : { text: c.text };
 });
 
 export const STD_DOC_BLOCKS = [
@@ -220,6 +234,21 @@ export const seedTemplates = (): TemplatesState => ({
   globalTemplates: [],
 });
 
+function normalizeOption(raw: unknown): ComplaintOption | null {
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    return text ? { text } : null;
+  }
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { text?: unknown; options?: unknown };
+  const text = typeof o.text === "string" ? o.text.trim() : "";
+  if (!text) return null;
+  const options = Array.isArray(o.options)
+    ? o.options.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean)
+    : [];
+  return options.length ? { text, options } : { text };
+}
+
 export function normalizeComplaint(raw: unknown): ComplaintTemplate | null {
   if (typeof raw === "string") {
     const text = raw.trim();
@@ -230,8 +259,8 @@ export function normalizeComplaint(raw: unknown): ComplaintTemplate | null {
   const text = typeof o.text === "string" ? o.text.trim() : "";
   if (!text) return null;
   if (Array.isArray(o.options)) {
-    const options = o.options.map((x) => String(x).trim()).filter(Boolean);
-    return { text, options };
+    const options = o.options.map(normalizeOption).filter(Boolean) as ComplaintOption[];
+    return options.length ? { text, options } : { text };
   }
   return { text };
 }

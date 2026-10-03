@@ -993,9 +993,32 @@ function studyAutoTag(
   return bits.map(inline).join(", ");
 }
 
+function extraTail(extras?: { name?: string; value?: string }[]): string {
+  return (extras || [])
+    .map((e) => {
+      const name = (e.name || "").trim();
+      const value = (e.value || "").trim();
+      if (!name && !value) return "";
+      if (!name) return value;
+      if (!value) return name;
+      return `${name} - ${value}`;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function withStudyExtras(text: string, extras?: { name?: string; value?: string }[], fallback?: string): string {
+  const tail = extraTail(extras);
+  const base = text.trim();
+  if (!tail) return base;
+  if (!base) return fallback ? `${fallback}: ${tail}.` : tail;
+  if (base.endsWith(".")) return `${base.slice(0, -1)}, ${tail}.`;
+  return `${base}, ${tail}`;
+}
+
 export function fillStudyTemplate(
   def: StudyDef,
-  instance: { date: string; fields: Record<string, string>; omit?: string[] },
+  instance: { date: string; fields: Record<string, string>; omit?: string[]; extras?: { name?: string; value?: string }[] },
   previous?: StudyInstance,
 ) {
   const seeded = applyConditionalDefaults(def, instance.fields);
@@ -1009,9 +1032,10 @@ export function fillStudyTemplate(
   if (def.key === "custom_lab") {
     const named = (fields.title || "").trim();
     const body = (fields.body || "").trim();
-    if (!named && !body) return "";
     const title = named || def.label || "Свой анализ";
-    return body ? `${title} от ${date}: ${body}` : `${title} от ${date}`;
+    if (!named && !body && !extraTail(instance.extras)) return "";
+    const core = body ? `${title} от ${date}: ${body}` : named ? `${title} от ${date}` : "";
+    return withStudyExtras(core, instance.extras, `${title} от ${date}`);
   }
 
   if (def.category === "questionnaire") {
@@ -1044,7 +1068,8 @@ export function fillStudyTemplate(
     }
     if (!bits.length) return "";
     const prefix = one ? one.title : "Анкеты";
-    return `${prefix} от ${date}: ${bits.join("; ")}.`;
+    if (!extraTail(instance.extras)) return `${prefix} от ${date}: ${bits.join("; ")}.`;
+    return withStudyExtras(`${prefix} от ${date}: ${bits.join("; ")}.`, instance.extras);
   }
 
   if ((def.sparse || def.category === "lab") && !useLabTemplate(def)) {
@@ -1064,8 +1089,8 @@ export function fillStudyTemplate(
       const label = f.showHeading === false ? "" : f.label;
       bits.push(`${label} ${text}`.trim());
     }
-    if (!bits.length) return "";
-    return `${def.label} от ${date}: ${bits.join(", ")}.`;
+    if (!bits.length) return withStudyExtras("", instance.extras, `${def.label} от ${date}`);
+    return withStudyExtras(`${def.label} от ${date}: ${bits.join(", ")}.`, instance.extras);
   }
 
   let text = def.template.replaceAll("{date}", date);
@@ -1098,7 +1123,8 @@ export function fillStudyTemplate(
     const phrase = (fields[f.key] || "").trim();
     if (phrase) text = `${text} ${phrase}`;
   }
-  return text
+  return withStudyExtras(
+    text
     .replace(/,\s*,/g, ",")
     .replace(/:\s*,/g, ": ")
     .replace(/\s*\(\s*%?\s*\)/g, "")
@@ -1110,7 +1136,9 @@ export function fillStudyTemplate(
     .split("\n")
     .filter((line) => line.trim() !== "")
     .join("\n")
-    .trim();
+    .trim(),
+    instance.extras,
+  );
 }
 
 /** `{+key}` → «название - значение». Hidden, omitted or empty field disappears with its name. */
