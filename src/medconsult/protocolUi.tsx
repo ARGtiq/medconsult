@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, parseDrugLine, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -374,6 +374,174 @@ function DrugSearch({
   );
 }
 
+function DrugLineEditor({
+  line,
+  onSave,
+  onCancel,
+}: {
+  line: string;
+  onSave: (next: string) => void;
+  onCancel: () => void;
+}) {
+  const parsed = parseDrugLine(line);
+  const [name] = useState(parsed?.name || "");
+  const [dosage, setDosage] = useState(parsed?.dosage || "");
+  const [brand, setBrand] = useState(parsed?.brand || "");
+  const [frequency, setFrequency] = useState(parsed?.frequency || "");
+  const [days, setDays] = useState(parsed?.duration || "");
+  const doseRef = useRef<HTMLInputElement>(null);
+  const doses = useMemo(() => dosesForDrug(name), [name]);
+  const brandOptions = useMemo(() => {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
+    return (rec?.brandNames || "")
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, [name]);
+
+  useEffect(() => {
+    doseRef.current?.focus();
+    doseRef.current?.select();
+  }, []);
+
+  if (!parsed) return null;
+
+  function onDose(v: string) {
+    setDosage(v);
+    const matches = variantsOf(name).filter((x) => x.dosage === v);
+    if (matches.length === 1) {
+      if (matches[0].frequency) setFrequency(matches[0].frequency);
+      if (matches[0].duration) setDays(matches[0].duration);
+    }
+  }
+
+  function commit() {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
+    const picked = brand.trim();
+    const next = formatDrugMention({
+      name: name.trim(),
+      form: (rec?.form || DEFAULT_DRUG_FORM).trim(),
+      brandNames: picked || rec?.brandNames,
+      composition: rec?.composition,
+      dosage: dosage.trim(),
+      frequency: frequency.trim(),
+      duration: courseText(days),
+    }).text;
+    if (next) onSave(next);
+  }
+
+  function onFieldKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+    if (e.key === "Escape") onCancel();
+  }
+
+  const field = "w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm";
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]">
+        <div className="flex items-center rounded-md border border-line bg-paper px-2 py-1.5 text-sm">{name}</div>
+        <input
+          ref={doseRef}
+          value={dosage}
+          onChange={(e) => onDose(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="доза"
+          aria-label="Доза"
+          list={doses.length ? "rx-line-dose" : undefined}
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="торговое"
+          aria-label="Торговое название"
+          list={brandOptions.length ? "rx-line-brand" : undefined}
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="кратность"
+          aria-label="Кратность"
+          className={field}
+          autoComplete="off"
+        />
+        <input
+          value={days}
+          onChange={(e) => setDays(e.target.value)}
+          onKeyDown={onFieldKey}
+          placeholder="курс"
+          aria-label="Курс"
+          className={field}
+          autoComplete="off"
+        />
+      </div>
+      {doses.length > 0 && (
+        <datalist id="rx-line-dose">
+          {doses.map((d) => (
+            <option key={d.value} value={d.value} label={d.label} />
+          ))}
+        </datalist>
+      )}
+      {brandOptions.length > 0 && (
+        <datalist id="rx-line-brand">
+          {brandOptions.map((b) => (
+            <option key={b} value={b} />
+          ))}
+        </datalist>
+      )}
+      {doses.length > 1 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {doses.map((d) => (
+            <button
+              key={d.value}
+              type="button"
+              onClick={() => onDose(d.value)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                dosage === d.value ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+            >
+              {d.value}
+            </button>
+          ))}
+        </div>
+      )}
+      {brandOptions.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {brandOptions.map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => setBrand(brand === b ? "" : b)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                brand === b ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-1 flex gap-2">
+        <button type="button" className="text-[11px] font-medium text-teal" onClick={commit}>
+          записать
+        </button>
+        <button type="button" className="text-[11px] text-mute" onClick={onCancel}>
+          отмена
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Sec({
   id,
   title,
@@ -514,11 +682,24 @@ export function RecommendationsBlock({
             onChange={(next) => store.renameList("recommendations", next)}
             analogsOf={(line) => analogsOf(line).map((a) => a.line)}
             noteOf={extraOfLine}
+            editNode={(index, line, close) =>
+              parseDrugLine(line) ? (
+                <DrugLineEditor
+                  line={line}
+                  onSave={(next) => {
+                    const copy = [...session.recommendations];
+                    copy[index] = next;
+                    store.renameList("recommendations", copy);
+                    close();
+                  }}
+                  onCancel={close}
+                />
+              ) : null
+            }
             onInsertAfter={(index, line) => {
-              if (session.recommendations.includes(line)) return;
-              const next = [...session.recommendations];
-              next.splice(index + 1, 0, line);
-              store.renameList("recommendations", next);
+              const rest = session.recommendations.filter((item, i) => i !== index && item !== line);
+              rest.splice(Math.min(index, rest.length), 0, line);
+              store.renameList("recommendations", rest);
             }}
           />
         </>

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import {
@@ -46,6 +46,7 @@ export function EditableChips({
   analogsOf,
   onInsertAfter,
   noteOf,
+  editNode,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
@@ -57,6 +58,8 @@ export function EditableChips({
   onInsertAfter?: (index: number, line: string) => void;
   /** Мелкий текст под строкой. В сам пункт не пишется. */
   noteOf?: (line: string) => string;
+  /** Форма вместо текстового поля. null — править как текст. */
+  editNode?: (index: number, line: string, close: () => void) => ReactNode | null;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -106,8 +109,17 @@ export function EditableChips({
 
   return (
     <div className={lines ? "mt-1 flex flex-col gap-1" : "mt-1 flex flex-wrap gap-1"}>
-      {items.map((t, i) =>
-        edit === i ? (
+      {items.map((t, i) => {
+        if (edit === i) {
+          const custom = editNode?.(i, t, () => setEdit(null));
+          if (custom) {
+            return (
+              <div key={`e-${i}`} className="rounded-md border border-teal/40 bg-paper p-1.5">
+                {custom}
+              </div>
+            );
+          }
+          return (
           <input
             key={`e-${i}`}
             ref={ref}
@@ -127,7 +139,9 @@ export function EditableChips({
                 : "min-w-[8rem] rounded-full border border-teal bg-paper px-2 py-0.5 text-xs"
             }
           />
-        ) : (
+          );
+        }
+        return (
           <div key={`${t}-${i}`} className={lines ? "flex flex-col gap-1" : "contents"}>
           <span
             className={`${lines ? "flex w-full items-start gap-1 rounded-md px-2 py-1 text-sm" : "inline-flex items-center gap-0.5"} ${chipClass(true, false, drugMarked(t))} ${over === i ? "ring-2 ring-teal" : ""}`}
@@ -145,7 +159,7 @@ export function EditableChips({
             ) : null}
             <button
               type="button"
-              title="Нажми — править как текст"
+              title={editNode ? "Нажми — доза, торговое, кратность, курс" : "Нажми — править как текст"}
               className={lines ? "min-w-0 flex-1 text-left" : undefined}
               onClick={() => {
                 setEdit(i);
@@ -200,8 +214,8 @@ export function EditableChips({
             </div>
           ) : null}
           </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

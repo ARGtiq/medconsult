@@ -601,6 +601,49 @@ export function formatDrugMention(d: {
   return { head: head || name, paren, text: text || name };
 }
 
+/** Разобрать уже вставленную строку обратно в поля формы. */
+export function parseDrugLine(line: string): { name: string; brand: string; dosage: string; frequency: string; duration: string } | null {
+  const raw = line.trim();
+  if (!raw) return null;
+  const low = raw.toLowerCase();
+  const rec = liveDrugRecords()
+    .filter((d) => {
+      const n = d.name.trim().toLowerCase();
+      return !!n && (low.includes(n) || low.includes(`«${n}»`));
+    })
+    .sort((a, b) => b.name.length - a.name.length)[0];
+  if (!rec) return null;
+  const paren = raw.match(/\(([^)]*)\)/);
+  let brand = "";
+  if (paren) {
+    const inside = paren[1].trim();
+    if (inside && !/и др\.\s*аналоги/i.test(inside) && !inside.includes("+")) {
+      const brands = (rec.brandNames || "")
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      brand = brands.find((b) => b.toLowerCase() === inside.toLowerCase()) || inside;
+    }
+  }
+  let tail = raw;
+  if (paren && paren.index != null) tail = raw.slice(paren.index + paren[0].length);
+  else {
+    const at = low.indexOf(rec.name.toLowerCase());
+    tail = at >= 0 ? raw.slice(at + rec.name.length) : "";
+  }
+  const bits = tail
+    .split(/\s+-\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return {
+    name: rec.name,
+    brand,
+    dosage: bits[0] || "",
+    frequency: bits[1] || "",
+    duration: bits.slice(2).join(" - "),
+  };
+}
+
 export function analogsOf(lineOrName: string): { name: string; line: string }[] {
   const raw = lineOrName.trim();
   if (!raw) return [];
