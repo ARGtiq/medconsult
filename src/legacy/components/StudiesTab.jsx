@@ -6,7 +6,7 @@ import AutoResizeTextarea from './AutoResizeTextarea'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import { applyMarkup } from '../lib/md'
 import { showToast } from '../lib/toast'
-import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
+import { autoFieldLine, replaceWholeLine } from '../lib/studyLine'
 
 import {
   blankField,

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
 import { STUDIES } from '../../medconsult/data/studies'
-import { autoFieldLine } from '../lib/studyLine'
+import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
 
 export const KIND_OPTIONS = [
   { value: 'text', label: 'текст' },
