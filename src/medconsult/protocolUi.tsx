@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -69,6 +69,13 @@ function DrugSearch({
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
   const items = useMemo(() => {
     const out: TypeaheadItem[] = [];
+    const qn = q.trim().toLowerCase();
+    if (qn.length >= 2) {
+      for (const r of liveGeneralRecs()) {
+        if (selected.includes(r.text) || !r.text.toLowerCase().includes(qn)) continue;
+        out.push({ id: `gen:${r.id}`, label: r.text, hint: "общая" });
+      }
+    }
     for (const h of hits) {
       const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === h.name.toLowerCase());
       const vars = variantsOf(h.name);
@@ -103,7 +110,7 @@ function DrugSearch({
       });
     }
     return out;
-  }, [hits, selected]);
+  }, [hits, selected, q]);
   const doses = useMemo(() => dosesForDrug(name), [name]);
   const brandOptions = useMemo(() => {
     const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
@@ -112,6 +119,17 @@ function DrugSearch({
       .map((s) => s.trim())
       .filter(Boolean);
   }, [name]);
+  const generalChips = useMemo(() => {
+    const code = diagnosisCode.trim().toUpperCase();
+    return liveGeneralRecs()
+      .filter((r) => {
+        if (selected.includes(r.text)) return false;
+        if (!r.mkb10Codes.length) return true;
+        if (!code) return false;
+        return r.mkb10Codes.some((c) => code === c || code.startsWith(`${c}.`) || code.startsWith(c));
+      })
+      .map((r) => r.text);
+  }, [diagnosisCode, selected]);
   const loadedExtra = useMemo(() => {
     const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
     return (rec?.extra || "").trim();
@@ -217,6 +235,11 @@ function DrugSearch({
           clearOnPick={false}
           focusNonce={focusName}
           onPick={(it, how) => {
+            if (String(it.id).startsWith("gen:")) {
+              onAdd(it.label);
+              reset();
+              return;
+            }
             const drug = it.name || it.label;
             const typed = q.trim().toLowerCase();
             const drugL = drug.toLowerCase();
@@ -332,6 +355,12 @@ function DrugSearch({
             </button>
           ))}
         </div>
+      )}
+      {!name && !q.trim() && generalChips.length > 0 && (
+        <>
+          <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">общие</div>
+          <ToggleChips texts={generalChips} onToggle={onAdd} selected={selected} dashed />
+        </>
       )}
       {!name && (
         <p className="mt-1.5 text-xs text-mute">

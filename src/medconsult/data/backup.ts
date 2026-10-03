@@ -254,6 +254,7 @@ const LEGACY_GROUPS: Record<string, string[]> = {
     "vitaeDefaultKey",
     "treatmentSchemes",
     "recommendationPacks",
+    "generalRecommendations",
   ],
   workspace: ["templatePresets"],
   system: ["bugReports", "defaultTemplateId", "printTemplates", "defaultPrintTemplateId"],

@@ -5,15 +5,27 @@ import { DiseasesPage } from '../../medconsult/DiseasesPage'
 
 function startTab(initialTab) {
   if (initialTab === 'studies' || initialTab === 'templates') return 'blocks'
-  if (initialTab === 'guidelines' || initialTab === 'schemes' || initialTab === 'drugs' || initialTab === 'groups') {
+  if (
+    initialTab === 'guidelines' ||
+    initialTab === 'schemes' ||
+    initialTab === 'drugs' ||
+    initialTab === 'groups' ||
+    initialTab === 'general'
+  ) {
     return 'appointments'
   }
   return initialTab || 'mkb'
 }
 
-function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksContent, guidelinesContent }) {
+function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksContent, guidelinesContent, generalRecsContent }) {
   const [sub, setSub] = useState(
-    initialTab === 'schemes' || initialTab === 'packs' ? 'packs' : initialTab === 'drugs' || initialTab === 'groups' ? 'drugs' : 'guidelines',
+    initialTab === 'schemes' || initialTab === 'packs'
+      ? 'packs'
+      : initialTab === 'drugs' || initialTab === 'groups'
+        ? 'drugs'
+        : initialTab === 'general'
+          ? 'general'
+          : 'guidelines',
   )
   const drugsProps = {
     initialSub: initialTab === 'groups' ? 'groups' : 'drugs',
@@ -31,15 +43,19 @@ function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksCont
         <button type="button" className={sub === 'packs' ? 'active' : ''} onClick={() => setSub('packs')}>
           Пакеты рекомендаций
         </button>
+        <button type="button" className={sub === 'general' ? 'active' : ''} onClick={() => setSub('general')}>
+          Общие рекомендации
+        </button>
       </div>
       {sub === 'guidelines' && (guidelinesContent ? guidelinesContent({ initialItemId: initialTab === 'guidelines' ? initialItemId : null }) : <p className="empty-hint">Нет редактора клинреков.</p>)}
       {sub === 'drugs' && (drugsContent ? drugsContent(drugsProps) : <p className="empty-hint">Нет редактора лекарств.</p>)}
       {sub === 'packs' && (recPacksContent ? recPacksContent() : <p className="empty-hint">Нет редактора пакетов.</p>)}
+      {sub === 'general' && (generalRecsContent ? generalRecsContent() : <p className="empty-hint">Нет редактора общих рекомендаций.</p>)}
     </div>
   )
 }
 
-export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent }) {
+export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent, generalRecsContent }) {
   const [tab, setTab] = useState(startTab(initialTab))
 
   return (
@@ -47,7 +63,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       <h2 className="guidelines-title">Справочник</h2>
       <p className="settings-note-inline">
         МКБ-10, болезни, блоки, наборы, глобальные шаблоны, назначения, печать.
-        В «Назначениях» — клинреки, лекарства и пакеты рекомендаций.
+        В «Назначениях» — клинреки, лекарства, пакеты и общие рекомендации.
       </p>
       <div className="settings-tabs">
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
@@ -78,7 +94,7 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
       {tab === 'appointments' && (
-        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} recPacksContent={recPacksContent} guidelinesContent={guidelinesContent} />
+        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} recPacksContent={recPacksContent} guidelinesContent={guidelinesContent} generalRecsContent={generalRecsContent} />
       )}
       {tab === 'print' && <PrintTemplatesTab />}
     </div>

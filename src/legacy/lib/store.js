@@ -80,6 +80,7 @@ const NAMESPACES = {
     'vitaeDefaultKey',
     'treatmentSchemes',
     'recommendationPacks',
+    'generalRecommendations',
   ],
   // рабочие заготовки, не жалко потерять
   workspace: ['templatePresets'],
@@ -183,6 +184,8 @@ function defaultState() {
     treatmentSchemes: {},
     // пакеты рекомендаций: id -> { name, mkb10Codes[], items[], updatedAt }
     recommendationPacks: {},
+    // общие рекомендации: id -> { text, mkb10Codes[], updatedAt }
+    generalRecommendations: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
     // сохранённые визиты (черновики/готовые протоколы)
@@ -1260,6 +1263,48 @@ export const store = {
     delete state.recommendationPacks[id]
     writeAll(state)
     return state.recommendationPacks
+  },
+
+  getGeneralRecommendations() {
+    const state = readAll()
+    return Object.values(state.generalRecommendations || {})
+      .map((raw) => {
+        const text = String(raw?.text || '').trim()
+        if (!text) return null
+        return {
+          id: raw.id,
+          text,
+          mkb10Codes: (raw.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean),
+          updatedAt: raw.updatedAt || 0,
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.text.localeCompare(b.text, 'ru'))
+  },
+
+  saveGeneralRecommendation(item) {
+    const state = readAll()
+    state.generalRecommendations = state.generalRecommendations || {}
+    const text = String(item?.text || '').trim()
+    if (!text) return state.generalRecommendations
+    const id = item?.id || crypto.randomUUID()
+    const mkb10Codes = (item?.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
+    for (const [key, row] of Object.entries(state.generalRecommendations)) {
+      if (key !== id && String(row?.text || '').trim().toLowerCase() === text.toLowerCase()) {
+        delete state.generalRecommendations[key]
+      }
+    }
+    state.generalRecommendations[id] = { id, text, mkb10Codes, updatedAt: Date.now() }
+    writeAll(state)
+    return state.generalRecommendations
+  },
+
+  deleteGeneralRecommendation(id) {
+    const state = readAll()
+    state.generalRecommendations = state.generalRecommendations || {}
+    delete state.generalRecommendations[id]
+    writeAll(state)
+    return state.generalRecommendations
   },
 
   searchRecommendationPacks(query) {

@@ -1,4 +1,5 @@
 import LegacyReference from "@/legacy/components/ReferencePage";
+import GeneralRecsTab from "@/legacy/components/GeneralRecsTab";
 import "@/legacy/legacy.css";
 import { AppShell } from "./AppShell";
 import { DrugsReference } from "./DrugsReference";
@@ -21,6 +22,7 @@ export function ReferencePage() {
           guidelinesContent={(props: { initialItemId?: string | null }) => (
             <GuidelinesReference initialItemId={props?.initialItemId} />
           )}
+          generalRecsContent={() => <GeneralRecsTab />}
         />
       </div>
     </AppShell>

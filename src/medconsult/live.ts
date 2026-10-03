@@ -10,6 +10,18 @@ import type { StudyDef, StudyEntry, StudyField } from "./types";
 export const DRUG_FORMS = ["таб.", "капс.", "супп.", "р-р", "амп.", "мазь", "крем", "гель", "капли", "спрей", "порошок", "сироп", "сусп."];
 export const DEFAULT_DRUG_FORM = "таб.";
 
+export function liveGeneralRecs(): { id: string; text: string; mkb10Codes: string[] }[] {
+  try {
+    return (store.getGeneralRecommendations() || []).map((r) => ({
+      id: String(r.id || ""),
+      text: String(r.text || "").trim(),
+      mkb10Codes: (r.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean),
+    })).filter((r) => r.text);
+  } catch {
+    return [];
+  }
+}
+
 export function liveIcd(): { code: string; title: string }[] {
   try {
     return getAllMkb10().map((x: { code: string; label: string }) => ({ code: x.code, title: x.label }));
