@@ -10,13 +10,25 @@ import type { StudyDef, StudyEntry, StudyField } from "./types";
 export const DRUG_FORMS = ["таб.", "капс.", "супп.", "р-р", "амп.", "мазь", "крем", "гель", "капли", "спрей", "порошок", "сироп", "сусп."];
 export const DEFAULT_DRUG_FORM = "таб.";
 
-export function liveGeneralRecs(): { id: string; text: string; mkb10Codes: string[] }[] {
+export type GeneralRec = {
+  id: string;
+  text: string;
+  note: string;
+  category: string;
+  mkb10Codes: string[];
+};
+
+export function liveGeneralRecs(): GeneralRec[] {
   try {
-    return (store.getGeneralRecommendations() || []).map((r) => ({
-      id: String(r.id || ""),
-      text: String(r.text || "").trim(),
-      mkb10Codes: (r.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean),
-    })).filter((r) => r.text);
+    return (store.getGeneralRecommendations() || [])
+      .map((r) => ({
+        id: String(r.id || ""),
+        text: String(r.text || "").trim(),
+        note: String(r.note || "").trim(),
+        category: String(r.category || "").trim(),
+        mkb10Codes: (r.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean),
+      }))
+      .filter((r) => r.text);
   } catch {
     return [];
   }
@@ -965,8 +977,8 @@ export function learnedDrugs(complaints: string[], code: string): string[] {
   const db = liveDrugsMerged();
   return [...names]
     .map((n) => {
-      const hit = db.find((d) => d.name.toLowerCase() === n.toLowerCase() || n.toLowerCase().includes(d.name.toLowerCase()));
-      return hit ? drugLine(hit) : n;
+      const hit = db.find((d) => d.name.toLowerCase() === n.toLowerCase());
+      return hit ? drugLine(hit) : "";
     })
     .filter(Boolean);
 }

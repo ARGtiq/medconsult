@@ -184,7 +184,7 @@ function defaultState() {
     treatmentSchemes: {},
     // пакеты рекомендаций: id -> { name, mkb10Codes[], items[], updatedAt }
     recommendationPacks: {},
-    // общие рекомендации: id -> { text, mkb10Codes[], updatedAt }
+    // общие рекомендации: id -> { text, note, category, mkb10Codes[], updatedAt }
     generalRecommendations: {},
     // список пациентов с аллергиями: { id, name, allergies: [строки МНН/групп] }
     patients: [],
@@ -1274,6 +1274,8 @@ export const store = {
         return {
           id: raw.id,
           text,
+          note: String(raw.note || '').trim(),
+          category: String(raw.category || '').trim(),
           mkb10Codes: (raw.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean),
           updatedAt: raw.updatedAt || 0,
         }
@@ -1289,12 +1291,14 @@ export const store = {
     if (!text) return state.generalRecommendations
     const id = item?.id || crypto.randomUUID()
     const mkb10Codes = (item?.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
+    const note = String(item?.note || '').trim()
+    const category = String(item?.category || '').trim()
     for (const [key, row] of Object.entries(state.generalRecommendations)) {
       if (key !== id && String(row?.text || '').trim().toLowerCase() === text.toLowerCase()) {
         delete state.generalRecommendations[key]
       }
     }
-    state.generalRecommendations[id] = { id, text, mkb10Codes, updatedAt: Date.now() }
+    state.generalRecommendations[id] = { id, text, note, category, mkb10Codes, updatedAt: Date.now() }
     writeAll(state)
     return state.generalRecommendations
   },

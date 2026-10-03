@@ -50,10 +50,12 @@ function courseText(raw: string) {
 
 function DrugSearch({
   diagnosisCode,
+  diagnosisTitle,
   selected,
   onAdd,
 }: {
   diagnosisCode: string;
+  diagnosisTitle: string;
   selected: string[];
   onAdd: (line: string) => void;
 }) {
@@ -65,6 +67,7 @@ function DrugSearch({
   const [days, setDays] = useState("");
   const [focusDose, setFocusDose] = useState(0);
   const [focusName, setFocusName] = useState(0);
+  const [genOpen, setGenOpen] = useState(false);
   const doseRef = useRef<HTMLInputElement>(null);
   const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
   const items = useMemo(() => {
@@ -72,8 +75,15 @@ function DrugSearch({
     const qn = q.trim().toLowerCase();
     if (qn.length >= 2) {
       for (const r of liveGeneralRecs()) {
-        if (selected.includes(r.text) || !r.text.toLowerCase().includes(qn)) continue;
-        out.push({ id: `gen:${r.id}`, label: r.text, hint: "общая" });
+        if (selected.includes(r.text)) continue;
+        const blob = `${r.text}\n${r.note}\n${r.category}`.toLowerCase();
+        if (!blob.includes(qn)) continue;
+        out.push({
+          id: `gen:${r.id}`,
+          label: r.text,
+          hint: r.category || "общая",
+          note: r.note || undefined,
+        });
       }
     }
     for (const h of hits) {
@@ -119,17 +129,32 @@ function DrugSearch({
       .map((s) => s.trim())
       .filter(Boolean);
   }, [name]);
-  const generalChips = useMemo(() => {
+  const generalGroups = useMemo(() => {
     const code = diagnosisCode.trim().toUpperCase();
-    return liveGeneralRecs()
-      .filter((r) => {
-        if (selected.includes(r.text)) return false;
-        if (!r.mkb10Codes.length) return true;
-        if (!code) return false;
-        return r.mkb10Codes.some((c) => code === c || code.startsWith(`${c}.`) || code.startsWith(c));
-      })
-      .map((r) => r.text);
-  }, [diagnosisCode, selected]);
+    const stem = code.split(".")[0];
+    const title = diagnosisTitle.trim().toLowerCase();
+    const rows = liveGeneralRecs().filter((r) => {
+      if (selected.includes(r.text)) return false;
+      const note = r.note.trim();
+      const noteL = note.toLowerCase();
+      const noteU = note.toUpperCase();
+      if (note && code && (noteU.includes(code) || (stem.length >= 3 && noteU.includes(stem)))) return true;
+      if (note && title.length >= 4 && (noteL.includes(title) || (noteL.length >= 4 && title.includes(noteL)))) return true;
+      if (!r.mkb10Codes.length) return true;
+      if (!code) return false;
+      return r.mkb10Codes.some((c) => code === c || code.startsWith(`${c}.`) || code.startsWith(c));
+    });
+    const groups = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const key = r.category || "без категории";
+      const list = groups.get(key) || [];
+      list.push(r);
+      groups.set(key, list);
+    }
+    return [...groups.keys()]
+      .sort((a, b) => (a === "без категории" ? 1 : b === "без категории" ? -1 : a.localeCompare(b, "ru")))
+      .map((name) => ({ name, rows: groups.get(name) || [] }));
+  }, [diagnosisCode, diagnosisTitle, selected]);
   const loadedExtra = useMemo(() => {
     const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
     return (rec?.extra || "").trim();
@@ -243,8 +268,10 @@ function DrugSearch({
             const drug = it.name || it.label;
             const typed = q.trim().toLowerCase();
             const drugL = drug.toLowerCase();
-            const looksLikeDrug = !typed || drugL.startsWith(typed) || drugL.includes(typed);
-            if (how === "enter" && !looksLikeDrug) {
+            const labelL = it.label.toLowerCase();
+            const noteL = (it.note || "").toLowerCase();
+            const rowMatches = !typed || drugL.includes(typed) || labelL.includes(typed) || noteL.includes(typed);
+            if (how === "enter" && !rowMatches) {
               if (typed) onAdd(q.trim());
               reset();
               return;
@@ -356,11 +383,35 @@ function DrugSearch({
           ))}
         </div>
       )}
-      {!name && !q.trim() && generalChips.length > 0 && (
-        <>
-          <div className="mt-2 text-[10px] tracking-wide text-mute uppercase">общие</div>
-          <ToggleChips texts={generalChips} onToggle={onAdd} selected={selected} dashed />
-        </>
+      {!name && !q.trim() && generalGroups.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setGenOpen((v) => !v)}
+            className="text-[10px] tracking-wide text-mute uppercase"
+          >
+            {genOpen ? "▾" : "▸"} общие
+          </button>
+          {genOpen &&
+            generalGroups.map((group) => (
+              <div key={group.name} className="mt-1">
+                <div className="text-[10px] text-mute">{group.name}</div>
+                <div className="mt-0.5 flex flex-wrap gap-1">
+                  {group.rows.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      title={r.note || undefined}
+                      onClick={() => onAdd(r.text)}
+                      className="max-w-full rounded-full border border-dashed border-teal/40 bg-surface px-2 py-0.5 text-left text-xs text-teal"
+                    >
+                      <span className="line-clamp-4 whitespace-pre-wrap">{r.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
       )}
       {!name && (
         <p className="mt-1.5 text-xs text-mute">
@@ -666,6 +717,7 @@ export function RecommendationsBlock({
       )}
       <DrugSearch
         diagnosisCode={session.diagnosisCode}
+        diagnosisTitle={session.diagnosisTitle}
         selected={session.recommendations}
         onAdd={addRecommendation}
       />

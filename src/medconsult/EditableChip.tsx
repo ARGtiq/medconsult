@@ -160,7 +160,7 @@ export function EditableChips({
             <button
               type="button"
               title={editNode ? "Нажми — доза, торговое, кратность, курс" : "Нажми — править как текст"}
-              className={lines ? "min-w-0 flex-1 text-left" : undefined}
+              className={lines ? "min-w-0 flex-1 text-left whitespace-pre-wrap" : undefined}
               onClick={() => {
                 setEdit(i);
                 setDraft(t);

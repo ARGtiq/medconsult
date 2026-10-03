@@ -48,6 +48,7 @@ export function PatientsPage() {
     <AppShell>
       <div className="legacy-surface min-h-[calc(100dvh-3rem)] p-3 pb-24 md:p-6">
         <LegacyPatients
+          currentPatientId={app.session.patientId}
           onLoadVisit={onLoadVisit}
           onDeleteVisit={(id: string) => {
             app.deleteVisit(id);

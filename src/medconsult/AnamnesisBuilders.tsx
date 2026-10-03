@@ -1007,7 +1007,7 @@ export function AnamnesisVitae({
         onChange={(allergies) => setCard({ allergies })}
       />
       <CardFill
-        label="принимает постоянно"
+        label="принимает сейчас"
         items={session.currentMedications || []}
         placeholder="препарат"
         onChange={(currentMedications) => setCard({ currentMedications })}
@@ -1406,7 +1406,7 @@ export function AnamnesisVitae({
         onChange={(allergies) => setCard({ allergies })}
       />
       </VitaeSection>
-      <VitaeSection id="meds" title="принимает постоянно" omitted={omitted("meds")} onOmit={setOmit}>
+      <VitaeSection id="meds" title="принимает сейчас" omitted={omitted("meds")} onOmit={setOmit}>
       <ChipList
         label=""
         items={session.currentMedications || []}

@@ -120,6 +120,57 @@ function calcAge(dob?: string) {
   return String(years);
 }
 
+function patientName(p: Patient) {
+  return (p.name || `${p.lastName || ""} ${p.firstName || ""}`).replace(/\s+/g, " ").trim();
+}
+
+function isoFromParts(day: string, month: string, yearRaw: string) {
+  let year = Number(yearRaw);
+  if (yearRaw.length === 2) {
+    const yy = Number(yearRaw);
+    const cut = new Date().getFullYear() % 100;
+    year = yy <= cut ? 2000 + yy : 1900 + yy;
+  }
+  const d = Number(day);
+  const m = Number(month);
+  if (!year || year < 1900 || year > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+  return `${String(year).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** «ФИО, ДД.ММ.ГГГГ, ФИО, ДД.ММ.ГГГГ» или «ФИО ДД.ММ.ГГГГ» через запятую или с новой строки. */
+export function parseRecordedList(raw: string): { name: string; dob: string }[] {
+  const dateRe = /(\d{1,2})[./](\d{1,2})[./](\d{2,4})/;
+  const chunks = String(raw || "")
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: { name: string; dob: string }[] = [];
+  let pending = "";
+  const push = (name: string, dob: string) => {
+    const n = name.replace(/\s+/g, " ").trim();
+    if (n.length < 2 || !dob) return;
+    out.push({ name: n, dob });
+  };
+  for (const chunk of chunks) {
+    const dm = chunk.match(dateRe);
+    if (dm && chunk.replace(dateRe, "").trim() === "") {
+      if (pending) push(pending, isoFromParts(dm[1], dm[2], dm[3]));
+      pending = "";
+      continue;
+    }
+    if (dm) {
+      const name = chunk.replace(dateRe, " ").replace(/\s+/g, " ").trim();
+      if (pending) push(pending, "");
+      push(name || pending, isoFromParts(dm[1], dm[2], dm[3]));
+      pending = "";
+      continue;
+    }
+    if (pending) push(pending, "");
+    pending = chunk;
+  }
+  return out;
+}
+
 export function adaptPatient(p: Record<string, unknown>): Patient {
   const name = String(p.name || "");
   const parts = name.trim().split(/\s+/);
@@ -131,6 +182,8 @@ export function adaptPatient(p: Record<string, unknown>): Patient {
     age: String(p.age || calcAge(p.dob as string) || ""),
     name: name || `${p.lastName || ""} ${p.firstName || ""}`.trim(),
     dob: p.dob as string | undefined,
+    recorded: !!p.recorded,
+    recordedAt: Number(p.recordedAt) || 0,
     note: typeof p.note === "string" ? p.note : undefined,
     allergies: Array.isArray(p.allergies)
       ? (p.allergies as string[])
@@ -173,6 +226,8 @@ function writePatient(p: Patient) {
       id: p.id,
       name: p.name,
       dob: p.dob || "",
+      recorded: !!p.recorded,
+      recordedAt: p.recordedAt || 0,
       note: p.note || "",
       allergies: p.allergies || [],
       currentMedications: p.currentMedications || [],
@@ -331,6 +386,7 @@ type AppStore = {
   addRecommendation: (text: string) => void;
   renameList: (field: "complaints" | "localStatus" | "recommendations", next: string[]) => void;
   addPatient: (input: { lastName: string; firstName: string; patronymic?: string; year?: string }) => Patient;
+  addRecorded: (raw: string) => number;
   updatePatient: (id: string, patch: Partial<Patient>) => void;
   addExtraBlock: (kindId: string, title?: string) => void;
   updateExtraBlock: (id: string, patch: Partial<ExtraBlock>) => void;
@@ -716,8 +772,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
     get().setSession({ recommendations: [...session.recommendations, text] });
     try {
-      if (session.diagnosisCode) legacy.recordDiagnosisDrug(session.diagnosisCode, text.split(" ")[0]);
-      session.complaints.forEach((c) => legacy.recordComplaintDrug(c, text.split(" ")[0]));
+      const low = text.toLowerCase();
+      const known = Object.values(legacy.getDrugInfoAll() || {}).find((d) => {
+        const name = String(d?.name || "").trim().toLowerCase();
+        return name.length >= 3 && low.includes(name);
+      });
+      const drugName = String(known?.name || "").trim();
+      if (drugName) {
+        if (session.diagnosisCode) legacy.recordDiagnosisDrug(session.diagnosisCode, drugName);
+        session.complaints.forEach((c) => legacy.recordComplaintDrug(c, drugName));
+      }
     } catch {
       /* */
     }
@@ -746,6 +810,48 @@ export const useAppStore = create<AppStore>((set, get) => ({
     get().setSession({ patientId: p.id });
     get().setToast(`Пациент: ${p.name}`);
     return p;
+  },
+
+  addRecorded(raw) {
+    const rows = parseRecordedList(raw);
+    if (!rows.length) {
+      get().setToast("Нужны ФИО и дата: Иванов Иван Иванович, 22.03.1990");
+      return 0;
+    }
+    const base = Date.now();
+    let patients = [...get().patients];
+    rows.forEach((row, i) => {
+      const key = row.name.toLowerCase();
+      const existing = patients.find((p) => patientName(p).toLowerCase() === key && (!p.dob || p.dob === row.dob));
+      const recordedAt = base + (rows.length - i);
+      if (existing) {
+        const next = { ...existing, dob: existing.dob || row.dob, age: existing.age || calcAge(row.dob), recorded: true, recordedAt };
+        patients = patients.map((p) => (p.id === existing.id ? next : p));
+        writePatient(next);
+        return;
+      }
+      const parts = row.name.split(/\s+/);
+      const lastName = parts[0] || "";
+      const first = parts.slice(1).join(" ");
+      const created: Patient = {
+        id: uid("p"),
+        lastName,
+        firstName: first,
+        age: calcAge(row.dob),
+        name: row.name,
+        dob: row.dob,
+        allergies: [],
+        currentMedications: [],
+        recorded: true,
+        recordedAt,
+      };
+      patients.push(created);
+      writePatient(created);
+    });
+    writeJson(PATIENTS_KEY, patients);
+    set({ patients });
+    get().setToast(`Записанные: ${rows.length}`);
+    return rows.length;
   },
 
   updatePatient(id, patch) {

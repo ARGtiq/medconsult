@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ListPlus, Plus } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
@@ -20,9 +20,11 @@ function haystack(p: Patient) {
 }
 
 export function PatientPicker() {
-  const { patients, session, setSession, addPatient } = useAppStore();
+  const { patients, session, setSession, addPatient, addRecorded } = useAppStore();
   const [q, setQ] = useState("");
   const [form, setForm] = useState(false);
+  const [queue, setQueue] = useState(false);
+  const [queueText, setQueueText] = useState("");
   const [fullName, setFullName] = useState("");
   const [splitName, setSplitName] = useState(false);
   const [lastName, setLastName] = useState("");
@@ -30,28 +32,43 @@ export function PatientPicker() {
   const [patronymic, setPatronymic] = useState("");
   const [year, setYear] = useState("");
   const plusRef = useRef<HTMLButtonElement>(null);
+  const queueRef = useRef<HTMLButtonElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [formPos, setFormPos] = useState({ top: 48, left: 12 });
   const selected = patients.find((p) => p.id === session.patientId);
 
   const items: TypeaheadItem[] = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const list = s ? patients.filter((p) => haystack(p).includes(s)) : patients;
-    const mapped = list.slice(0, 12).map((p) => ({
+    const ordered = [...patients].sort((a, b) => {
+      const ar = a.recorded ? 0 : 1;
+      const br = b.recorded ? 0 : 1;
+      if (ar !== br) return ar - br;
+      if (a.recorded && b.recorded) return (b.recordedAt || 0) - (a.recordedAt || 0);
+      return (a.lastName || "").localeCompare(b.lastName || "", "ru");
+    });
+    const list = s ? ordered.filter((p) => haystack(p).includes(s)) : ordered;
+    const recorded = list.filter((p) => p.recorded).slice(0, 40);
+    const rest = list.filter((p) => !p.recorded).slice(0, 12);
+    const row = (p: Patient): TypeaheadItem => ({
       id: p.id,
       label: `${formatPatient(p)}${p.age ? `, ${p.age}` : ""}${dobBits(p.dob).pretty ? ` (${dobBits(p.dob).pretty})` : ""}`,
-    }));
-    const none = { id: "__none__", label: "без пациента" };
-    if (!s || "без пациента".includes(s) || "без".startsWith(s) || s.startsWith("без")) return [none, ...mapped];
-    return mapped;
-  }, [patients, q]);
+      tone: p.recorded ? (p.id === session.patientId ? "ok" : "wait") : undefined,
+    });
+    const none: TypeaheadItem = { id: "__none__", label: "без пациента" };
+    const head = recorded.map(row);
+    const tail = rest.map(row);
+    if (!s || "без пациента".includes(s) || "без".startsWith(s) || s.startsWith("без")) return [...head, none, ...tail];
+    return [...head, ...tail];
+  }, [patients, q, session.patientId]);
 
   useLayoutEffect(() => {
-    if (!form || !plusRef.current) return;
+    const anchor = queue ? queueRef.current : plusRef.current;
+    if ((!form && !queue) || !anchor) return;
     function place() {
-      if (!plusRef.current) return;
-      const r = plusRef.current.getBoundingClientRect();
-      const width = 280;
+      const node = queue ? queueRef.current : plusRef.current;
+      if (!node) return;
+      const r = node.getBoundingClientRect();
+      const width = queue ? 340 : 280;
       const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
       const top = r.bottom + 6;
       setFormPos({ top, left });
@@ -63,7 +80,7 @@ export function PatientPicker() {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [form]);
+  }, [form, queue]);
 
   function create(e: FormEvent) {
     e.preventDefault();
@@ -84,8 +101,17 @@ export function PatientPicker() {
     setQ("");
   }
 
+  function pinQueue(e: FormEvent) {
+    e.preventDefault();
+    const n = addRecorded(queueText);
+    if (!n) return;
+    setQueueText("");
+    setQueue(false);
+    setQ("");
+  }
+
   return (
-    <div className="flex min-w-0 max-w-[340px] flex-1 items-center gap-1">
+    <div className="flex min-w-0 max-w-[380px] flex-1 items-center gap-1">
       <div className="min-w-0 flex-1">
         <Typeahead
           value={q}
@@ -113,10 +139,27 @@ export function PatientPicker() {
         />
       </div>
       <button
+        ref={queueRef}
+        type="button"
+        title="Записанные пациенты"
+        onClick={() => {
+          setQueue((v) => !v);
+          setForm(false);
+        }}
+        className={`flex size-8 shrink-0 items-center justify-center rounded-lg border text-teal ${
+          queue ? "border-teal bg-teal-soft" : "border-line bg-paper"
+        }`}
+      >
+        <ListPlus className="size-4" />
+      </button>
+      <button
         ref={plusRef}
         type="button"
         title="Новый пациент"
-        onClick={() => setForm((v) => !v)}
+        onClick={() => {
+          setForm((v) => !v);
+          setQueue(false);
+        }}
         className={`flex size-8 shrink-0 items-center justify-center rounded-lg border text-teal ${
           form ? "border-teal bg-teal-soft" : "border-line bg-paper"
         }`}
@@ -182,6 +225,37 @@ export function PatientPicker() {
               </button>
               <button type="submit" className="rounded-md bg-teal px-2 py-1 text-xs font-semibold text-paper">
                 добавить
+              </button>
+            </div>
+          </form>,
+          document.body,
+        )}
+      {queue &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <form
+            onSubmit={pinQueue}
+            style={{ top: formPos.top, left: formPos.left, width: 340 }}
+            className="fixed z-[80] rounded-xl border border-line bg-surface p-2.5 shadow-lg"
+          >
+            <div className="mb-1.5 text-[10px] font-semibold tracking-wide text-mute uppercase">Записанные</div>
+            <textarea
+              autoFocus
+              value={queueText}
+              onChange={(e) => setQueueText(e.target.value)}
+              rows={5}
+              placeholder={"Иванов Иван Иванович, 22.03.1990, Петрова Анна Сергеевна, 01.05.1988"}
+              className="mb-2 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            />
+            <p className="mb-2 text-[11px] leading-snug text-mute">
+              ФИО и полная дата рождения через запятую. Закрепятся сверху списка: принятый зелёный, остальные красные.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="text-xs text-mute" onClick={() => setQueue(false)}>
+                отмена
+              </button>
+              <button type="submit" className="rounded-md bg-teal px-2 py-1 text-xs font-semibold text-paper">
+                закрепить
               </button>
             </div>
           </form>,

@@ -70,7 +70,7 @@ declare module "@/legacy/lib/store" {
     getDrugsForComplaints: (complaints: string[]) => { drug: string; weight: number }[];
     getDrugsForDiagnosisCodes: (codes: string[]) => { drug: string; weight: number }[];
     getDrugsForMkbCode: (code: string) => { name?: string; dosage?: string; frequency?: string; duration?: string; mkb10Codes?: string }[];
-    getGeneralRecommendations: () => { id: string; text: string; mkb10Codes?: string[] }[];
+    getGeneralRecommendations: () => { id: string; text: string; note?: string; category?: string; mkb10Codes?: string[] }[];
     exportAll: () => string;
     importAll: (raw: string) => void;
     exportNamespace: (ns: string) => string;

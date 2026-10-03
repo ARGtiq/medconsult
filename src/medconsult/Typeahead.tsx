@@ -12,6 +12,8 @@ export type TypeaheadItem = {
   /** Третья строка ещё мельче: поле «прочее». */
   note?: string;
   name?: string;
+  /** Записанные: принятый зелёный, остальные красные. */
+  tone?: "ok" | "wait";
 };
 
 export function Typeahead({
@@ -161,8 +163,14 @@ export function Typeahead({
                 <div
                   data-idx={i}
                   className={`flex w-full items-start gap-1.5 px-2 py-1.5 text-sm ${
-                    i === idx ? "bg-teal-soft text-teal" : "hover:bg-paper"
-                  } ${marked ? "border-l-2 border-l-teal" : ""}`}
+                    it.tone === "ok"
+                      ? "bg-ok-soft text-ok"
+                      : it.tone === "wait"
+                        ? "bg-danger-soft text-danger"
+                        : i === idx
+                          ? "bg-teal-soft text-teal"
+                          : "hover:bg-paper"
+                  } ${i === idx ? "ring-2 ring-inset ring-teal" : ""} ${marked ? "border-l-2 border-l-teal" : ""}`}
                 >
                   <button
                     type="button"

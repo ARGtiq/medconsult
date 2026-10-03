@@ -171,6 +171,21 @@
 }
 .legacy-surface .patients-list-item:hover { background: var(--paper); }
 .legacy-surface .patients-list-item.active { background: var(--teal); color: white; }
+.legacy-surface .patients-list-item.is-wait { background: #f3e8e8; color: #8a2a2a; }
+.legacy-surface .patients-list-item.is-seen { background: #e5f6e8; color: #1d6b3a; }
+.legacy-surface .patients-list-item.is-wait.active { background: #b23a3a; color: white; }
+.legacy-surface .patients-list-item.is-seen.active { background: #1d6b3a; color: white; }
+
+.legacy-surface .gen-recs.settings-tab { gap: 8px; }
+.legacy-surface .gen-recs .settings-note-inline { font-size: 11px; }
+.legacy-surface .gen-recs .drug-form { padding: 8px; gap: 6px; }
+.legacy-surface .gen-recs .drug-form textarea,
+.legacy-surface .gen-recs .drug-form input { font-size: 12px; padding: 4px 6px; min-width: 0; }
+.legacy-surface .gen-recs .drug-db-list { gap: 4px; }
+.legacy-surface .gen-recs .drug-db-card { padding: 4px 8px; }
+.legacy-surface .gen-recs .drug-db-card-name { font-size: 12px; white-space: pre-wrap; text-align: left; line-height: 1.35; }
+.legacy-surface .gen-recs .drug-db-line { font-size: 11px; margin-top: 2px; }
+.legacy-surface .gen-recs .gen-rec-cat { margin-top: 6px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
 
 .legacy-surface .patients-detail {
   background: var(--panel);

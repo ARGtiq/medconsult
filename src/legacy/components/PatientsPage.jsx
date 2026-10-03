@@ -54,7 +54,7 @@ function summarizeVisit(v) {
   }
 }
 
-export default function PatientsPage({ onLoadVisit, onDeleteVisit }) {
+export default function PatientsPage({ onLoadVisit, onDeleteVisit, currentPatientId }) {
   const [patients, setPatients] = useState(store.getPatients())
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -63,7 +63,16 @@ export default function PatientsPage({ onLoadVisit, onDeleteVisit }) {
   const [mode, setMode] = useState('patients') // 'patients' | 'visitSearch'
   const [visitQuery, setVisitQuery] = useState('')
 
-  const filtered = patients.filter((p) => matchesPatient(p, query))
+  const filtered = patients
+    .filter((p) => matchesPatient(p, query))
+    .slice()
+    .sort((a, b) => {
+      const ar = a.recorded ? 0 : 1
+      const br = b.recorded ? 0 : 1
+      if (ar !== br) return ar - br
+      if (a.recorded && b.recorded) return (b.recordedAt || 0) - (a.recordedAt || 0)
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ru')
+    })
   const selected = patients.find((p) => p.id === selectedId) || null
   const visitResults = mode === 'visitSearch' ? store.searchVisits(visitQuery) : []
 
@@ -226,19 +235,23 @@ export default function PatientsPage({ onLoadVisit, onDeleteVisit }) {
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="patients-list">
-            {filtered.map((p) => (
+            {filtered.map((p) => {
+              const accepted = !!(p.recorded && currentPatientId && p.id === currentPatientId)
+              const waiting = !!(p.recorded && !accepted)
+              return (
               <button
                 type="button"
                 key={p.id}
-                className={p.id === selectedId ? 'patients-list-item active' : 'patients-list-item'}
+                className={`patients-list-item${p.id === selectedId ? ' active' : ''}${accepted ? ' is-seen' : ''}${waiting ? ' is-wait' : ''}`}
                 onClick={() => setSelectedId(p.id)}
               >
                 <span>{p.name}</span>
                 {p.dob ? (
-                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#8b909a' }}>({dobPretty(p.dob)})</span>
+                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'inherit', opacity: 0.75 }}>({dobPretty(p.dob)})</span>
                 ) : null}
               </button>
-            ))}
+              )
+            })}
             {filtered.length === 0 && patients.length > 0 && <p className="empty-hint">По этому запросу никого не нашлось.</p>}
             {patients.length === 0 && (
               <p className="empty-hint">

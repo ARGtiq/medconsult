@@ -102,6 +102,9 @@ export type Patient = {
   age: string;
   name?: string;
   dob?: string;
+  /** Закреплён в списке записанных на приём. */
+  recorded?: boolean;
+  recordedAt?: number;
   note?: string;
   allergies?: string[];
   currentMedications?: string[];
