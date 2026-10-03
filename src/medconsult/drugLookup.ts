@@ -14,6 +14,7 @@ export type DrugCardInfo = {
   interactions?: string;
   monitoring?: string;
   evidenceLevel?: string;
+  extra?: string;
   note?: string;
   crossAllergyNote?: string;
   inDatabase: boolean;
@@ -112,6 +113,7 @@ type DbRow = {
   interactions?: string;
   monitoring?: string;
   evidenceLevel?: string;
+  extra?: string;
 };
 
 function dbRows(): DbRow[] {
@@ -189,6 +191,7 @@ export function lookupDrug(raw: string): DrugCardInfo | null {
     interactions: dbHit?.interactions || "",
     monitoring: dbHit?.monitoring || "",
     evidenceLevel: dbHit?.evidenceLevel || "",
+    extra: (dbHit as DbRow | undefined)?.extra || "",
     note: "",
     crossAllergyNote: gm?.crossAllergyNote || "",
   };

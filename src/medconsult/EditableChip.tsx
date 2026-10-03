@@ -45,6 +45,7 @@ export function EditableChips({
   markParen,
   analogsOf,
   onInsertAfter,
+  noteOf,
 }: {
   items: string[];
   onChange: (next: string[]) => void;
@@ -54,6 +55,8 @@ export function EditableChips({
   markParen?: boolean;
   analogsOf?: (line: string) => string[];
   onInsertAfter?: (index: number, line: string) => void;
+  /** Мелкий текст под строкой. В сам пункт не пишется. */
+  noteOf?: (line: string) => string;
 }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -150,6 +153,9 @@ export function EditableChips({
               }}
             >
               {markParen ? <ParenText text={t} /> : t}
+              {noteOf?.(t)?.trim() ? (
+                <span className="mt-0.5 line-clamp-2 block text-[10px] leading-tight font-normal break-words text-mute">{noteOf(t).trim()}</span>
+              ) : null}
             </button>
             {analogsOf && onInsertAfter ? (
               <button

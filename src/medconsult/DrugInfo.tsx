@@ -29,6 +29,7 @@ export function InfoDot({ query, className = "" }: { query: string; className?: 
         <span className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-md border border-line bg-surface p-2 text-left text-[11px] leading-snug text-ink shadow">
           <span className="font-medium">{info.name || query}</span>
           {info.dosage ? <span className="mt-0.5 block text-ink-soft">{info.dosage}</span> : null}
+          {info.extra ? <span className="mt-0.5 block text-[10px] leading-snug text-mute">{info.extra}</span> : null}
           {info.note ? <span className="mt-0.5 block">{info.note}</span> : null}
         </span>
       )}
@@ -66,6 +67,7 @@ function Card({ info }: { info: DrugCardInfo }) {
       </div>
       <Row label="доза / схема" value={dose} />
       <Row label="торговые названия" value={info.brandNames} />
+      <Row label="прочее" value={info.extra} />
       <Row label="МКБ-10" value={info.mkb10Codes} />
       <Row label="примечание" value={info.note} />
       <Row label="мониторинг" value={info.monitoring} warn />

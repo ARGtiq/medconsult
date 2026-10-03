@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { STUDIES } from '../../medconsult/data/studies'
-import { extractDrugInfo, suggestBrandNames, shortenText } from '../lib/openrouter'
+import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import useEscapeToClose from '../lib/useEscapeToClose'
 import FillProgressBar from './FillProgressBar'
@@ -33,6 +33,7 @@ function blankForm() {
     interactions: '',
     contraindications: '',
     monitoring: '',
+    extra: '',
     mkb10Codes: '',
     evidenceLevel: '',
     studyTriggers: [],
@@ -250,6 +251,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [instructionText, setInstructionText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState('')
+  const [extractNote, setExtractNote] = useState('')
   const [brandLoading, setBrandLoading] = useState(false)
   const [brandError, setBrandError] = useState('')
   function closeForm() {
@@ -372,9 +374,16 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     }
     setExtracting(true)
     setExtractError('')
+    setExtractNote('')
     try {
       const info = await extractDrugInfo(instructionText)
-      setForm((prev) => ({ ...prev, ...info, studyTriggers: prev.studyTriggers || [] }))
+      const labels = drugExtractFilled(form, mergeDrugExtract(form, info))
+      if (!labels.length) {
+        setExtractError('В тексте не нашлось данных для карточки. Вставь инструкцию целиком, не только меню сайта.')
+        return
+      }
+      setForm((prev) => mergeDrugExtract(prev, info))
+      setExtractNote(`Заполнено: ${labels.join(', ')}`)
     } catch (e) {
       setExtractError(e.message)
     } finally {
@@ -535,6 +544,11 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
           value={form.monitoring}
           onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
         />
+        <AutoResizeTextarea
+          placeholder="Прочее, необязательно: возбудители, спектр. По этому тексту препарат ищется в назначениях"
+          value={form.extra || ''}
+          onChange={(e) => setForm({ ...form, extra: e.target.value })}
+        />
         <div className="drug-form-row">
           <Mkb10CodesInput
             value={form.mkb10Codes}
@@ -552,7 +566,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         {form.name && <EvidenceCheckButton drugName={form.name} compact />}
 
         <div className="extract-block">
-          <div className="extract-label">Или вставь текст инструкции (например, с ГРЛС grls.rosminzdrav.ru) — AI заполнит поля выше</div>
+          <div className="extract-label">Вставь текст инструкции (rlsnet, ГРЛС) — AI заполнит схему приёма, побочные, противопоказания и прочее</div>
           <textarea
             className="instruction-textarea"
             placeholder="Вставь текст инструкции по медицинскому применению…"
@@ -564,6 +578,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
             {extracting ? 'Извлекаю…' : '🤖 Извлечь из текста (AI)'}
           </button>
           {extractError && <div className="ai-error">{extractError}</div>}
+          {extractNote && !extractError && <p className="empty-hint">{extractNote}</p>}
         </div>
 
         <div className="drug-form-actions">
@@ -654,6 +669,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
               {d.form && <div className="drug-db-line">Форма: {d.form}</div>}
               {d.composition && <div className="drug-db-line">Состав: {d.composition}</div>}
+              {d.extra && <div className="drug-db-extra">{d.extra}</div>}
               {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
               {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}
               {(d.studyTriggers || []).map((t, i) => {

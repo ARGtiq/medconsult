@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
@@ -98,6 +98,7 @@ function DrugSearch({
             ? "несколько доз"
             : [primary?.dosage, primary?.frequency, primary?.duration].filter(Boolean).join(" · ") || undefined,
         hint: h.via,
+        note: (rec?.extra || "").trim() || undefined,
         name: h.name,
       });
     }
@@ -110,6 +111,10 @@ function DrugSearch({
       .split(/[,;]/)
       .map((s) => s.trim())
       .filter(Boolean);
+  }, [name]);
+  const loadedExtra = useMemo(() => {
+    const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
+    return (rec?.extra || "").trim();
   }, [name]);
 
   useEffect(() => {
@@ -261,6 +266,7 @@ function DrugSearch({
           autoComplete="off"
         />
       </div>
+      {name && loadedExtra ? <p className="mt-1 text-[10px] leading-snug text-mute">{loadedExtra}</p> : null}
       {doses.length > 0 && (
         <datalist id="rx-dose-list">
           {doses.map((d) => (
@@ -450,6 +456,7 @@ export function RecommendationsBlock({
             items={session.recommendations}
             onChange={(next) => store.renameList("recommendations", next)}
             analogsOf={(line) => analogsOf(line).map((a) => a.line)}
+            noteOf={extraOfLine}
             onInsertAfter={(index, line) => {
               if (session.recommendations.includes(line)) return;
               const next = [...session.recommendations];

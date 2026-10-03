@@ -9,6 +9,8 @@ export type TypeaheadItem = {
   hint?: string;
   /** Вторая строка мельче: кратность и схема. */
   detail?: string;
+  /** Третья строка ещё мельче: поле «прочее». */
+  note?: string;
   name?: string;
 };
 
@@ -177,6 +179,9 @@ export function Typeahead({
                     </span>
                     {it.detail && (
                       <span className="w-full truncate text-[11px] leading-tight font-normal !text-mute">{it.detail}</span>
+                    )}
+                    {it.note && (
+                      <span className="line-clamp-2 w-full text-[10px] leading-tight font-normal break-words !text-mute">{it.note}</span>
                     )}
                   </button>
                     {it.hint && (

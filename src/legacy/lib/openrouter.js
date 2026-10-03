@@ -234,9 +234,19 @@ export function catalogIsStale(provider = getProvider()) {
   return Date.now() - at > CATALOG_TTL
 }
 
-async function callOpenRouterProvider(systemPrompt, userPrompt) {
+async function callOpenRouterProvider(systemPrompt, userPrompt, opts = {}) {
   const apiKey = getApiKey('openrouter')
   if (!apiKey) throw new Error('Не задан ключ OpenRouter — добавь его в настройках сверху')
+
+  const body = {
+    model: getModel('openrouter'),
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: opts.temperature ?? 0.2,
+  }
+  if (opts.maxTokens) body.max_tokens = opts.maxTokens
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -244,14 +254,7 @@ async function callOpenRouterProvider(systemPrompt, userPrompt) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: getModel('openrouter'),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.2,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -263,19 +266,22 @@ async function callOpenRouterProvider(systemPrompt, userPrompt) {
   return data?.choices?.[0]?.message?.content?.trim() || ''
 }
 
-async function callGoogleProvider(systemPrompt, userPrompt, allowSwap = true) {
+async function callGoogleProvider(systemPrompt, userPrompt, allowSwap = true, opts = {}) {
   const apiKey = getApiKey('google')
   if (!apiKey) throw new Error('Не задан ключ Google AI Studio — добавь его в настройках сверху')
 
   const model = getModel('google')
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`
+  const generationConfig = { temperature: opts.temperature ?? 0.2 }
+  if (opts.maxTokens) generationConfig.maxOutputTokens = opts.maxTokens
+  if (opts.json) generationConfig.responseMimeType = 'application/json'
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.2 },
+      generationConfig,
     }),
   })
 
@@ -284,7 +290,7 @@ async function callGoogleProvider(systemPrompt, userPrompt, allowSwap = true) {
     const next = allowSwap && res.status === 404 ? text.match(/use models\/([A-Za-z0-9._-]+)/)?.[1] : ''
     if (next && next !== model) {
       setModel('google', next)
-      return callGoogleProvider(systemPrompt, userPrompt, false)
+      return callGoogleProvider(systemPrompt, userPrompt, false, opts)
     }
     throw new Error(`Google AI ${res.status}: ${text.slice(0, 200)}`)
   }
@@ -293,9 +299,9 @@ async function callGoogleProvider(systemPrompt, userPrompt, allowSwap = true) {
   return data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('').trim() || ''
 }
 
-async function callAI(systemPrompt, userPrompt) {
+async function callAI(systemPrompt, userPrompt, opts) {
   const provider = getProvider()
-  return provider === 'google' ? callGoogleProvider(systemPrompt, userPrompt) : callOpenRouterProvider(systemPrompt, userPrompt)
+  return provider === 'google' ? callGoogleProvider(systemPrompt, userPrompt, true, opts) : callOpenRouterProvider(systemPrompt, userPrompt, opts)
 }
 
 export async function shortenText(text) {
@@ -339,17 +345,252 @@ export async function suggestDiagnosis(complaints, anamnesis) {
   )
 }
 
+const DRUG_EXTRACT_PROMPT = `Ты заполняешь карточку препарата для врача СТРОГО по вставленному тексту инструкции (часто это копипаст со страницы rlsnet или ГРЛС, с обрывками вёрстки). Не выдумывай факты, которых нет в тексте. Но если раздел в тексте есть — поле не оставляй пустым: сожми дословно, коротко.
+
+Особенно не пропускай «Режим дозирования» / «Способ применения и дозы»: взрослая схема внутрь — это dosage, frequency и duration. Побочные эффекты — только одно из полей, не единственное.
+
+Ответь одним JSON-объектом без markdown и без пояснений:
+{
+  "dosage": "разовая доза взрослого кратко, напр. 500 мг + 125 мг",
+  "frequency": "кратность кратко, напр. 3 р/сут",
+  "duration": "длительность курса, если указана, иначе пустая строка",
+  "regimens": [
+    {"label": "взрослые, внутрь", "dosage": "разовая доза", "frequency": "кратность", "duration": "курс"}
+  ],
+  "form": "одно из: таб. | капс. | супп. | р-р | амп. | мазь | крем | гель | капли | спрей | порошок | сироп | сусп.",
+  "composition": "действующие вещества через « + », только если их несколько; одно вещество — пустая строка",
+  "group": "фармакологическая группа кратко, если указана",
+  "brandNames": "торговые названия через запятую, только если явно перечислены",
+  "sideEffects": "3–6 самых частых побочных через запятую",
+  "contraindications": "главные противопоказания кратко",
+  "interactions": "значимые взаимодействия кратко",
+  "monitoring": "что контролировать на фоне приёма, если указано, иначе пустая строка",
+  "mkb10Codes": "коды МКБ-10 через запятую, только если есть в тексте",
+  "extra": "прочее для поиска: на каких возбудителей действует, спектр, чувствительность. Коротко через запятую, только из текста. Не копируй сюда побочки и противопоказания."
+}
+
+regimens: от 1 до 4 взрослых схем (обычная внутрь первой, отдельно почечная недостаточность или парентеральная, если они явно расписаны). Не копируй все детские таблицы. dosage, frequency и duration повторяют первую схему.
+Каждое текстовое поле — не длиннее 400 символов. extra — не длиннее 300. Пустая строка, только если раздела в тексте нет.`
+
+const INSTRUCTION_HEADINGS = [
+  'Состав',
+  'Форма выпуска',
+  'Описание лекарственной формы',
+  'Фармакологическое действие',
+  'Фармакологические свойства',
+  'Фармакодинамика',
+  'Фармакокинетика',
+  'Показания',
+  'Противопоказания',
+  'С осторожностью',
+  'Применение при беременности',
+  'Режим дозирования',
+  'Способ применения и дозы',
+  'Способ применения',
+  'Побочное действие',
+  'Побочные действия',
+  'Взаимодействие',
+  'Лекарственное взаимодействие',
+  'Особые указания',
+  'Передозировка',
+]
+
+export function compactInstruction(text, limit = 28000) {
+  let flat = String(text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  if (!flat) return ''
+  const alt = [...INSTRUCTION_HEADINGS]
+    .sort((a, b) => b.length - a.length)
+    .map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')
+  flat = flat.replace(new RegExp(`(?<!\\n)(${alt})`, 'gi'), '\n\n$1').trim()
+  if (flat.length <= limit) return flat
+  const chunks = flat.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean)
+  const keep = []
+  chunks.forEach((chunk, idx) => {
+    const head = chunk.slice(0, 80)
+    if (INSTRUCTION_HEADINGS.some((h) => head.toLowerCase().startsWith(h.toLowerCase()))) keep.push(idx)
+  })
+  if (!keep.length) return flat.slice(0, limit)
+  let out = ''
+  for (const idx of keep) {
+    const piece = chunks[idx].slice(0, 6000)
+    if (out.length + piece.length + 2 > limit) {
+      const room = limit - out.length - 2
+      if (room > 240) out += `\n\n${piece.slice(0, room)}`
+      break
+    }
+    out += (out ? '\n\n' : '') + piece
+  }
+  return out.trim() || flat.slice(0, limit)
+}
+
+function parseJsonObject(raw) {
+  const cleaned = String(raw || '').replace(/```json|```/gi, '').trim()
+  const tryParse = (s) => {
+    try {
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
+  const direct = tryParse(cleaned)
+  if (direct && typeof direct === 'object') return Array.isArray(direct) ? direct[0] : direct
+  const start = cleaned.indexOf('{')
+  if (start < 0) return null
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = start; i < cleaned.length; i++) {
+    const c = cleaned[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) {
+        const obj = tryParse(cleaned.slice(start, i + 1))
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) return obj
+        break
+      }
+    }
+  }
+  return null
+}
+
+function asExtractText(value) {
+  if (Array.isArray(value)) return value.map(asExtractText).filter(Boolean).join(', ')
+  if (value && typeof value === 'object') return ''
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function clipText(value, max) {
+  const text = asExtractText(value)
+  if (text.length <= max) return text
+  return `${text.slice(0, max - 1).trim()}…`
+}
+
+function snapDrugForm(value) {
+  const s = asExtractText(value).toLowerCase()
+  if (!s) return ''
+  const table = [
+    [/табл|таблет|^таб\b/, 'таб.'],
+    [/капс/, 'капс.'],
+    [/супп|свеч/, 'супп.'],
+    [/суспен|сусп/, 'сусп.'],
+    [/сироп/, 'сироп'],
+    [/порош/, 'порошок'],
+    [/маз/, 'мазь'],
+    [/крем/, 'крем'],
+    [/гел/, 'гель'],
+    [/капл/, 'капли'],
+    [/спрей/, 'спрей'],
+    [/ампул|^амп\b/, 'амп.'],
+    [/раствор|р-р|инфуз/, 'р-р'],
+  ]
+  for (const [re, form] of table) if (re.test(s)) return form
+  return ''
+}
+
+function regimensFromExtract(info) {
+  const raw = Array.isArray(info?.regimens) ? info.regimens : []
+  const list = raw
+    .map((row) => ({
+      label: clipText(row?.label, 80),
+      dosage: clipText(row?.dosage, 160),
+      frequency: clipText(row?.frequency, 80),
+      duration: clipText(row?.duration, 80),
+    }))
+    .filter((row) => row.dosage || row.frequency || row.duration)
+    .slice(0, 4)
+  if (list.length) return list
+  const one = {
+    label: '',
+    dosage: clipText(info?.dosage, 160),
+    frequency: clipText(info?.frequency, 80),
+    duration: clipText(info?.duration, 80),
+  }
+  return one.dosage || one.frequency || one.duration ? [one] : []
+}
+
+/** Кладёт ответ ИИ в поля карточки. Пустые строки из ответа уже заполненное не затирают. Доза пишется в схему приёма, не мимо неё. */
+export function mergeDrugExtract(prev, raw) {
+  const info = raw && typeof raw === 'object' ? raw : {}
+  const next = { ...(prev || {}) }
+  const textKeys = [
+    ['sideEffects', 700],
+    ['group', 200],
+    ['brandNames', 300],
+    ['composition', 300],
+    ['interactions', 700],
+    ['contraindications', 700],
+    ['monitoring', 400],
+    ['mkb10Codes', 120],
+    ['extra', 500],
+  ]
+  for (const [key, max] of textKeys) {
+    const value = clipText(info[key], max)
+    if (value) next[key] = value
+  }
+  const form = snapDrugForm(info.form)
+  if (form) next.form = form
+  if (!asExtractText(prev?.name)) {
+    const name = clipText(info.name, 120)
+    if (name) next.name = name
+  }
+  const regimens = regimensFromExtract(info)
+  if (regimens.length) {
+    next.regimens = regimens
+    next.dosage = regimens[0].dosage
+    next.frequency = regimens[0].frequency
+    next.duration = regimens[0].duration
+  }
+  if (Array.isArray(prev?.studyTriggers)) next.studyTriggers = prev.studyTriggers
+  return next
+}
+
+export function drugExtractFilled(prev, next) {
+  const labels = []
+  const before = prev?.regimens?.[0] || {}
+  const after = next?.regimens?.[0] || {}
+  if (after.dosage && after.dosage !== (before.dosage || '')) labels.push('доза')
+  if (after.frequency && after.frequency !== (before.frequency || '')) labels.push('кратность')
+  if (after.duration && after.duration !== (before.duration || '')) labels.push('курс')
+  const map = [
+    ['group', 'группа'],
+    ['brandNames', 'торговые'],
+    ['form', 'форма'],
+    ['composition', 'состав'],
+    ['sideEffects', 'побочные'],
+    ['contraindications', 'противопоказания'],
+    ['interactions', 'взаимодействия'],
+    ['monitoring', 'мониторинг'],
+    ['mkb10Codes', 'МКБ'],
+    ['extra', 'прочее'],
+  ]
+  for (const [key, label] of map) {
+    if ((next?.[key] || '') && next[key] !== (prev?.[key] || '')) labels.push(label)
+  }
+  return labels
+}
+
 export async function extractDrugInfo(instructionText) {
-  const raw = await callAI(
-    'Ты извлекаешь структурированные данные СТРОГО из предоставленного текста инструкции по медицинскому применению препарата. КРИТИЧЕСКИ ВАЖНО: используй только то, что явно написано в тексте. Никогда не дополняй, не досочиняй и не подставляй "типичные" значения из общих знаний о препарате, даже если уверен в них, — если данных нет в тексте, оставляй поле пустой строкой. Отвечай СТРОГО валидным JSON без markdown-разметки, без ```, без преамбулы. Формат: {"dosage": "стандартная разовая/суточная доза кратко, дословно из текста", "frequency": "кратность приёма кратко, дословно из текста", "sideEffects": "3-5 главных побочных эффектов через запятую, только те, что перечислены в тексте", "group": "фармакологическая группа кратко, если указана в тексте", "brandNames": "3-6 торговых названий через запятую, только если явно перечислены в тексте", "form": "лекарственная форма кратко: табл., капсулы — если указана в тексте", "composition": "действующие вещества через « + », только если их несколько; одно действующее — пустая строка", "monitoring": "какие анализы/обследования нужно контролировать на фоне приёма, через запятую — только если explicitly указано в тексте, иначе пустая строка"}. Пустая строка для любого поля, которого нет в тексте — не выдумывай.',
-    instructionText.slice(0, 12000)
-  )
-  const cleaned = raw.replace(/```json|```/g, '').trim()
-  try {
-    return JSON.parse(cleaned)
-  } catch {
+  const body = compactInstruction(instructionText)
+  if (!body) throw new Error('Пустой текст инструкции')
+  const raw = await callAI(DRUG_EXTRACT_PROMPT, body, { maxTokens: 4096, temperature: 0.1, json: true })
+  const parsed = parseJsonObject(raw)
+  if (!parsed || typeof parsed !== 'object') {
     throw new Error('Не удалось разобрать ответ AI как JSON. Попробуй ещё раз или заполни вручную.')
   }
+  return parsed
 }
 
 export async function extractGuidelineInfo(instructionText) {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
-import { extractDrugInfo, suggestBrandNames } from '../lib/openrouter'
+import { extractDrugInfo, suggestBrandNames, mergeDrugExtract } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import DrugGroupsInput from './DrugGroupsInput'
 import Mkb10CodesInput from './Mkb10CodesInput'
@@ -27,6 +27,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
     interactions: existing?.interactions || '',
     contraindications: existing?.contraindications || '',
     monitoring: existing?.monitoring || '',
+    extra: existing?.extra || '',
     mkb10Codes: existing?.mkb10Codes || '',
     evidenceLevel: existing?.evidenceLevel || '',
   })
@@ -41,7 +42,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
     setExtractError('')
     try {
       const info = await extractDrugInfo(instructionText)
-      setForm((prev) => ({ ...prev, ...info }))
+      setForm((prev) => mergeDrugExtract(prev, info))
     } catch (e) {
       setExtractError(e.message)
     } finally {
@@ -138,6 +139,12 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
             placeholder="Мониторинг / обследования на фоне приёма"
             value={form.monitoring}
             onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
+            rows={2}
+          />
+          <textarea
+            placeholder="Прочее, необязательно: возбудители, спектр — по этому тексту ищется в назначениях"
+            value={form.extra || ''}
+            onChange={(e) => setForm({ ...form, extra: e.target.value })}
             rows={2}
           />
           <div className="drug-form-row">

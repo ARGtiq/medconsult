@@ -58,6 +58,7 @@
 .legacy-surface .drug-form-actions { display: flex; gap: 8px; }
 .legacy-surface .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
 .legacy-surface .drug-db-line-highlight { color: var(--teal); font-weight: 500; }
+.legacy-surface .drug-db-extra { font-size: 11px; line-height: 1.35; color: var(--ink-soft); margin-top: 3px; font-weight: 400; }
 
 .legacy-surface .drug-monitoring-row {
   display: flex;

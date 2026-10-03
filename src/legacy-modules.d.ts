@@ -31,6 +31,7 @@ declare module "@/legacy/lib/store" {
         contraindications?: string;
         interactions?: string;
         monitoring?: string;
+        extra?: string;
         evidenceLevel?: string;
       }
     >;
@@ -46,9 +47,10 @@ declare module "@/legacy/lib/store" {
       contraindications?: string;
       interactions?: string;
       monitoring?: string;
+      extra?: string;
       evidenceLevel?: string;
     } | null;
-    saveDrugInfo: (info: { name: string; form?: string; composition?: string; brandNames?: string; group?: string }) => void;
+    saveDrugInfo: (info: { name: string; form?: string; composition?: string; brandNames?: string; group?: string; extra?: string }) => void;
     saveCustomGroup: (key: string, group: { label?: string; drugs?: string[] }) => void;
     getGroupMeta: (key: string) => {
       sideEffects?: string;

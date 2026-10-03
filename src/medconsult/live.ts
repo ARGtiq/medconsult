@@ -648,6 +648,7 @@ export type DrugRecord = {
   form?: string;
   group?: string;
   mkb10Codes?: string;
+  extra?: string;
   regimens?: DrugRegimen[];
 };
 
@@ -682,6 +683,7 @@ export function liveDrugRecords(): DrugRecord[] {
         form: String((d as { form?: string }).form || "").trim(),
         group: d.group,
         mkb10Codes: d.mkb10Codes,
+        extra: String((d as { extra?: string }).extra || "").trim(),
         regimens,
       });
     });
@@ -694,7 +696,7 @@ export function liveDrugRecords(): DrugRecord[] {
 export type DrugHit = {
   line: string;
   name: string;
-  via: "ДВ" | "торговое" | "группа" | "МКБ";
+  via: "ДВ" | "торговое" | "группа" | "МКБ" | "прочее";
   hint: string;
 };
 
@@ -708,6 +710,26 @@ function groupCatalog(): { label: string; drugs: string[] }[] {
     /* */
   }
   return list;
+}
+
+function extraHit(text: string, q: string) {
+  if (q.length < 3 || !text.trim()) return false;
+  const hay = text.toLowerCase();
+  if (hay.includes(q)) return true;
+  if (tokensOf(text).some((w) => w.startsWith(q))) return true;
+  const compactQ = q.replace(/[^a-zа-яё0-9]+/gi, "");
+  if (compactQ.length >= 4 && hay.replace(/[^a-zа-яё0-9]+/gi, "").includes(compactQ)) return true;
+  return false;
+}
+
+/** Текст «прочее» карточки, если название препарата есть в строке назначения. */
+export function extraOfLine(line: string): string {
+  const low = line.trim().toLowerCase();
+  if (!low) return "";
+  const rec = liveDrugRecords()
+    .filter((d) => d.name && (d.extra || "").trim() && low.includes(d.name.toLowerCase()))
+    .sort((a, b) => b.name.length - a.name.length)[0];
+  return (rec?.extra || "").trim();
 }
 
 export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
@@ -773,6 +795,9 @@ export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
   for (const d of records) {
     const codes = (d.mkb10Codes || "").toLowerCase();
     if (codes.includes(q)) push(d, "МКБ", d.mkb10Codes || "");
+  }
+  for (const d of records) {
+    if (extraHit(d.extra || "", q)) push(d, "прочее", d.extra || "");
   }
   if (q.length >= 3) {
     liveIcdMerged()
