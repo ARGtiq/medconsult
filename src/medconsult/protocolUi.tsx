@@ -238,7 +238,7 @@ function DrugSearch({
               reset();
             }
           }}
-          placeholder={name ? "МНН" : "Рекомендация или лекарство"}
+          placeholder={name ? "МНН" : "Общая рекомендация или лекарство"}
           emptyHint="Enter — вставить текст"
           wrapLabels
         />
@@ -443,6 +443,14 @@ export function RecommendationsBlock({
   ixText: string | null;
 }) {
   const store = useAppStore();
+  useEffect(() => {
+    const g = (session.generalRecs || "").trim();
+    if (!g) return;
+    const extra = g.split("\n").map((s) => s.trim()).filter(Boolean);
+    const have = new Set(session.recommendations);
+    const head = extra.filter((l) => !have.has(l));
+    setSession({ generalRecs: "", recommendations: [...head, ...session.recommendations] });
+  }, [session.generalRecs, session.recommendations, setSession]);
   if (!showRecs) return null;
   return (
     <Sec
@@ -453,16 +461,6 @@ export function RecommendationsBlock({
       onRemove={() => toggleBlock("recommendations")}
       ai={showAi("recommendations") ? () => polish("recommendations") : undefined}
     >
-      <div className="mb-2">
-        <div className="text-[10px] tracking-wide text-mute uppercase">общие рекомендации</div>
-        <textarea
-          value={session.generalRecs || ""}
-          onChange={(e) => setSession({ generalRecs: e.target.value })}
-          rows={2}
-          placeholder="Например: избегать переохлаждения"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
-        />
-      </div>
       {fromPractice.length > 0 && (
         <>
           <div className="text-[10px] tracking-wide text-mute uppercase">из практики</div>
