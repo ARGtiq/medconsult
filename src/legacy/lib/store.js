@@ -1216,9 +1216,10 @@ export const store = {
     const subtypes = (pack.subtypes || [])
       .map((s) => ({
         name: String(s?.name || '').trim(),
-        phases: (s?.phases || []).map(cleanPhase),
+        note: String(s?.note || '').trim(),
+        phases: (s?.phases || []).map(cleanPhase).filter((p) => p.name || p.items.length),
       }))
-      .filter((s) => s.name || s.phases.some((p) => p.items.length || p.name))
+      .filter((s) => s.name || s.note || s.phases.length)
     const phases = subtypes.length
       ? []
       : (pack.phases || []).map(cleanPhase).filter((p) => p.name || p.items.length)
@@ -1272,7 +1273,11 @@ export const store = {
         (p.note || '').toLowerCase().includes(q) ||
         (p.items || []).some((t) => itemHit(t, q)) ||
         (p.phases || []).some((phase) => (phase.items || []).some((t) => itemHit(t, q))) ||
-        (p.subtypes || []).some((sub) => (sub.phases || []).some((phase) => (phase.items || []).some((t) => itemHit(t, q)))),
+        (p.subtypes || []).some(
+          (sub) =>
+            (sub.note || '').toLowerCase().includes(q) ||
+            (sub.phases || []).some((phase) => (phase.items || []).some((t) => itemHit(t, q))),
+        ),
     )
   },
 

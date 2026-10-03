@@ -9,6 +9,38 @@ import { rxText } from '../lib/rx'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
+function packLineCount(p) {
+  const phases = p.subtypes?.length
+    ? p.subtypes.flatMap((s) => s.phases || [])
+    : p.phases?.length
+      ? p.phases
+      : [{ items: p.items || [] }]
+  const n = phases.reduce(
+    (sum, phase) => sum + (phase.items || []).filter((it) => String(it?.text || it?.name || '').trim()).length,
+    0,
+  )
+  return n || (p.items || []).length
+}
+
+function blankUnit() {
+  return { name: '', items: [{ ...EMPTY_ITEM }] }
+}
+
+/** Фаза и пункт — одна строка. Старую фазу с несколькими пунктами раскладываем на строки, заголовок не теряем. */
+function unitsFrom(phases) {
+  const units = []
+  for (const phase of phases || []) {
+    const items = (phase?.items || [])
+      .map(asItem)
+      .filter((it) => String(it.text || it.name || '').trim() || (it.subs || []).length)
+    const heading = String(phase?.name || '').trim()
+    const headingIsItem = heading && items.some((it) => String(it.text || it.name || '').trim() === heading)
+    if (heading && !headingIsItem) units.push({ name: '', items: [asItem({ text: heading })] })
+    items.forEach((it) => units.push({ name: '', items: [it] }))
+  }
+  return units.length ? units : [blankUnit()]
+}
+
 function drugBits(raw) {
   return {
     name: String(raw?.name ?? ''),
@@ -147,21 +179,18 @@ function linkPackDrugs(pack) {
 }
 
 function toForm(pack) {
-  const phaseForm = (phase) => ({
-    name: phase?.name || '',
-    items: (phase?.items || []).map(asItem).filter((it) => it.text || it.name).length
-      ? (phase?.items || []).map(asItem)
-      : [{ ...EMPTY_ITEM }],
-  })
   const subtypes = (pack.subtypes || []).map((s) => ({
     name: s.name || '',
-    phases: (s.phases || []).length ? s.phases.map(phaseForm) : [{ name: '', items: [{ ...EMPTY_ITEM }] }],
+    note: s.note || '',
+    phases: unitsFrom(s.phases),
   }))
+  if (subtypes.length && pack.note && subtypes.every((s) => !String(s.note || '').trim())) {
+    const i = Math.min(pack.activeSubtype || 0, Math.max(subtypes.length - 1, 0))
+    subtypes[i] = { ...subtypes[i], note: pack.note }
+  }
   const phases = subtypes.length
     ? []
-    : (pack.phases || []).length
-      ? pack.phases.map(phaseForm)
-      : [{ name: '', items: (pack.items || []).map(asItem).length ? (pack.items || []).map(asItem) : [{ ...EMPTY_ITEM }] }]
+    : unitsFrom((pack.phases || []).length ? pack.phases : [{ name: '', items: pack.items || [] }])
   return {
     id: pack.id,
     fromSchemeId: pack.fromSchemeId || '',
@@ -224,7 +253,7 @@ export default function RecPacksTab() {
       name,
       category: (form.category || '').trim(),
       mkb10Codes: form.mkb10CodesText.split(',').map((c) => c.trim()).filter(Boolean),
-      note: form.note || '',
+      note: form.subtypes?.length ? '' : (form.note || ''),
       studyTriggers: form.studyTriggers || [],
       items: phasesNow.flatMap((phase) => phase.items.map(asItem)).filter((it) => it.text.trim() || it.name),
       phases: form.subtypes?.length ? [] : form.phases,
@@ -267,7 +296,7 @@ export default function RecPacksTab() {
   return (
     <div className="settings-tab">
       <p className="settings-note-inline">
-        Коды МКБ подсказываются из базы. Пункты — свои или лекарства. Подтип один из нескольких, фаза группирует пункты.
+        Коды МКБ подсказываются из базы. Подтип — один вариант пакета, у каждого своё примечание. Фаза и пункт — одно и то же: строка в протоколе.
       </p>
       <button type="button" className="btn-primary" onClick={() => setForm(toForm({ name: '', items: [] }))}>
         + пакет
@@ -281,7 +310,7 @@ export default function RecPacksTab() {
               <button type="button" key={p.id} className="home-draft-item" onClick={() => setForm(toForm(p))}>
                 <strong>{p.name}</strong>
                 <span className="guideline-panel-text-muted">
-                  {(p.mkb10Codes || []).join(', ') || 'без МКБ'} · {(p.items || []).length} строк
+                  {(p.mkb10Codes || []).join(', ') || 'без МКБ'} · {packLineCount(p)} строк
                 </span>
               </button>
             ))}
@@ -317,12 +346,14 @@ export default function RecPacksTab() {
                 placeholder="код или название болезни"
                 label="Коды МКБ-10"
               />
-              <AutoResizeTextarea
-                value={form.note || ''}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                placeholder="Примечание к пакету. В протокол попадает кнопкой «добавить все»"
-                minRows={2}
-              />
+              {!form.subtypes.length && (
+                <AutoResizeTextarea
+                  value={form.note || ''}
+                  onChange={(e) => setForm({ ...form, note: e.target.value })}
+                  placeholder="Примечание к пакету. В протокол попадает кнопкой «добавить все»"
+                  minRows={2}
+                />
+              )}
               <QuietDepends
                 triggers={form.studyTriggers || []}
                 onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
@@ -364,60 +395,74 @@ export default function RecPacksTab() {
                 onClick={() => {
                   const current = form.subtypes.length
                     ? form.subtypes
-                    : [{ name: '', phases: viewPhases() }]
-                  const subtypes = [...current, { name: '', phases: [{ name: '', items: [{ ...EMPTY_ITEM }] }] }]
-                  setForm({ ...form, subtypes, phases: [], activeSubtype: subtypes.length - 1 })
+                    : [{ name: '', note: form.note || '', phases: viewPhases() }]
+                  const subtypes = [...current, { name: '', note: '', phases: [blankUnit()] }]
+                  setForm({ ...form, subtypes, phases: [], note: '', activeSubtype: subtypes.length - 1 })
                 }}
               >
                 + подтип
               </button>
+              {form.subtypes.length > 0 && (
+                <div className="pack-subtype-note">
+                  <div className="pack-unit-kicker">
+                    Примечание подтипа «{form.subtypes[form.activeSubtype || 0]?.name || `подтип ${(form.activeSubtype || 0) + 1}`}»
+                  </div>
+                  <AutoResizeTextarea
+                    value={form.subtypes[form.activeSubtype || 0]?.note || ''}
+                    onChange={(e) => {
+                      const note = e.target.value
+                      const active = form.activeSubtype || 0
+                      setForm({
+                        ...form,
+                        note: '',
+                        subtypes: form.subtypes.map((s, idx) => (idx === active ? { ...s, note } : s)),
+                      })
+                    }}
+                    placeholder="Только для этого подтипа. В протокол попадает кнопкой «добавить все»"
+                    minRows={2}
+                  />
+                </div>
+              )}
+              <p className="settings-note-inline">
+                Фаза и пункт — одно и то же: одна строка рекомендаций, она попадает в протокол отдельно. Подпункт — деталь или вариант внутри этой строки, его можно вставить и сам по себе.
+              </p>
               {viewPhases().map((phase, pi) => (
-                <div key={pi} className="pack-phase">
-                  <div className="drug-form-row">
-                    <input
-                      value={phase.name}
-                      placeholder="фаза — оставь пустым, если она одна"
-                      onChange={(e) => {
-                        const name = e.target.value
-                        setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, name } : p))))
-                      }}
-                    />
+                <div key={pi} className="pack-unit">
+                  <div className="pack-unit-head">
+                    <span className="pack-unit-kicker">Фаза/пункт {pi + 1}</span>
                     {viewPhases().length > 1 && (
                       <button
                         type="button"
                         className="remove-btn"
-                        onClick={() => setForm(withPhases(viewPhases().filter((_, i) => i !== pi)))}
+                        onClick={() => {
+                          const next = viewPhases().filter((_, i) => i !== pi)
+                          setForm(withPhases(next.length ? next : [blankUnit()]))
+                        }}
                       >
                         ×
                       </button>
                     )}
                   </div>
-                  {phase.items.map((item, ii) => (
-                    <PackLine
-                      key={ii}
-                      item={item}
-                      onChange={(next) => patchItem(pi, ii, next)}
-                      onRemove={() => {
-                        const items = phase.items.filter((_, j) => j !== ii)
-                        setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, items: items.length ? items : [{ ...EMPTY_ITEM }] } : p))))
-                      }}
-                    />
-                  ))}
-                  <button
-                    type="button"
-                    className="btn-secondary btn-small"
-                    onClick={() => setForm(withPhases(viewPhases().map((p, i) => (i === pi ? { ...p, items: [...p.items, { ...EMPTY_ITEM }] } : p))))}
-                  >
-                    + пункт
-                  </button>
+                  <PackLine
+                    item={phase.items[0] || EMPTY_ITEM}
+                    onChange={(next) => patchItem(pi, 0, next)}
+                    onRemove={() => {
+                      const phases = viewPhases()
+                      if (phases.length <= 1) {
+                        setForm(withPhases([blankUnit()]))
+                        return
+                      }
+                      setForm(withPhases(phases.filter((_, i) => i !== pi)))
+                    }}
+                  />
                 </div>
               ))}
               <button
                 type="button"
                 className="btn-secondary btn-small"
-                onClick={() => setForm(withPhases([...viewPhases(), { name: '', items: [{ ...EMPTY_ITEM }] }]))}
+                onClick={() => setForm(withPhases([...viewPhases(), blankUnit()]))}
               >
-                + фаза
+                + фаза/пункт
               </button>
               <button type="button" className="pack-depend-btn" onClick={() => setForm({ ...form, nonDrugOn: !form.nonDrugOn })}>
                 {form.nonDrugOn ? 'немедикаментозная терапия' : '+ немедикаментозная терапия'}

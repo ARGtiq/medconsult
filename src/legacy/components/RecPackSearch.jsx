@@ -46,6 +46,17 @@ function itemBlock(item) {
   return [`* ${item.text}`, ...item.subs.map((s) => `  * ${subLine(s)}`)].join('\n')
 }
 
+function noteOf(pack, subtypeIdx) {
+  if (pack.subtypes?.length) {
+    const sub = pack.subtypes[Math.min(subtypeIdx, pack.subtypes.length - 1)] || pack.subtypes[0]
+    const own = String(sub?.note || '').trim()
+    if (own) return own
+    const split = pack.subtypes.some((s) => String(s?.note || '').trim())
+    return split ? '' : String(pack.note || '').trim()
+  }
+  return String(pack.note || '').trim()
+}
+
 function phasesOf(pack, subtypeIdx) {
   if (pack.subtypes?.length) {
     const sub = pack.subtypes[Math.min(subtypeIdx, pack.subtypes.length - 1)] || pack.subtypes[0]
@@ -70,12 +81,12 @@ function PackBody({ pack, onApply }) {
     .map((phase) => ({ name: phase.name || '', items: (phase.items || []).map(packItem).filter((it) => it.text) }))
     .filter((phase) => phase.name || phase.items.length)
   const extras = packExtras(pack)
+  const note = noteOf(pack, subtypeIdx)
   const allLines = [...phases.flatMap((phase) => phase.items.map(itemBlock)), ...extras]
   return (
     <div className="pack-spoiler-body">
       {(pack.category || '').trim() && <div className="guideline-panel-text-muted">{pack.category}</div>}
       {(pack.mkb10Codes || []).length > 0 && <div className="guideline-panel-text-muted">{pack.mkb10Codes.join(', ')}</div>}
-      {(pack.note || '').trim() && <div className="guideline-panel-text-muted">{pack.note}</div>}
       {(pack.redFlags || '').trim() && <div className="guideline-redflags">{pack.redFlags}</div>}
       {(pack.subtypes || []).length > 1 && (
         <div className="pack-subtypes">
@@ -87,9 +98,12 @@ function PackBody({ pack, onApply }) {
           ))}
         </div>
       )}
-      {phases.map((phase, pi) => (
+      {note && <div className="guideline-panel-text-muted">{note}</div>}
+      {phases.map((phase, pi) => {
+        const same = phase.items.length === 1 && phase.name.trim() === phase.items[0].text.trim()
+        return (
         <div key={`${phase.name}-${pi}`} className="pack-phase">
-          {phase.name && <div className="pack-phase-label">{phase.name}</div>}
+          {phase.name && !same && <div className="pack-phase-label">{phase.name}</div>}
           {phase.items.map((item) => (
             <div key={item.text} style={{ marginTop: 6 }}>
               <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => onApply([itemBlock(item)])}>
@@ -113,7 +127,8 @@ function PackBody({ pack, onApply }) {
             </div>
           ))}
         </div>
-      ))}
+        )
+      })}
       {pack.nonDrugOn && String(pack.nonDrugTherapy || '').trim() && (
         <button type="button" className="suggestion-pill" onClick={() => onApply([String(pack.nonDrugTherapy).trim()])}>
           + {pack.nonDrugTherapy}
@@ -128,7 +143,7 @@ function PackBody({ pack, onApply }) {
         <button
           type="button"
           className="btn-secondary btn-small"
-          onClick={() => onApply([...allLines, (pack.note || '').trim()].filter(Boolean))}
+          onClick={() => onApply([...allLines, note].filter(Boolean))}
         >
           добавить все
         </button>

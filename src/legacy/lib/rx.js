@@ -77,6 +77,7 @@ function asPhase(raw) {
 function asSubtype(raw) {
   return {
     name: String(raw?.name || '').trim(),
+    note: String(raw?.note || '').trim(),
     phases: (raw?.phases || []).map(asPhase),
   }
 }
