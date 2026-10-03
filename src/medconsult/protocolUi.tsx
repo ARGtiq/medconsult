@@ -206,7 +206,7 @@ function DrugSearch({
 
   return (
     <div className="mt-1">
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]">
+      <div className={name ? "grid grid-cols-2 gap-1.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(5.5rem,0.7fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_4.2rem]" : ""}>
         <Typeahead
           value={q}
           onChange={(v) => {
@@ -218,14 +218,32 @@ function DrugSearch({
           focusNonce={focusName}
           onPick={(it, how) => {
             const drug = it.name || it.label;
+            const typed = q.trim().toLowerCase();
+            const drugL = drug.toLowerCase();
+            const looksLikeDrug = !typed || drugL.startsWith(typed) || drugL.includes(typed);
+            if (how === "enter" && !looksLikeDrug) {
+              if (typed) onAdd(q.trim());
+              reset();
+              return;
+            }
             if (how === "enter") insertNow(drug);
             else load(drug);
           }}
-          onSubmitCustom={(raw) => insertNow(raw)}
-          placeholder="МНН  Enter вставит"
-          emptyHint="Нет в справочнике. Enter вставит как есть"
+          onSubmitCustom={(raw) => {
+            const drug = raw.trim();
+            const known = liveDrugRecords().some((d) => d.name.toLowerCase() === drug.toLowerCase());
+            if (known) insertNow(drug);
+            else {
+              if (drug) onAdd(drug);
+              reset();
+            }
+          }}
+          placeholder={name ? "МНН" : "Рекомендация или лекарство"}
+          emptyHint="Enter — вставить текст"
           wrapLabels
         />
+        {name ? (
+          <>
         <input
           ref={doseRef}
           value={dosage}
@@ -265,6 +283,8 @@ function DrugSearch({
           className={field}
           autoComplete="off"
         />
+          </>
+        ) : null}
       </div>
       {name && loadedExtra ? <p className="mt-1 text-[10px] leading-snug text-mute">{loadedExtra}</p> : null}
       {doses.length > 0 && (
@@ -313,9 +333,9 @@ function DrugSearch({
           ))}
         </div>
       )}
-      {!q.trim() && !diagnosisCode && !name && (
+      {!name && (
         <p className="mt-1.5 text-xs text-mute">
-          Одно лекарство в списке. Enter вставляет сразу. Tab или клик — доза, торговое, кратность, курс.
+          Общая фраза — напишите и Enter, поле останется одним. Лекарство из списка: клик или Tab — доза, торговое, кратность и курс. Пустое торговое — все названия в скобках.
         </p>
       )}
       {!q.trim() && !!diagnosisCode && hits.length > 0 && (
@@ -433,6 +453,16 @@ export function RecommendationsBlock({
       onRemove={() => toggleBlock("recommendations")}
       ai={showAi("recommendations") ? () => polish("recommendations") : undefined}
     >
+      <div className="mb-2">
+        <div className="text-[10px] tracking-wide text-mute uppercase">общие рекомендации</div>
+        <textarea
+          value={session.generalRecs || ""}
+          onChange={(e) => setSession({ generalRecs: e.target.value })}
+          rows={2}
+          placeholder="Например: избегать переохлаждения"
+          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
+        />
+      </div>
       {fromPractice.length > 0 && (
         <>
           <div className="text-[10px] tracking-wide text-mute uppercase">из практики</div>

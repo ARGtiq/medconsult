@@ -74,6 +74,7 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     localStatus: [],
     studies: [],
     recommendations: [],
+    generalRecs: "",
     notes: "",
     headerOverride: "",
     docStd: [],
@@ -81,6 +82,15 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     allergies: [],
     currentMedications: [],
     ...partial,
+  };
+}
+
+function complaintSource(session: SessionState): { list: string[]; dirty: boolean } {
+  const typed = session.complaintsText;
+  const dirty = !session.complaintsChipMode && typeof typed === "string";
+  return {
+    dirty,
+    list: dirty ? typed.split(/,\s*/).map((s) => s.trim()).filter(Boolean) : session.complaints,
   };
 }
 
@@ -589,14 +599,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     })();
     const base = complaintBaseOf(text, templates);
-    const existing = findComplaintVariant(session.complaints, base, templates) || (session.complaints.includes(text) ? text : undefined);
+    const { list: source, dirty } = complaintSource(session);
+    const existing = findComplaintVariant(source, base, templates) || (source.includes(text) ? text : undefined);
     const complaints = existing
-      ? session.complaints.filter((c) => c !== existing && c !== text)
-      : [...session.complaints, text];
+      ? source.filter((c) => c !== existing && c !== text)
+      : [...source, text];
     const recent = Array.from(new Set([base.replace(/ ×\d+$/, ""), ...get().recentChips])).slice(0, 8);
     writeJson(CHIPS_KEY, recent);
-    persistSession({ ...session, complaints });
-    set({ session: { ...session, complaints }, recentChips: recent });
+    const next = {
+      ...session,
+      complaints,
+      ...(dirty ? { complaintsText: complaints.join(", ") } : {}),
+    };
+    persistSession(next);
+    set({ session: next, recentChips: recent });
     try {
       if (!existing) {
         legacy.recordComplaint(base);
@@ -618,7 +634,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     })();
     const b = base.trim();
     const catalog = optionsForComplaint(b, templates);
-    const existing = findComplaintVariant(session.complaints, b, templates);
+    const { list: source, dirty } = complaintSource(session);
+    const existing = findComplaintVariant(source, b, templates);
     const selected = complaintOptionsSelected(existing, b, catalog);
     let nextOpts: string[];
     if (!option) nextOpts = [];
@@ -628,10 +645,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const ordered = catalog.filter((o) => nextOpts.some((s) => s.toLowerCase() === o.toLowerCase()));
     const extras = nextOpts.filter((s) => !catalog.some((o) => o.toLowerCase() === s.toLowerCase()));
     const composed = composeComplaintOptions(b, [...ordered, ...extras]);
-    const complaints = session.complaints.filter((c) => c !== existing && c !== b);
+    const complaints = source.filter((c) => c !== existing && c !== b);
     if (!complaints.includes(composed)) complaints.push(composed);
-    persistSession({ ...session, complaints });
-    set({ session: { ...session, complaints } });
+    const next = {
+      ...session,
+      complaints,
+      ...(dirty ? { complaintsText: complaints.join(", ") } : {}),
+    };
+    persistSession(next);
+    set({ session: next });
   },
 
   toggleLocal(text) {
@@ -915,7 +937,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       extraBlocks,
       hiddenBlocks: hidden,
       openSection: tpl.stdBlocks[0] || extraBlocks[0]?.id || session.openSection,
-      ...(complaints.length ? { complaints } : {}),
+      ...(complaints.length ? { complaints, complaintsChipMode: false, complaintsText: undefined } : {}),
       ...(tpl.anamnesis.trim() ? { anamnesis: tpl.anamnesis, anamnesisChipMode: false } : {}),
       ...(tpl.anamnesisVitae.trim()
         ? { anamnesisVitae: tpl.anamnesisVitae, vitaeChipMode: false, vitaeTemplateId: "" }
@@ -1043,7 +1065,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   undoAi() {
     const u = get().aiUndo;
     if (!u) return;
-    if (u.section === "complaints" || u.section === "recommendations") {
+    if (u.section === "complaints") {
+      const parsed = JSON.parse(u.before);
+      if (Array.isArray(parsed)) get().setSession({ complaints: parsed, complaintsText: undefined, complaintsChipMode: false });
+      else
+        get().setSession({
+          complaints: parsed.complaints || [],
+          complaintsText: parsed.complaintsText ?? undefined,
+          complaintsChipMode: !!parsed.complaintsChipMode,
+        });
+    } else if (u.section === "recommendations") {
       get().setSession({ [u.section]: JSON.parse(u.before) } as Partial<SessionState>);
     } else {
       get().setSession({ [u.section]: u.before } as Partial<SessionState>);

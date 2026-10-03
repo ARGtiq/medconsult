@@ -47,6 +47,7 @@ export function mdToHtml(src) {
   s = s.replace(/^# (.+)$/gm, '<h2>$1</h2>')
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   s = s.replace(/__(.+?)__/g, '<strong>$1</strong>')
+  s = s.replace(/\+\+(.+?)\+\+/g, '<u style="text-decoration:underline">$1</u>')
   s = s.replace(/(^|[^*])\*(?!\*)(.+?)\*(?!\*)/g, '$1<em>$2</em>')
   s = s.replace(/`(.+?)`/g, '<code>$1</code>')
   s = renderLists(s)

@@ -143,6 +143,38 @@ export const BUILTIN_STUDIES = [
     ],
     referenceNotes: 'Лейкоцитоз + сдвиг влево + повышение СОЭ — признаки воспаления/инфекции. Анемия (Hb <130/120) требует уточнения причины.',
   },
+  {
+    key: 'bh_blood',
+    label: 'БХ крови',
+    category: 'lab',
+    template:
+      'БХ крови от {date}: креатинин — {crea} мкмоль/л, мочевина — {urea} ммоль/л, мочевая кислота — {uric} мкмоль/л, АЛТ — {alt} Ед/л, АСТ — {ast} Ед/л, билирубин общий — {bili} мкмоль/л, глюкоза — {glucose} ммоль/л, белок — {protein} г/л, калий — {k} ммоль/л, натрий — {na} ммоль/л.',
+    fields: [
+      { key: 'crea', label: 'Креатинин', unit: 'мкмоль/л', kind: 'number', normal: '62–115 (муж)', refOp: 'range', refMin: 62, refMax: 115 },
+      { key: 'urea', label: 'Мочевина', unit: 'ммоль/л', kind: 'number', normal: '2,5–8,3', refOp: 'range', refMin: 2.5, refMax: 8.3 },
+      { key: 'uric', label: 'Мочевая кислота', unit: 'мкмоль/л', kind: 'number', normal: '200–420 (муж)', refOp: 'range', refMin: 200, refMax: 420 },
+      { key: 'alt', label: 'АЛТ', unit: 'Ед/л', kind: 'number', normal: '≤40', refOp: 'lte', refMax: 40 },
+      { key: 'ast', label: 'АСТ', unit: 'Ед/л', kind: 'number', normal: '≤40', refOp: 'lte', refMax: 40 },
+      { key: 'bili', label: 'Билирубин общ.', unit: 'мкмоль/л', kind: 'number', normal: '3,4–20,5', refOp: 'range', refMin: 3.4, refMax: 20.5 },
+      { key: 'glucose', label: 'Глюкоза', unit: 'ммоль/л', kind: 'number', normal: '3,3–5,5', refOp: 'range', refMin: 3.3, refMax: 5.5 },
+      { key: 'protein', label: 'Общий белок', unit: 'г/л', kind: 'number', normal: '65–85', refOp: 'range', refMin: 65, refMax: 85 },
+      { key: 'k', label: 'Калий', unit: 'ммоль/л', kind: 'number', normal: '3,5–5,1', refOp: 'range', refMin: 3.5, refMax: 5.1 },
+      { key: 'na', label: 'Натрий', unit: 'ммоль/л', kind: 'number', normal: '136–145', refOp: 'range', refMin: 136, refMax: 145 },
+    ],
+    referenceNotes: 'Референсы мужские, ориентир. Отклонение подчёркивается в тексте для копирования.',
+  },
+  {
+    key: 'custom_lab',
+    label: 'Свой анализ',
+    category: 'lab',
+    template: '{title} от {date}: {body}',
+    templateEdited: true,
+    fields: [
+      { key: 'title', label: 'Название' },
+      { key: 'body', label: 'Текст', long: true },
+    ],
+    referenceNotes: 'Название, дата и свободный текст. Пустое название в протоколе — «Свой анализ».',
+  },
 ]
 
 export function getBuiltinStudy(key) {

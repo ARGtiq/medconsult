@@ -146,6 +146,17 @@ export function FieldControl({
       </div>
     );
   }
+  if (f.long) {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={4}
+        placeholder="текст результата"
+        className="mt-0.5 w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm leading-snug"
+      />
+    );
+  }
   return (
     <FitTextarea
       value={value}
@@ -253,6 +264,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   if (!def || !entry) return null;
   const selected = session.openSection === studyKey;
   const open = !settings.blocksAsSpoiler || selected;
+  const customTitle = studyKey === "custom_lab" ? (entry.instances[0]?.fields.title || "").trim() : "";
   const previous = entry.previous;
   const prevFields = previous ? applyComputed(def, applyConditionalDefaults(def, previous.fields)) : null;
   const patchStudy = (patch: Partial<StudyEntry>) => {
@@ -287,7 +299,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
         className="flex w-full items-center gap-2 text-left"
         onClick={() => setSession({ openSection: selected ? null : studyKey })}
       >
-        <h4 className="text-sm font-medium">{def.label}</h4>
+        <h4 className="text-sm font-medium">{customTitle || def.label}</h4>
         {previous?.date && (
           <span className="rounded bg-teal-soft px-1.5 text-[10px] font-semibold text-teal">было {previous.date}</span>
         )}
@@ -360,7 +372,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const bad = fieldAbnormal(value, f.normal, f, fields);
                   const omitted = (inst.omit || []).includes(f.key);
                   const pickable = !f.computed;
-                  const wide = f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
+                  const wide = f.long || f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
                   const share =
                     f.refOf && f.refOfMode !== "value" && !f.computed
                       ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")

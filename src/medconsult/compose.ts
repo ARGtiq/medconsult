@@ -41,6 +41,18 @@ function includeStd(session: SessionState, id: string) {
   return true;
 }
 
+export function complaintsTextOf(session: SessionState): string {
+  if (session.complaintsChipMode) return (session.complaints || []).join(", ");
+  if (typeof session.complaintsText === "string") return session.complaintsText;
+  return (session.complaints || []).join(", ");
+}
+
+export function recommendationsTextOf(session: SessionState): string {
+  const general = (session.generalRecs || "").trim();
+  const lines = (session.recommendations || []).map((s) => s.trim()).filter(Boolean).join("\n");
+  return [general, lines].filter(Boolean).join("\n");
+}
+
 export function composeBlocks(
   session: SessionState,
   _patient?: Patient,
@@ -100,7 +112,7 @@ export function composeBlocks(
       studiesSent = true;
     }
     if (id === "complaints" && includeStd(session, "complaints")) {
-      push("complaints", "Жалобы", (session.complaints || []).join(", "));
+      push("complaints", "Жалобы", complaintsTextOf(session));
     } else if (id === "anamnesis" && includeStd(session, "anamnesis")) {
       push("anamnesis", "Анамнез заболевания", session.anamnesis);
     } else if (id === "anamnesisVitae" && includeStd(session, "anamnesisVitae")) {
@@ -111,7 +123,7 @@ export function composeBlocks(
       const dx = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");
       push("diagnosis", "Диагноз", dx);
     } else if (id === "recommendations" && includeStd(session, "recommendations")) {
-      push("recommendations", "Рекомендации", (session.recommendations || []).map((s) => s.trim()).filter(Boolean).join("\n"));
+      push("recommendations", "Рекомендации", recommendationsTextOf(session));
     }
   }
   if (!studiesSent) emitStudies();

@@ -1,13 +1,14 @@
 import { mdToHtml } from "@/legacy/lib/md";
 
 export function hasMarkup(text: string) {
-  return /\*\*[^*\n]+\*\*|\*[^*\n]+\*|^\s*[-*] /m.test(text || "");
+  return /\*\*[^*\n]+\*\*|\*[^*\n]+\*|^\s*[-*] |\+\+[^\n]+?\+\+/m.test(text || "");
 }
 
 export function plainMarkup(text: string) {
   return (text || "")
     .replace(/\*\*([^*\n]+)\*\*/g, "$1")
     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2")
+    .replace(/\+\+([^\n]+?)\+\+/g, "$1")
     .replace(/^\s*[-*] /gm, "• ");
 }
 

@@ -30,6 +30,8 @@ export type StudyField = {
   optional?: boolean;
   /** Если false — в тексте исследования нет названия пункта, только значение. */
   showHeading?: boolean;
+  /** Широкое многострочное поле, не короткая строка. */
+  long?: boolean;
   /** Фраза тега. `{value}` — введённое значение. */
   phrase?: string;
   /** Текст перед введённым значением в протоколе. */
@@ -131,6 +133,10 @@ export type SessionState = {
   openSection: string | null;
   hiddenBlocks: string[];
   complaints: string[];
+  /** Свободный текст жалоб. Пока не задан — в протоколе склейка чипов. */
+  complaintsText?: string;
+  /** Чипы выбранных жалоб вместо одного текстового поля. */
+  complaintsChipMode?: boolean;
   anamnesis: string;
   anamnesisVitae: string;
   anamnesisDraft?: AnamnesisDraft;
@@ -146,6 +152,8 @@ export type SessionState = {
   localPicks?: LocalPick[];
   studies: StudyEntry[];
   recommendations: string[];
+  /** Общие рекомендации без полей лекарства. Идут перед назначениями. */
+  generalRecs?: string;
   notes: string;
   headerOverride: string;
   docStd: string[];

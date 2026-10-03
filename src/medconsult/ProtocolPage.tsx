@@ -10,7 +10,7 @@ import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlock
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, type OptionMenuState } from "./EditableChip";
 import { addLocalOption, localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
-import { composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
+import { complaintsTextOf, composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
 import {
   compactGuideline,
@@ -347,10 +347,22 @@ export function ProtocolPage() {
     setAiBusy(true);
     try {
       if (section === "complaints") {
-        store.setAiUndo({ section, before: JSON.stringify(session.complaints) });
-        const src = session.complaints.join(", ");
+        const src = complaintsTextOf(session);
+        store.setAiUndo({
+          section,
+          before: JSON.stringify({
+            complaints: session.complaints,
+            complaintsText: session.complaintsText ?? null,
+            complaintsChipMode: !!session.complaintsChipMode,
+          }),
+        });
         const next = hasApiKey() ? await polishNarrative(src) : polishLocal(src);
-        store.setSession({ complaints: next.split(/,\s*/).map((s) => s.trim()).filter(Boolean) });
+        const complaints = next.split(/,\s*/).map((s) => s.trim()).filter(Boolean);
+        store.setSession(
+          session.complaintsChipMode
+            ? { complaints }
+            : { complaints, complaintsText: next, complaintsChipMode: false },
+        );
       } else if (section === "anamnesis") {
         store.setAiUndo({ section, before: session.anamnesis });
         const next = hasApiKey() ? await polishNarrative(session.anamnesis) : polishLocal(session.anamnesis);
@@ -837,8 +849,51 @@ export function ProtocolPage() {
                 />
               </>
             ) : null}
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
-            <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
+            {session.complaintsChipMode ? (
+              <>
+                <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте · клик — править</div>
+                <EditableChips items={session.complaints} onChange={(next) => store.renameList("complaints", next)} />
+                <button
+                  type="button"
+                  className="mt-1 text-[11px] font-medium text-teal"
+                  onClick={() => setSession({ complaintsChipMode: false, complaintsText: undefined })}
+                >
+                  как текст
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте</div>
+                <textarea
+                  value={session.complaintsText ?? session.complaints.join(", ")}
+                  onChange={(e) => {
+                    const complaintsText = e.target.value;
+                    setSession({
+                      complaintsText,
+                      complaintsChipMode: false,
+                      complaints: complaintsText.split(/,\s*/).map((s) => s.trim()).filter(Boolean),
+                    });
+                  }}
+                  rows={3}
+                  placeholder="Жалобы в протоколе"
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
+                />
+                <button
+                  type="button"
+                  className="mt-1 text-[11px] font-medium text-teal"
+                  onClick={() => {
+                    const text = session.complaintsText ?? session.complaints.join(", ");
+                    setSession({
+                      complaintsChipMode: true,
+                      complaints: text.split(/,\s*/).map((s) => s.trim()).filter(Boolean),
+                      complaintsText: undefined,
+                    });
+                  }}
+                >
+                  вернуть чипы
+                </button>
+              </>
+            )}
             {session.diagnosisCode && hubMode === "block" && (
               <div className="legacy-surface klinrek-slot mt-2">{klinrekPanel("complaints")}</div>
             )}
@@ -1429,7 +1484,7 @@ function ProtocolText({ text }: { text: string }) {
   }
   return (
     <div
-      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_.pack-source]:mt-1 [&_.pack-source]:block [&_.pack-source]:text-[11px] [&_.pack-source]:text-mute [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_.pack-source]:mt-1 [&_.pack-source]:block [&_.pack-source]:text-[11px] [&_.pack-source]:text-mute [&_strong]:font-semibold [&_u]:underline [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
       dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
     />
   );

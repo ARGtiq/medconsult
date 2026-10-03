@@ -159,6 +159,40 @@ export const STUDIES: StudyDef[] = [
     referenceNotes: "Лейкоцитоз + сдвиг влево + СОЭ — воспаление. Hb <130 у мужчин — анемия.",
   },
   {
+    key: "bh_blood",
+    label: "БХ крови",
+    category: "lab",
+    hint: "креатинин, АЛТ, АСТ, глюкоза…",
+    template:
+      "БХ крови от {date}: креатинин {crea} мкмоль/л, мочевина {urea} ммоль/л, мочевая кислота {uric} мкмоль/л, АЛТ {alt} Ед/л, АСТ {ast} Ед/л, билирубин общ. {bili} мкмоль/л, глюкоза {glucose} ммоль/л, белок {protein} г/л, калий {k} ммоль/л, натрий {na} ммоль/л.",
+    fields: [
+      { key: "crea", label: "Креатинин", unit: "мкмоль/л", kind: "number", normal: "62–115 (муж)", refOp: "range", refMin: 62, refMax: 115 },
+      { key: "urea", label: "Мочевина", unit: "ммоль/л", kind: "number", normal: "2,5–8,3", refOp: "range", refMin: 2.5, refMax: 8.3 },
+      { key: "uric", label: "Мочевая кислота", unit: "мкмоль/л", kind: "number", normal: "200–420 (муж)", refOp: "range", refMin: 200, refMax: 420 },
+      { key: "alt", label: "АЛТ", unit: "Ед/л", kind: "number", normal: "≤40", refOp: "lte", refMax: 40 },
+      { key: "ast", label: "АСТ", unit: "Ед/л", kind: "number", normal: "≤40", refOp: "lte", refMax: 40 },
+      { key: "bili", label: "Билирубин общ.", unit: "мкмоль/л", kind: "number", normal: "3,4–20,5", refOp: "range", refMin: 3.4, refMax: 20.5 },
+      { key: "glucose", label: "Глюкоза", unit: "ммоль/л", kind: "number", normal: "3,3–5,5", refOp: "range", refMin: 3.3, refMax: 5.5 },
+      { key: "protein", label: "Общий белок", unit: "г/л", kind: "number", normal: "65–85", refOp: "range", refMin: 65, refMax: 85 },
+      { key: "k", label: "Калий", unit: "ммоль/л", kind: "number", normal: "3,5–5,1", refOp: "range", refMin: 3.5, refMax: 5.1 },
+      { key: "na", label: "Натрий", unit: "ммоль/л", kind: "number", normal: "136–145", refOp: "range", refMin: 136, refMax: 145 },
+    ],
+    referenceNotes: "Референсы мужские, ориентир. Отклонение от нормы подчёркивается в тексте для копирования.",
+  },
+  {
+    key: "custom_lab",
+    label: "Свой анализ",
+    category: "lab",
+    hint: "название, дата и текст",
+    template: "{title} от {date}: {body}",
+    templateEdited: true,
+    fields: [
+      { key: "title", label: "Название" },
+      { key: "body", label: "Текст", long: true },
+    ],
+    referenceNotes: "Впишите название и текст. Дата — в строке сверху. Пустое название в протоколе станет «Свой анализ».",
+  },
+  {
     key: "psa",
     label: "ПСА",
     category: "lab",
@@ -422,6 +456,16 @@ function withPrev(cur: string, prev?: string, prevDate?: string) {
   if (!p || p === c) return c;
   const d = prettyDate(prevDate);
   return d ? `${c} (${p}, ${d})` : `${c} (${p})`;
+}
+
+/** Underline the current value in the copy block when it sits outside the reference. */
+function markDeviant(cur: string, prev: string | undefined, prevDate: string | undefined, abnormal: boolean) {
+  const base = withPrev(cur, prev, prevDate);
+  if (!abnormal) return base;
+  const c = (cur || "").trim();
+  if (!c || c === "—") return base;
+  if (base.startsWith(c)) return `++${c}++${base.slice(c.length)}`;
+  return `++${base}++`;
 }
 
 function parseScore(raw: string) {
@@ -915,7 +959,8 @@ function filledFieldBit(
   if (!v) return null;
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const value = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+  const bad = fieldAbnormal(v, f.normal, f, fields);
+  const value = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
   const shown = fieldShownText(f, value);
   return { label: f.showHeading === false ? "" : f.label, shown };
 }
@@ -961,6 +1006,14 @@ export function fillStudyTemplate(
   const omit = new Set(instance.omit || []);
   const visible = def.fields.filter((f) => !omit.has(f.key));
 
+  if (def.key === "custom_lab") {
+    const named = (fields.title || "").trim();
+    const body = (fields.body || "").trim();
+    if (!named && !body) return "";
+    const title = named || def.label || "Свой анализ";
+    return body ? `${title} от ${date}: ${body}` : `${title} от ${date}`;
+  }
+
   if (def.category === "questionnaire") {
     const scales = liveScales();
     const one = scaleFromStudyKey(def.key, scales);
@@ -1003,7 +1056,10 @@ export function fillStudyTemplate(
       if (!v) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
       const unit = f.unit ? ` ${f.unit}` : "";
-      const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+      const cur = `${v}${unit}`.trim();
+      const prev = p ? `${p}${unit}`.trim() : "";
+      const bad = fieldAbnormal(v, f.normal, f, fields);
+      const shown = markDeviant(cur, prev, prevDate, bad);
       const text = fieldShownText(f, shown);
       const label = f.showHeading === false ? "" : f.label;
       bits.push(`${label} ${text}`.trim());
@@ -1022,7 +1078,8 @@ export function fillStudyTemplate(
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    const valueBit = withPrev(v, p, prevDate);
+    const bad = !!v && fieldAbnormal(v, f.normal, f, fields);
+    const valueBit = markDeviant(v, p, prevDate, bad);
     const replacement =
       f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
         ? ""
@@ -1069,7 +1126,8 @@ function namedFieldText(
   if (!v) return "";
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const shown = withPrev(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate);
+  const bad = fieldAbnormal(v, f.normal, f, fields);
+  const shown = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
   if (f.before || f.after || f.phrase) return fieldShownText(f, shown);
   if (f.showHeading === false) return shown;
   return `${(f.label || f.key).trim()} - ${shown}`.trim();
