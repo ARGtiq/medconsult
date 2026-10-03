@@ -76,13 +76,16 @@ function DrugSearch({
     if (qn.length >= 2) {
       for (const r of liveGeneralRecs()) {
         if (selected.includes(r.text)) continue;
-        const blob = `${r.text}\n${r.note}\n${r.category}`.toLowerCase();
+        const blob = `${r.title}\n${r.text}\n${r.note}\n${r.category}`.toLowerCase();
         if (!blob.includes(qn)) continue;
+        const head = r.title || r.text;
         out.push({
           id: `gen:${r.id}`,
-          label: r.text,
+          label: head,
           hint: r.category || "общая",
+          detail: r.title ? r.text.split("\n").map((s) => s.trim()).filter(Boolean)[0] : undefined,
           note: r.note || undefined,
+          name: r.text,
         });
       }
     }
@@ -261,7 +264,7 @@ function DrugSearch({
           focusNonce={focusName}
           onPick={(it, how) => {
             if (String(it.id).startsWith("gen:")) {
-              onAdd(it.label);
+              onAdd(it.name || it.label);
               reset();
               return;
             }
@@ -401,11 +404,11 @@ function DrugSearch({
                     <button
                       key={r.id}
                       type="button"
-                      title={r.note || undefined}
+                      title={[r.title ? r.text : "", r.note].filter(Boolean).join("\n") || undefined}
                       onClick={() => onAdd(r.text)}
                       className="max-w-full rounded-full border border-dashed border-teal/40 bg-surface px-2 py-0.5 text-left text-xs text-teal"
                     >
-                      <span className="line-clamp-4 whitespace-pre-wrap">{r.text}</span>
+                      <span className={r.title ? "" : "line-clamp-4 whitespace-pre-wrap"}>{r.title || r.text}</span>
                     </button>
                   ))}
                 </div>
@@ -681,7 +684,7 @@ export function RecommendationsBlock({
   toggleBlock: (id: string) => void;
   showAi: (section: string) => boolean;
   polish: (section: "complaints" | "anamnesis" | "recommendations" | "all") => void;
-  fromPractice: string[];
+  fromPractice: { label: string; line: string }[];
   addRecommendation: (line: string) => void;
   hubMode: string;
   klinrekPanel: (slot: "complaints" | "diagnosis" | "studies" | "recs" | "sheet", bare?: boolean) => ReactNode;
@@ -712,7 +715,13 @@ export function RecommendationsBlock({
       {fromPractice.length > 0 && (
         <>
           <div className="text-[10px] tracking-wide text-mute uppercase">из практики</div>
-          <ToggleChips texts={fromPractice} onToggle={addRecommendation} selected={session.recommendations} dashed />
+          <ToggleChips
+            texts={fromPractice.map((p) => p.label)}
+            values={fromPractice.map((p) => p.line)}
+            onToggle={addRecommendation}
+            selected={session.recommendations}
+            dashed
+          />
         </>
       )}
       <DrugSearch

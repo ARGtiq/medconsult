@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
 import { store } from '../lib/store'
+import AutoResizeTextarea from './AutoResizeTextarea'
 import Mkb10CodesInput from './Mkb10CodesInput'
 
 export default function GeneralRecsTab() {
   const [items, setItems] = useState(() => store.getGeneralRecommendations())
+  const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [note, setNote] = useState('')
   const [category, setCategory] = useState('')
@@ -16,6 +18,7 @@ export default function GeneralRecsTab() {
   }
 
   function reset() {
+    setTitle('')
     setText('')
     setNote('')
     setCategory('')
@@ -28,6 +31,7 @@ export default function GeneralRecsTab() {
     if (!line) return
     store.saveGeneralRecommendation({
       id: editId || undefined,
+      title,
       text: line,
       note,
       category,
@@ -54,6 +58,7 @@ export default function GeneralRecsTab() {
 
   function startEdit(item) {
     setEditId(item.id)
+    setTitle(item.title || '')
     setText(item.text)
     setNote(item.note || '')
     setCategory(item.category || '')
@@ -76,12 +81,18 @@ export default function GeneralRecsTab() {
   return (
     <div className="settings-tab gen-recs">
       <p className="settings-note-inline">
-        Текст попадает в протокол как есть, можно списком. Пустые коды МКБ — в любом приёме. Примечание ищется в назначениях и по диагнозу, в протокол не пишется.
+        Заголовок виден в справочнике и в поиске, в протокол не пишется. Текст попадает как есть, можно списком. Пустые коды МКБ — в любом приёме. Примечание ищется в назначениях и по диагнозу, в протокол не пишется.
       </p>
       <div className="drug-form">
-        <textarea
-          ref={textRef}
-          rows={3}
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Заголовок — в справочнике и в поиске"
+        />
+        <AutoResizeTextarea
+          textareaRef={textRef}
+          minRows={2}
+          compact
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -112,7 +123,7 @@ export default function GeneralRecsTab() {
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Примечание: диагноз или как сдавать"
+            placeholder="Примечание: используется при поиске"
           />
         </div>
         <Mkb10CodesInput value={codes} onChange={setCodes} placeholder="Коды МКБ, необязательно" />
@@ -136,7 +147,7 @@ export default function GeneralRecsTab() {
               <div key={item.id} className="drug-db-card">
                 <div className="drug-db-card-top">
                   <button type="button" className="drug-db-card-name" onClick={() => startEdit(item)}>
-                    {item.text}
+                    {item.title || item.text}
                   </button>
                   <button
                     type="button"
@@ -150,6 +161,7 @@ export default function GeneralRecsTab() {
                     удалить
                   </button>
                 </div>
+                {item.title ? <div className="drug-db-line gen-rec-body">{item.text}</div> : null}
                 {item.note ? <div className="drug-db-line">{item.note}</div> : null}
                 {(item.mkb10Codes || []).length > 0 ? (
                   <div className="drug-db-line">{item.mkb10Codes.join(', ')}</div>

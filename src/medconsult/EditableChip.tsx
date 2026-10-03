@@ -224,12 +224,15 @@ export function EditableChips({
 
 export function ToggleChips({
   texts,
+  values,
   selected,
   onToggle,
   onRename,
   dashed,
 }: {
   texts: string[];
+  /** Если задано — в протокол уходит это, на чипе остаётся короткая подпись из texts. */
+  values?: string[];
   selected: string[];
   onToggle: (t: string) => void;
   onRename?: (from: string, to: string) => void;
@@ -245,20 +248,21 @@ export function ToggleChips({
 
   return (
     <div className="mt-1 flex flex-wrap gap-1">
-      {texts.map((t) => {
-        const on = selected.includes(t);
+      {texts.map((t, i) => {
+        const value = values?.[i] ?? t;
+        const on = selected.includes(value);
         const marked = drugMarked(t);
-        if (on && onRename && edit === t) {
+        if (on && onRename && edit === value) {
           return (
             <input
-              key={t}
+              key={value}
               ref={ref}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => {
                 const next = draft.trim();
-                if (!next) onToggle(t);
-                else if (next !== t) onRename(t, next);
+                if (!next) onToggle(value);
+                else if (next !== value) onRename(value, next);
                 setEdit(null);
               }}
               onKeyDown={(e) => {
@@ -273,17 +277,17 @@ export function ToggleChips({
           );
         }
         return (
-          <span key={t} className={`inline-flex items-center gap-0.5 ${chipClass(on, dashed, marked)}`}>
+          <span key={value} className={`inline-flex items-center gap-0.5 ${chipClass(on, dashed, marked)}`}>
             <button
               type="button"
-              title={on && onRename ? "Нажми — править как текст" : undefined}
+              title={value !== t ? value : on && onRename ? "Нажми — править как текст" : undefined}
               onClick={() => {
                 if (on && onRename) {
-                  setEdit(t);
-                  setDraft(t);
+                  setEdit(value);
+                  setDraft(value);
                   return;
                 }
-                onToggle(t);
+                onToggle(value);
               }}
             >
               {t}

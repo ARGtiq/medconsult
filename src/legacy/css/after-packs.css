@@ -185,6 +185,7 @@
 .legacy-surface .gen-recs .drug-db-card { padding: 4px 8px; }
 .legacy-surface .gen-recs .drug-db-card-name { font-size: 12px; white-space: pre-wrap; text-align: left; line-height: 1.35; }
 .legacy-surface .gen-recs .drug-db-line { font-size: 11px; margin-top: 2px; }
+.legacy-surface .gen-recs .gen-rec-body { white-space: pre-wrap; }
 .legacy-surface .gen-recs .gen-rec-cat { margin-top: 6px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
 
 .legacy-surface .patients-detail {

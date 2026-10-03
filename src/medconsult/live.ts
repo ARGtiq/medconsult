@@ -12,6 +12,7 @@ export const DEFAULT_DRUG_FORM = "таб.";
 
 export type GeneralRec = {
   id: string;
+  title: string;
   text: string;
   note: string;
   category: string;
@@ -23,6 +24,7 @@ export function liveGeneralRecs(): GeneralRec[] {
     return (store.getGeneralRecommendations() || [])
       .map((r) => ({
         id: String(r.id || ""),
+        title: String(r.title || "").trim(),
         text: String(r.text || "").trim(),
         note: String(r.note || "").trim(),
         category: String(r.category || "").trim(),
@@ -1017,7 +1019,10 @@ export function searchAllergy(query: string): AllergyHit[] {
   return out.slice(0, 14);
 }
 
-export function learnedDrugs(complaints: string[], code: string): string[] {
+export type PracticeChip = { label: string; line: string };
+
+/** Чип «из практики»: короткая подпись, в протокол — полная строка как при обычном выборе. */
+export function learnedDrugs(complaints: string[], code: string): PracticeChip[] {
   const names = new Set<string>();
   try {
     if (complaints.length) {
@@ -1031,7 +1036,7 @@ export function learnedDrugs(complaints: string[], code: string): string[] {
   }
   const db = liveDrugRecords();
   const seen = new Set<string>();
-  const out: string[] = [];
+  const out: PracticeChip[] = [];
   for (const n of names) {
     const low = n.trim().toLowerCase();
     if (!low) continue;
@@ -1045,7 +1050,7 @@ export function learnedDrugs(complaints: string[], code: string): string[] {
         .sort((a, b) => b.name.length - a.name.length)[0];
     if (!rec) continue;
     const v = variantsOf(rec.name)[0];
-    const text = formatDrugMention({
+    const line = formatDrugMention({
       name: rec.name,
       form: (rec.form || DEFAULT_DRUG_FORM).trim(),
       brandNames: rec.brandNames,
@@ -1054,10 +1059,14 @@ export function learnedDrugs(complaints: string[], code: string): string[] {
       frequency: v?.frequency,
       duration: v?.duration,
     }).text;
-    const key = text.toLowerCase();
-    if (!text || seen.has(key)) continue;
+    const label = [rec.name, v?.dosage, v?.frequency]
+      .map((s) => (s || "").trim())
+      .filter(Boolean)
+      .join(" ");
+    const key = line.toLowerCase();
+    if (!line || seen.has(key)) continue;
     seen.add(key);
-    out.push(text);
+    out.push({ label: label || rec.name, line });
   }
   return out;
 }

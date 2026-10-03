@@ -1273,6 +1273,7 @@ export const store = {
         if (!text) return null
         return {
           id: raw.id,
+          title: String(raw.title || '').trim(),
           text,
           note: String(raw.note || '').trim(),
           category: String(raw.category || '').trim(),
@@ -1281,7 +1282,7 @@ export const store = {
         }
       })
       .filter(Boolean)
-      .sort((a, b) => a.text.localeCompare(b.text, 'ru'))
+      .sort((a, b) => (a.title || a.text).localeCompare(b.title || b.text, 'ru'))
   },
 
   saveGeneralRecommendation(item) {
@@ -1291,6 +1292,7 @@ export const store = {
     if (!text) return state.generalRecommendations
     const id = item?.id || crypto.randomUUID()
     const mkb10Codes = (item?.mkb10Codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean)
+    const title = String(item?.title || '').trim()
     const note = String(item?.note || '').trim()
     const category = String(item?.category || '').trim()
     for (const [key, row] of Object.entries(state.generalRecommendations)) {
@@ -1298,7 +1300,7 @@ export const store = {
         delete state.generalRecommendations[key]
       }
     }
-    state.generalRecommendations[id] = { id, text, note, category, mkb10Codes, updatedAt: Date.now() }
+    state.generalRecommendations[id] = { id, title, text, note, category, mkb10Codes, updatedAt: Date.now() }
     writeAll(state)
     return state.generalRecommendations
   },
