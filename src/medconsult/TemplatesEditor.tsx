@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   getTemplates,
   resetTemplates,
@@ -19,10 +19,11 @@ import { emptyScale, itemKind, type ScaleDef, type ScaleItem, type ScaleItemKind
 import { searchIcd } from "./live";
 import { Typeahead } from "./Typeahead";
 import type { LocalItem, LocalPack, WorkKind } from "./types";
+import { deleteDisease, diseaseKey, findDisease, listDiseases, saveDisease, type Disease } from "./diseases";
 import StudiesTab from "@/legacy/components/StudiesTab";
 import { useAppStore } from "./store";
 
-type BlockTab = "objective" | "status" | "chronic" | "surgery" | "complaints" | "docs" | "questionnaires" | "studies" | "vitae";
+type BlockTab = "objective" | "status" | "chronic" | "complaints" | "docs" | "questionnaires" | "studies" | "vitae";
 
 function IcdCodesField({
   codes,
@@ -152,7 +153,6 @@ export function TemplatesEditor({
               [
                 ["complaints", "жалобы"],
                 ["vitae", "анамнез жизни"],
-                ["surgery", "операции"],
                 ["objective", "объективный статус"],
                 ["status", "локальный статус"],
                 ["questionnaires", "анкеты"],
@@ -175,13 +175,20 @@ export function TemplatesEditor({
           {tab === "objective" && (
             <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
           )}
-          {tab === "surgery" && (
-            <PresetEditor
-              items={data.surgeries}
-              onChange={(surgeries) => persist({ surgeries })}
-              hint="Свои операции с приёма тоже попадают сюда."
-              describe
-            />
+          {tab === "vitae" && (
+            <div className="space-y-2">
+              <StudiesTab scope="vitae" />
+              <Fold title="Перенесённые заболевания" hint="Один список с карточками болезней. Чипы на приёме берутся отсюда. «i» есть, если кроме названия что-то заполнено.">
+                <PastDiseaseEditor items={data.chronic} onChange={(chronic) => persist({ chronic })} />
+              </Fold>
+              <Fold title="Операции" hint="Свои операции с приёма тоже попадают сюда.">
+                <PresetEditor
+                  items={data.surgeries}
+                  onChange={(surgeries) => persist({ surgeries })}
+                  describe
+                />
+              </Fold>
+            </div>
           )}
           {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
           {tab === "complaints" && (
@@ -198,28 +205,6 @@ export function TemplatesEditor({
           )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
           {tab === "studies" && <StudiesTab />}
-          {tab === "vitae" && (
-            <div className="space-y-4">
-              <StudiesTab scope="vitae" />
-              <div>
-                <div className="mb-1 text-xs font-semibold text-ink">Перенесённые заболевания</div>
-                <PresetEditor
-                  items={data.chronic}
-                  onChange={(chronic) => persist({ chronic })}
-                  hint="Чипы перенесённых заболеваний в анамнезе жизни."
-                />
-              </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold text-ink">Операции</div>
-                <PresetEditor
-                  items={data.surgeries}
-                  onChange={(surgeries) => persist({ surgeries })}
-                  hint="Свои операции с приёма тоже попадают сюда."
-                  describe
-                />
-              </div>
-            </div>
-          )}
         </>
       )}
       {layer === "packs" && (
@@ -238,6 +223,148 @@ export function TemplatesEditor({
         />
       )}
     </section>
+  );
+}
+
+function Fold({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-line bg-paper">
+      <button type="button" className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs font-semibold" onClick={() => setOpen((v) => !v)}>
+        <span className="text-mute">{open ? "▾" : "▸"}</span>
+        {title}
+      </button>
+      {open && (
+        <div className="border-t border-line/70 px-2 py-2">
+          {hint ? <p className="mb-2 text-xs text-ink-soft">{hint}</p> : null}
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemFold({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-line/70 bg-surface">
+      <button type="button" className="flex w-full items-center gap-1 px-2 py-1 text-left text-sm" onClick={() => setOpen((v) => !v)}>
+        <span className="w-3 text-[10px] text-mute">{open ? "▾" : "▸"}</span>
+        <span className="min-w-0 flex-1 truncate">{title.trim() || "без названия"}</span>
+      </button>
+      {open && <div className="px-2 pb-2">{children}</div>}
+    </div>
+  );
+}
+
+const EMPTY_DISEASE = { classification: "", diagnosis: "", treatment: "", prevention: "", extra: "" };
+
+function diseaseBody(name: string): Disease {
+  return findDisease(name) || { name, ...EMPTY_DISEASE };
+}
+
+function writeDisease(name: string, patch: Partial<Disease>) {
+  const n = name.trim();
+  if (!n) return;
+  const prev = diseaseBody(n);
+  saveDisease({ ...prev, ...patch, name: n });
+}
+
+function PastDiseaseEditor({ items, onChange }: { items: VitaePreset[]; onChange: (p: VitaePreset[]) => void }) {
+  const [diseases, setDiseases] = useState<Disease[]>(() => listDiseases());
+  useEffect(() => {
+    const sync = () => setDiseases(listDiseases());
+    window.addEventListener("medconsult-diseases", sync);
+    return () => window.removeEventListener("medconsult-diseases", sync);
+  }, []);
+  const sig = items.map((p) => p.label.trim().toLowerCase()).join("\n");
+  const diseaseSig = diseases.map((d) => d.name.trim().toLowerCase()).join("\n");
+  useEffect(() => {
+    const have = new Set(sig.split("\n").filter(Boolean));
+    const extra = diseases.filter((d) => d.name.trim() && !have.has(d.name.trim().toLowerCase()));
+    if (!extra.length) return;
+    onChange([
+      ...items,
+      ...extra.map((d, i) => ({ id: `dis_${Date.now().toString(36)}_${i}`, label: d.name })),
+    ]);
+    // merge orphan disease cards into the chip list once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, diseaseSig]);
+
+  function patch(i: number, p: Partial<VitaePreset>) {
+    onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  }
+
+  function rename(i: number, label: string) {
+    const prevLabel = items[i]?.label || "";
+    patch(i, { label });
+    const body = diseaseBody(prevLabel);
+    if (prevLabel.trim() && diseaseKey(prevLabel) !== diseaseKey(label)) deleteDisease(prevLabel);
+    if (label.trim()) saveDisease({ ...body, name: label.trim() });
+  }
+
+  return (
+    <div className="space-y-1">
+      {items.map((it, i) => {
+        const body = diseaseBody(it.label);
+        return (
+          <ItemFold key={it.id} title={it.label}>
+            <div className="flex flex-wrap items-center gap-1">
+              <input
+                value={it.label}
+                onChange={(e) => rename(i, e.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              />
+              <label className="flex items-center gap-1 text-[11px] text-mute">
+                <input type="checkbox" checked={!!it.needsDate} onChange={(e) => patch(i, { needsDate: e.target.checked })} />
+                дата
+              </label>
+              {it.needsDate && (
+                <input
+                  value={it.emptyDateText || ""}
+                  onChange={(e) => patch(i, { emptyDateText: e.target.value })}
+                  placeholder="если пусто"
+                  className="w-24 rounded-md border border-line bg-paper px-1 py-1 text-xs"
+                />
+              )}
+              <button
+                type="button"
+                className="text-xs font-medium text-teal"
+                onClick={() => {
+                  const label = `${it.label} (копия)`;
+                  onChange([...items, { ...it, id: `p_${Date.now()}`, label }]);
+                  if (it.label.trim()) saveDisease({ ...body, name: label });
+                }}
+              >
+                копия
+              </button>
+              <button
+                type="button"
+                className="text-xs text-danger"
+                onClick={() => {
+                  onChange(items.filter((_, j) => j !== i));
+                  if (it.label.trim()) deleteDisease(it.label);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <textarea value={body.classification} onChange={(e) => writeDisease(it.label, { classification: e.target.value })} rows={2} placeholder="классификация" className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs" />
+            <textarea value={body.diagnosis} onChange={(e) => writeDisease(it.label, { diagnosis: e.target.value })} rows={2} placeholder="диагностика" className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs" />
+            <textarea value={body.treatment} onChange={(e) => writeDisease(it.label, { treatment: e.target.value })} rows={2} placeholder="лечение" className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs" />
+            <textarea value={body.prevention} onChange={(e) => writeDisease(it.label, { prevention: e.target.value })} rows={2} placeholder="профилактика" className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs" />
+            <textarea value={body.extra} onChange={(e) => writeDisease(it.label, { extra: e.target.value })} rows={2} placeholder="дополнительная информация" className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs" />
+          </ItemFold>
+        );
+      })}
+      <button
+        type="button"
+        className="mt-1 text-xs font-medium text-teal"
+        onClick={() => onChange([...items, { id: `p_${Date.now()}`, label: "новое" }])}
+      >
+        + пункт
+      </button>
+    </div>
   );
 }
 
@@ -1579,7 +1706,7 @@ function PresetEditor({
 }: {
   items: VitaePreset[];
   onChange: (p: VitaePreset[]) => void;
-  hint: string;
+  hint?: string;
   describe?: boolean;
 }) {
   function patch(i: number, p: Partial<VitaePreset>) {
@@ -1587,44 +1714,38 @@ function PresetEditor({
   }
   return (
     <div>
-      <p className="mb-2 text-xs text-ink-soft">{hint}</p>
+      {hint ? <p className="mb-2 text-xs text-ink-soft">{hint}</p> : null}
       <div className="space-y-1">
         {items.map((it, i) => (
-          <div key={it.id} className="rounded-md border border-line/70 bg-paper px-2 py-1">
+          <ItemFold key={it.id} title={it.label}>
             <div className="flex flex-wrap items-center gap-1">
-            <input
-              value={it.label}
-              onChange={(e) => patch(i, { label: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            />
-            <label className="flex items-center gap-1 text-[11px] text-mute">
               <input
-                type="checkbox"
-                checked={!!it.needsDate}
-                onChange={(e) => patch(i, { needsDate: e.target.checked })}
+                value={it.label}
+                onChange={(e) => patch(i, { label: e.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
               />
-              дата
-            </label>
-            {it.needsDate && (
-              <input
-                value={it.emptyDateText || ""}
-                onChange={(e) => patch(i, { emptyDateText: e.target.value })}
-                placeholder="если пусто"
-                className="w-24 rounded-md border border-line bg-paper px-1 py-1 text-xs"
-              />
-            )}
-            <button
-              type="button"
-              className="text-xs font-medium text-teal"
-              onClick={() =>
-                onChange([...items, { ...it, id: `p_${Date.now()}`, label: `${it.label} (копия)` }])
-              }
-            >
-              копия
-            </button>
-            <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-              ×
-            </button>
+              <label className="flex items-center gap-1 text-[11px] text-mute">
+                <input type="checkbox" checked={!!it.needsDate} onChange={(e) => patch(i, { needsDate: e.target.checked })} />
+                дата
+              </label>
+              {it.needsDate && (
+                <input
+                  value={it.emptyDateText || ""}
+                  onChange={(e) => patch(i, { emptyDateText: e.target.value })}
+                  placeholder="если пусто"
+                  className="w-24 rounded-md border border-line bg-paper px-1 py-1 text-xs"
+                />
+              )}
+              <button
+                type="button"
+                className="text-xs font-medium text-teal"
+                onClick={() => onChange([...items, { ...it, id: `p_${Date.now()}`, label: `${it.label} (копия)` }])}
+              >
+                копия
+              </button>
+              <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+                ×
+              </button>
             </div>
             {describe && (
               <textarea
@@ -1632,10 +1753,10 @@ function PresetEditor({
                 onChange={(e) => patch(i, { about: e.target.value })}
                 rows={2}
                 placeholder="описание. Если заполнено, на приёме у операции появится i"
-                className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs"
+                className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
               />
             )}
-          </div>
+          </ItemFold>
         ))}
       </div>
       <button

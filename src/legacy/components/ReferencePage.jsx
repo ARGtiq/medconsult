@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import Mkb10Page from './Mkb10Page'
-import { DiseasesPage } from '../../medconsult/DiseasesPage'
 
 function startTab(initialTab) {
   if (initialTab === 'studies' || initialTab === 'templates') return 'blocks'
@@ -62,15 +61,12 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
     <div className="guidelines-page">
       <h2 className="guidelines-title">Справочник</h2>
       <p className="settings-note-inline">
-        МКБ-10, болезни, блоки, наборы, глобальные шаблоны, назначения, печать.
-        В «Назначениях» — клинреки, лекарства, пакеты и общие рекомендации.
+        МКБ-10, блоки, наборы, глобальные шаблоны, назначения, печать.
+        Болезни — в блоке «анамнез жизни», вместе с перенесёнными.
       </p>
       <div className="settings-tabs">
         <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
           МКБ-10
-        </button>
-        <button type="button" className={tab === 'diseases' ? 'active' : ''} onClick={() => setTab('diseases')}>
-          Болезни
         </button>
         <button type="button" className={tab === 'blocks' ? 'active' : ''} onClick={() => setTab('blocks')}>
           Блоки
@@ -89,7 +85,6 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
         </button>
       </div>
       {tab === 'mkb' && <Mkb10Page />}
-      {tab === 'diseases' && <DiseasesPage />}
       {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
       {tab === 'packs' && (packsContent || <p className="empty-hint">Нет редактора наборов.</p>)}
       {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
