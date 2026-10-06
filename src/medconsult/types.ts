@@ -101,6 +101,7 @@ export type PatientGlobals = {
   studyLast?: Record<string, StudyInstance>;
   allergies?: string[];
   currentMedications?: string[];
+  medicationNotes?: Record<string, string>;
 };
 
 export type Patient = {
@@ -173,6 +174,8 @@ export type SessionState = {
   globalTemplateId?: string;
   allergies: string[];
   currentMedications: string[];
+  /** Примечание к препарату из «принимает сейчас». Ключ есть — поле включено, даже если текст пустой. */
+  medicationNotes?: Record<string, string>;
 };
 
 export type SettingsState = {

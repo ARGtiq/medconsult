@@ -8,6 +8,7 @@ import {
   emptyVitae,
   normalizeAnamnesis,
   normalizeVitae,
+  risksDenied,
   DEV_PRESETS,
   OCC_PRESETS,
   INFECTION_PRESETS,
@@ -511,18 +512,63 @@ function VitaeField({
   );
 }
 
+function MedNotes({
+  items,
+  notes,
+  onNote,
+}: {
+  items: string[];
+  notes?: Record<string, string>;
+  onNote?: (name: string, value: string | null) => void;
+}) {
+  if (!onNote || !items.length) return null;
+  const map = notes || {};
+  return (
+    <div className="mt-1 space-y-1">
+      {items.map((name) => {
+        const on = Object.prototype.hasOwnProperty.call(map, name);
+        if (!on) {
+          return (
+            <button key={name} type="button" className="block text-[11px] text-teal" onClick={() => onNote(name, "")}>
+              {name}: +примечание
+            </button>
+          );
+        }
+        return (
+          <div key={name} className="flex items-center gap-1">
+            <span className="max-w-28 shrink-0 truncate text-[11px] text-mute">{name}</span>
+            <input
+              value={map[name] || ""}
+              onChange={(e) => onNote(name, e.target.value)}
+              placeholder="примечание"
+              className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-0.5 text-xs"
+            />
+            <button type="button" className="text-xs text-mute" title="Убрать примечание" onClick={() => onNote(name, null)}>
+              ×
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChipList({
   label,
   items,
   onChange,
   allergy,
   placeholder,
+  notes,
+  onNote,
 }: {
   label: string;
   items: string[];
   onChange: (next: string[]) => void;
   allergy?: boolean;
   placeholder: string;
+  notes?: Record<string, string>;
+  onNote?: (name: string, value: string | null) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
@@ -603,6 +649,7 @@ function ChipList({
               />
             ) : null}
           </div>
+          <MedNotes items={items} notes={notes} onNote={onNote} />
         </div>
       ) : null}
       {allergy && open ? (
@@ -618,12 +665,16 @@ function CardFill({
   onChange,
   allergy,
   placeholder,
+  notes,
+  onNote,
 }: {
   label: string;
   items: string[];
   onChange: (next: string[]) => void;
   allergy?: boolean;
   placeholder: string;
+  notes?: Record<string, string>;
+  onNote?: (name: string, value: string | null) => void;
 }) {
   const [q, setQ] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -672,6 +723,7 @@ function CardFill({
       {open ? (
         <>
           <EditableChips items={items} onChange={onChange} />
+          <MedNotes items={items} notes={notes} onNote={onNote} />
           <Typeahead
             value={q}
             onChange={setQ}
@@ -943,7 +995,11 @@ export function AnamnesisVitae({
   const surgeryPresets = templates.surgeries;
   const { session, setSession } = useAppStore();
   const vitaeTpls = useVitaeTemplates();
-  const ctx = { medications: session.currentMedications, allergies: session.allergies };
+  const ctx = {
+    medications: session.currentMedications,
+    medicationNotes: session.medicationNotes,
+    allergies: session.allergies,
+  };
   const defaultKey = vitaeDefaultKey();
   const mode =
     session.vitaeTemplateId === "chips"
@@ -985,16 +1041,39 @@ export function AnamnesisVitae({
     });
   }
 
-  function setCard(patch: { allergies?: string[]; currentMedications?: string[] }) {
+  function writeFields(patchFields: Record<string, string>) {
+    if (!tpl) return;
+    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), ...patchFields };
+    setSession({
+      vitaeTemplateId: tpl.key,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
+    });
+  }
+
+  function setCard(patch: { allergies?: string[]; currentMedications?: string[]; medicationNotes?: Record<string, string> }) {
     const allergies = patch.allergies ?? session.allergies ?? [];
     const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
-    const nextCtx = { allergies, medications: currentMedications };
+    const rawNotes = patch.medicationNotes ?? session.medicationNotes ?? {};
+    const medicationNotes = Object.fromEntries(
+      Object.entries(rawNotes).filter(([name]) => currentMedications.includes(name)),
+    );
+    const nextCtx = { allergies, medications: currentMedications, medicationNotes };
     const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
     setSession({
       allergies,
       currentMedications,
+      medicationNotes,
       anamnesisVitae: usingTpl ? fillVitaeTemplate(tpl, session.vitaeFields || fields, nextCtx) : composeVitae(d, nextCtx),
     });
+  }
+
+  function setMedNote(name: string, value: string | null) {
+    const next = { ...(session.medicationNotes || {}) };
+    if (value === null) delete next[name];
+    else next[name] = value;
+    setCard({ medicationNotes: next });
   }
 
   const cardFields = (
@@ -1010,6 +1089,8 @@ export function AnamnesisVitae({
         label="принимает сейчас"
         items={session.currentMedications || []}
         placeholder="препарат"
+        notes={session.medicationNotes}
+        onNote={setMedNote}
         onChange={(currentMedications) => setCard({ currentMedications })}
       />
     </>
@@ -1042,7 +1123,6 @@ export function AnamnesisVitae({
     </div>
   );
   const openDev = d.development === "features" || d.developmentItems.length > 0;
-  const openOcc = d.occupation === "has" || d.occupationItems.length > 0;
   const openPast = d.pastIllness === "other" || d.pastItems.length > 0;
   const openInf = d.infections === "has" || d.infectionItems.length > 0;
   const openHer = d.heritage === "burdened" || d.heritageItems.length > 0;
@@ -1075,42 +1155,86 @@ export function AnamnesisVitae({
   if (tpl && mode !== "chips" && mode !== "text") {
     const shown = visibleVitaeFields(tpl, fields);
     const omittedField = (key: string) => fields[`__omit_${key}`] === "1";
+    const riskKeys = ["occupation", "smoke", "alcohol"];
+    const defs = templateDefaults(tpl);
+    const risksOn =
+      fields.__risks === "1" ||
+      (fields.__risks !== "0" &&
+        riskKeys.some((k) => {
+          const v = (fields[k] || "").trim();
+          const dflt = (defs[k] || "").trim();
+          return !!v && v !== dflt;
+        }));
+    let riskGate = false;
     return (
       <div>
         {picker}
-        {shown.map((f) =>
-          f.kind === "heading" ? (
-            <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
-              {f.label}
-            </div>
-          ) : (
-            <VitaeField
-              key={f.key}
-              label={f.label}
-              omitted={omittedField(f.key)}
-              onToggleOmit={() => writeField(`__omit_${f.key}`, omittedField(f.key) ? "" : "1")}
-              dim={f.optional && fields[`__on_${f.key}`] !== "1"}
-              onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}
-            >
-              {(!f.optional || fields[`__on_${f.key}`] === "1") && (
-                <FieldControl
-                  boxed
-                  f={f}
-                  value={
-                    f.key === "employment"
-                      ? fields[f.key] === "не работает"
-                        ? "нет"
-                        : fields[f.key] === "работает"
-                          ? "да"
-                          : fields[f.key] || ""
-                      : fields[f.key] || ""
-                  }
-                  onChange={(v) => writeField(f.key, v)}
+        {shown.map((f) => {
+          if (f.kind === "heading") {
+            return (
+              <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
+                {f.label}
+              </div>
+            );
+          }
+          const risk = riskKeys.includes(f.key);
+          const gate =
+            risk && !riskGate ? (
+              <VitaeField key="__risks" label="вредные привычки / профвредности">
+                <ChipRow
+                  label=""
+                  value={risksOn ? "yes" : "no"}
+                  onChange={(id) => {
+                    if (id === "yes") {
+                      writeFields({ __risks: "1" });
+                      return;
+                    }
+                    writeFields({
+                      __risks: "0",
+                      occupation: defs.occupation || "отрицает",
+                      smoke: defs.smoke || "не курит",
+                      alcohol: defs.alcohol || "алкоголь отрицает",
+                    });
+                  }}
+                  options={[
+                    { id: "no", text: "нет" },
+                    { id: "yes", text: "есть" },
+                  ]}
                 />
-              )}
-            </VitaeField>
-          ),
-        )}
+              </VitaeField>
+            ) : null;
+          if (risk) riskGate = true;
+          if (risk && !risksOn) return gate;
+          return (
+            <div key={f.key}>
+              {gate}
+              <VitaeField
+                label={f.label}
+                omitted={omittedField(f.key)}
+                onToggleOmit={() => writeField(`__omit_${f.key}`, omittedField(f.key) ? "" : "1")}
+                dim={f.optional && fields[`__on_${f.key}`] !== "1"}
+                onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}
+              >
+                {(!f.optional || fields[`__on_${f.key}`] === "1") && (
+                  <FieldControl
+                    boxed
+                    f={f}
+                    value={
+                      f.key === "employment"
+                        ? fields[f.key] === "не работает"
+                          ? "нет"
+                          : fields[f.key] === "работает"
+                            ? "да"
+                            : fields[f.key] || ""
+                        : fields[f.key] || ""
+                    }
+                    onChange={(v) => (risk ? writeFields({ [f.key]: v, __risks: "1" }) : writeField(f.key, v))}
+                  />
+                )}
+              </VitaeField>
+            </div>
+          );
+        })}
         {cardFields}
         <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
       </div>
@@ -1210,61 +1334,89 @@ export function AnamnesisVitae({
           </>
         )}
       </VitaeSection>
-      <VitaeSection id="occupation" title="профвредности" omitted={omitted("occupation")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.occupation}
-        fallback="denies"
-        onChange={(id) =>
-          patch({
-            occupation: id as VitaeDraft["occupation"],
-            occupationItems: id === "denies" ? [] : d.occupationItems,
-          })
-        }
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
-      />
-      {openOcc && (
-        <PresetPicker
-          presets={OCC_PRESETS}
-          selected={d.occupationItems}
-          onChange={(occupationItems) =>
-            patch({ occupationItems, occupation: occupationItems.length ? "has" : "denies" })
+      <VitaeSection
+        id="habits"
+        title="вредные привычки / профвредности"
+        omitted={omitted("habits") && omitted("occupation")}
+        onOmit={(_id, hide) => {
+          const set = new Set(d.omit || []);
+          if (hide) {
+            set.add("habits");
+            set.add("occupation");
+          } else {
+            set.delete("habits");
+            set.delete("occupation");
           }
+          patch({ omit: [...set] });
+        }}
+      >
+        <ChipRow
+          label=""
+          value={risksDenied(d) ? "no" : "yes"}
+          onChange={(id) => {
+            if (id === "yes") {
+              patch({ risks: "yes" });
+              return;
+            }
+            patch({
+              risks: "no",
+              smoke: "no",
+              alcohol: "no",
+              smokePacks: "",
+              occupation: "denies",
+              occupationItems: [],
+              occupationText: "",
+            });
+          }}
+          options={[
+            { id: "no", text: "нет" },
+            { id: "yes", text: "есть" },
+          ]}
         />
-      )}
-      </VitaeSection>
-      <VitaeSection id="habits" title="вредные привычки" omitted={omitted("habits")} onOmit={setOmit}>
-      <ChipRow
-        label="курение"
-        value={d.smoke}
-        fallback="no"
-        onChange={(id) => patch({ smoke: id as VitaeDraft["smoke"] })}
-        options={[
-          { id: "no", text: "не курит" },
-          { id: "yes", text: "курит" },
-        ]}
-      />
-      {d.smoke === "yes" && (
-        <input
-          value={d.smokePacks}
-          onChange={(e) => patch({ smokePacks: e.target.value })}
-          placeholder="пачек в сутки"
-          className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-        />
-      )}
-      <ChipRow
-        label="алкоголь"
-        value={d.alcohol}
-        fallback="no"
-        onChange={(id) => patch({ alcohol: id as VitaeDraft["alcohol"] })}
-        options={[
-          { id: "no", text: "отрицает" },
-          { id: "yes", text: "употребляет" },
-        ]}
-      />
+        {!risksDenied(d) && (
+          <>
+            <ChipRow
+              label="курение"
+              value={d.smoke}
+              fallback="no"
+              onChange={(id) => patch({ smoke: id as VitaeDraft["smoke"], risks: "yes" })}
+              options={[
+                { id: "no", text: "не курит" },
+                { id: "yes", text: "курит" },
+              ]}
+            />
+            {d.smoke === "yes" && (
+              <input
+                value={d.smokePacks}
+                onChange={(e) => patch({ smokePacks: e.target.value, risks: "yes" })}
+                placeholder="пачек в сутки"
+                className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              />
+            )}
+            <ChipRow
+              label="алкоголь"
+              value={d.alcohol}
+              fallback="no"
+              onChange={(id) => patch({ alcohol: id as VitaeDraft["alcohol"], risks: "yes" })}
+              options={[
+                { id: "no", text: "отрицает" },
+                { id: "yes", text: "употребляет" },
+              ]}
+            />
+            <div className="mt-1 text-xs text-ink-soft">профвредности</div>
+            <PresetPicker
+              presets={OCC_PRESETS}
+              selected={d.occupationItems}
+              onChange={(occupationItems) =>
+                patch({
+                  occupationItems,
+                  occupation: occupationItems.length ? "has" : d.occupationText.trim() ? "has" : "denies",
+                  risks: "yes",
+                })
+              }
+            />
+          </>
+        )}
       </VitaeSection>
       <VitaeSection id="disability" title="инвалидность" omitted={omitted("disability")} onOmit={setOmit}>
         <ChipRow
@@ -1411,6 +1563,8 @@ export function AnamnesisVitae({
         label=""
         items={session.currentMedications || []}
         placeholder="препарат + Enter"
+        notes={session.medicationNotes}
+        onNote={setMedNote}
         onChange={(currentMedications) => setCard({ currentMedications })}
       />
       </VitaeSection>

@@ -81,6 +81,7 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     extraBlocks: [],
     allergies: [],
     currentMedications: [],
+    medicationNotes: {},
     ...partial,
   };
 }
@@ -263,6 +264,7 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
   });
   const allergies = session.allergies || [];
   const currentMedications = session.currentMedications || [];
+  const medicationNotes = session.medicationNotes || {};
   const next: Patient = {
     ...prev,
     allergies,
@@ -278,6 +280,7 @@ function persistGlobals(session: SessionState, patients: Patient[]): Patient[] {
       studyLast,
       allergies,
       currentMedications,
+      medicationNotes,
     },
   };
   const list = patients.map((p, i) => (i === idx ? next : p));
@@ -292,7 +295,8 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   const vitaeText = patient.anamnesisVitae || patient.globals?.anamnesisVitae || "";
   const allergies = patient.allergies || [];
   const currentMedications = patient.currentMedications || [];
-  const card = { medications: currentMedications, allergies };
+  const medicationNotes = patient.globals?.medicationNotes || {};
+  const card = { medications: currentMedications, medicationNotes, allergies };
   const storedId = patient.globals?.vitaeTemplateId;
   const touched = vitaeDraftTouched(draft);
   let templateId = storedId;
@@ -322,6 +326,7 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
     ...session,
     allergies,
     currentMedications,
+    medicationNotes,
     anamnesisVitae: composed || vitaeText,
     vitaeDraft: draft,
     vitaeTemplateId: templateId,
@@ -492,7 +497,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       "extraBlocks" in patch ||
       "studies" in patch ||
       "allergies" in patch ||
-      "currentMedications" in patch;
+      "currentMedications" in patch ||
+      "medicationNotes" in patch;
     if (vitaeTouched && !switching) patients = persistGlobals(session, patients);
     persistSession(session);
     set({ session, patients });
@@ -851,6 +857,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       dob,
       allergies: session.allergies || [],
       currentMedications: session.currentMedications || [],
+      globals: {
+        allergies: session.allergies || [],
+        currentMedications: session.currentMedications || [],
+        medicationNotes: session.medicationNotes || {},
+      },
     };
     const patients = [...get().patients, p];
     const unique = Object.values(Object.fromEntries(patients.map((x) => [x.id, x]))) as Patient[];
@@ -1205,6 +1216,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       mode: "consult",
       allergies: prev.patientId ? prev.allergies || [] : [],
       currentMedications: prev.patientId ? prev.currentMedications || [] : [],
+      medicationNotes: prev.patientId ? prev.medicationNotes || {} : {},
     });
     if (prev.patientId) {
       session = applyGlobals(session, patients.find((p) => p.id === prev.patientId));

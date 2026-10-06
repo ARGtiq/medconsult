@@ -554,6 +554,7 @@ export function ProtocolPage() {
 
   const cardCtx = {
     medications: session.currentMedications || [],
+    medicationNotes: session.medicationNotes || {},
     allergies: session.allergies || [],
   };
 

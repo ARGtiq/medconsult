@@ -129,11 +129,14 @@ export type VitaeDraft = {
   disabilityCause: string;
   disabilityNote: string;
   disabilityNoteOn: boolean;
+  /** Вредные привычки и профвредности одним переключателем. Пусто — как раньше, по заполненным полям. */
+  risks: "" | "no" | "yes";
   omit: string[];
 };
 
 export type VitaeContext = {
   medications?: string[];
+  medicationNotes?: Record<string, string>;
   allergies?: string[];
 };
 
@@ -207,6 +210,7 @@ export const emptyVitae = (): VitaeDraft => ({
   disabilityCause: "",
   disabilityNote: "",
   disabilityNoteOn: false,
+  risks: "",
   omit: [],
 });
 
@@ -272,11 +276,19 @@ export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
   if (d.treated === "no") parts.push("Не лечился");
   if (d.treated === "yes") {
     const drugs = d.drugs.filter(Boolean).join(", ");
-    parts.push(drugs ? `Лечился: ${drugs}` : "Лечился");
-    if (d.effect === "none") parts.push("эффекта нет");
-    if (d.effect === "temp") parts.push("эффект временный");
-    if (d.effect === "full") parts.push("эффект полный");
-    if (d.effect === "worse") parts.push("на фоне лечения стало хуже");
+    const effect =
+      d.effect === "none"
+        ? "эффекта нет"
+        : d.effect === "temp"
+          ? "эффект временный"
+          : d.effect === "full"
+            ? "эффект полный"
+            : d.effect === "worse"
+              ? "на фоне лечения стало хуже"
+              : "";
+    let bit = drugs ? `Лечился, принимал ${drugs}` : "Лечился";
+    if (effect) bit += ` (${effect})`;
+    parts.push(bit);
   }
   if (!parts.length) return "";
   const text = parts.join(". ");
@@ -314,6 +326,27 @@ function list(values?: string[]) {
   return (values || []).map((x) => x.trim()).filter(Boolean);
 }
 
+export function formatMedication(name: string, notes?: Record<string, string>) {
+  const note = (notes?.[name] || "").trim();
+  return note ? `${name} (${note})` : name;
+}
+
+export function formatMedicationList(names?: string[], notes?: Record<string, string>) {
+  return list(names).map((name) => formatMedication(name, notes));
+}
+
+export function risksDenied(d: VitaeDraft) {
+  if (d.risks === "no") return true;
+  if (d.risks === "yes") return false;
+  return !(
+    d.occupation === "has" ||
+    d.occupationItems.length > 0 ||
+    !!d.occupationText.trim() ||
+    d.smoke === "yes" ||
+    d.alcohol === "yes"
+  );
+}
+
 function composeInfections(items: VitaeItem[], extraText: string) {
   const named = namedItems(items, INFECTION_PRESETS);
   const extra = extraText.trim();
@@ -337,19 +370,22 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
       : "Физическое и умственное развитие в детском и юношеском возрасте без особенностей";
 
   const occNamed = namedItems(d.occupationItems, OCC_PRESETS);
-  const occupation = occNamed.length
-    ? `Профессиональные вредности: ${[...occNamed, d.occupationText.trim()].filter(Boolean).join(", ")}`
-    : d.occupation === "has" && d.occupationText.trim()
-      ? `Профессиональные вредности: ${d.occupationText.trim()}`
-      : "Профессиональные вредности: отрицает";
+  const occupation = risksDenied(d)
+    ? "Профессиональные вредности: отрицает"
+    : occNamed.length
+      ? `Профессиональные вредности: ${[...occNamed, d.occupationText.trim()].filter(Boolean).join(", ")}`
+      : d.occupation === "has" && d.occupationText.trim()
+        ? `Профессиональные вредности: ${d.occupationText.trim()}`
+        : "Профессиональные вредности: отрицает";
 
-  const smoke =
-    d.smoke === "yes"
+  const smoke = risksDenied(d)
+    ? "не курит"
+    : d.smoke === "yes"
       ? d.smokePacks.trim()
         ? `курит, ${d.smokePacks.trim()} пач./сут`
         : "курит"
       : "не курит";
-  const alcohol = d.alcohol === "yes" ? "употребляет алкоголь" : "алкоголь отрицает";
+  const alcohol = !risksDenied(d) && d.alcohol === "yes" ? "употребляет алкоголь" : "алкоголь отрицает";
   const habits = `Вредные привычки: ${smoke}, ${alcohol}`;
 
   const workReason = (d.notWorkText || d.notWorkReason || "").trim();
@@ -377,7 +413,7 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
   ].filter(Boolean);
   const past = `Перенесённые заболевания: ${[...PAST_ALWAYS, ...Array.from(new Set(pastExtra))].join(", ")}`;
 
-  const medsFromCard = list(ctx?.medications);
+  const medsFromCard = formatMedicationList(ctx?.medications, ctx?.medicationNotes);
   const meds = medsFromCard.length
     ? `Принимаемые лекарства: ${medsFromCard.join(", ")}`
     : "Принимаемые лекарства: отрицает";

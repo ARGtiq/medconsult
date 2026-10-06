@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   getTemplates,
   resetTemplates,
@@ -1207,6 +1208,7 @@ function ObjectiveEditor({
 }
 
 function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: LocalPack[]) => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   function patch(i: number, p: Partial<LocalPack>) {
     onChange(packs.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
@@ -1224,13 +1226,45 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-soft">
-        Пункт — название, под ним варианты. На протоколе клик по шаблону вставляет пункты, повторный клик убирает.
-        Свой вариант и правка чипа — уже на приёме.
+        Список названий. Клик открывает шаблон. На протоколе клик по шаблону вставляет пункты, повторный клик убирает.
       </p>
+      <div className="space-y-1">
+        {packs.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setOpenId(p.id)}
+            className="flex w-full items-center rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+          >
+            <span className="min-w-0 flex-1 truncate">{p.label.trim() || "без названия"}</span>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="text-xs font-medium text-teal"
+        onClick={() => {
+          const id = `pack_${Date.now()}`;
+          onChange([
+            ...packs,
+            {
+              id,
+              label: "новый пакет",
+              codes: [],
+              chips: [],
+              items: [{ id: `it_${Date.now().toString(36)}`, label: "пункт", options: ["вариант"] }],
+            },
+          ]);
+          setOpenId(id);
+        }}
+      >
+        + пакет статуса
+      </button>
       {packs.map((p, i) => {
+        if (openId !== p.id) return null;
         const items = itemsOf(p);
-        return (
-          <div key={p.id} className="rounded-lg border border-line bg-paper p-2">
+        const editor = (
+          <div className="rounded-lg border border-line bg-paper p-2">
             <div className="flex gap-2">
               <input
                 value={p.label}
@@ -1251,11 +1285,19 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
                     items: copyItems,
                   };
                   onChange([...packs.slice(0, i + 1), copy, ...packs.slice(i + 1)]);
+                  setOpenId(copy.id);
                 }}
               >
                 копия
               </button>
-              <button type="button" className="text-xs text-danger" onClick={() => onChange(packs.filter((_, j) => j !== i))}>
+              <button
+                type="button"
+                className="text-xs text-danger"
+                onClick={() => {
+                  setOpenId(null);
+                  onChange(packs.filter((_, j) => j !== i));
+                }}
+              >
                 ×
               </button>
             </div>
@@ -1387,28 +1429,34 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
             </div>
           </div>
         );
+        if (typeof document === "undefined") return editor;
+        return createPortal(
+          <div
+            className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
+            onClick={() => setOpenId(null)}
+          >
+            <div
+              className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold">Шаблон локального статуса</div>
+                <button type="button" className="ml-auto text-xs text-mute" onClick={() => setOpenId(null)}>
+                  закрыть
+                </button>
+              </div>
+              {editor}
+            </div>
+          </div>,
+          document.body,
+        );
       })}
-      <button
-        type="button"
-        className="text-xs font-medium text-teal"
-        onClick={() =>
-          onChange([
-            ...packs,
-            {
-              id: `pack_${Date.now()}`,
-              label: "новый пакет",
-              codes: [],
-              chips: [],
-              items: [{ id: `it_${Date.now().toString(36)}`, label: "пункт", options: ["вариант"] }],
-            },
-          ])
-        }
-      >
-        + пакет статуса
-      </button>
     </div>
   );
 }
+
 
 function ComplaintDictEditor({
   items,

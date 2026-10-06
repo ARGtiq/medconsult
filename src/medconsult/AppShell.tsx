@@ -35,7 +35,7 @@ export function AppShell({
   topRight?: ReactNode;
 }) {
   const { path: pathname } = useNav();
-  const { settings, setSettings, hydrate, hydrated, toast } = useAppStore();
+  const { settings, setSettings, hydrate, hydrated } = useAppStore();
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -185,11 +185,6 @@ export function AppShell({
         })}
       </nav>
 
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm text-paper shadow-lg md:bottom-6">
-          {toast}
-        </div>
-      )}
       <div className="legacy-surface">
         <ToastContainer />
       </div>

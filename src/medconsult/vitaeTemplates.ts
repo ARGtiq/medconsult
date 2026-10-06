@@ -1,7 +1,7 @@
 import { store } from "@/legacy/lib/store";
 import { applyComputed, applyConditionalDefaults, fieldShown, fillStudyTemplate } from "./data/studies";
 import type { VitaeDraft } from "./anamnesisChips";
-import { normalizeVitae } from "./anamnesisChips";
+import { formatMedicationList, normalizeVitae } from "./anamnesisChips";
 import type { StudyDef, StudyField } from "./types";
 
 export type VitaeTemplate = StudyDef & { isDefault?: boolean; category: StudyDef["category"] | "vitae" };
@@ -61,7 +61,7 @@ export function templateDefaults(tpl: VitaeTemplate) {
 export function fillVitaeTemplate(
   def: VitaeTemplate,
   rawFields: Record<string, string> | undefined,
-  ctx?: { medications?: string[]; allergies?: string[] },
+  ctx?: { medications?: string[]; medicationNotes?: Record<string, string>; allergies?: string[] },
 ) {
   const asStudy = { ...def, category: "instrumental" as const, sparse: false, templateEdited: true };
   const seeded = applyConditionalDefaults(asStudy, rawFields || {});
@@ -71,7 +71,7 @@ export function fillVitaeTemplate(
     .filter((k) => k.startsWith("__omit_") && fields[k] === "1")
     .map((k) => k.slice("__omit_".length));
   let text = fillStudyTemplate(asStudy, { date, fields, omit });
-  const meds = (ctx?.medications || []).map((s) => s.trim()).filter(Boolean);
+  const meds = formatMedicationList(ctx?.medications, ctx?.medicationNotes);
   const allergy = (ctx?.allergies || []).map((s) => s.trim()).filter(Boolean);
   const tpl = def.template || "";
   text = text.replaceAll("{meds}", meds.length ? meds.join(", ") : "отрицает").replaceAll("{medications}", meds.length ? meds.join(", ") : "отрицает");
