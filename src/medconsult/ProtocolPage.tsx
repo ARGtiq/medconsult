@@ -6,9 +6,9 @@ import { checkDrugInteractions, hasApiKey, polishNarrative } from "@/legacy/lib/
 import { escapeHtml, printHtml } from "@/legacy/lib/print";
 import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
-import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton } from "./DocBlocks";
+import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton, SaveGlobalButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, type OptionMenuState } from "./EditableChip";
-import { addLocalOption, localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, type ObjectiveTemplate } from "./data/templates";
+import { addLocalOption, localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, defaultLocalValue, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { complaintsTextOf, composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -564,7 +564,7 @@ export function ProtocolPage() {
     }
     const picks = [
       ...(session.localPicks || []).filter((p) => p.packId !== pack.id),
-      ...localItems(pack).map((it) => ({ packId: pack.id, itemId: it.id, value: it.options[0] || it.label })),
+      ...localItems(pack).map((it) => ({ packId: pack.id, itemId: it.id, value: defaultLocalValue(it) })),
     ];
     writeLocal([...active, pack.id], picks, free);
   };
@@ -715,6 +715,7 @@ export function ProtocolPage() {
         {kindBtn("document", "другой документ")}
         <PlusPackButton />
         <PlusGlobalButton />
+        <SaveGlobalButton />
         <PlusStudyButton />
         {documentMode && <PlusDocBlockButton />}
         <button type="button" className="ml-auto text-xs font-medium text-teal" onClick={() => store.loadLastForPatient()}>

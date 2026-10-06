@@ -205,6 +205,8 @@ export type LocalItem = {
   id: string;
   label: string;
   options: string[];
+  /** Опция, которая выбирается при вставке шаблона. Если пусто — первая. */
+  defaultOption?: string;
   /** Подпункты опции. Индекс совпадает с options — как у жалобы. */
   optionSubs?: string[][];
   /** Старые группы подпунктов, не привязанные к опции. */

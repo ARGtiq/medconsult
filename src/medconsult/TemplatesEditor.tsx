@@ -8,6 +8,8 @@ import {
   STD_DOC_BLOCKS,
   complaintOptionSubs,
   complaintOptionText,
+  defaultLocalValue,
+  objectivePointsText,
   type ComplaintTemplate,
   type DocKind,
   type GlobalTemplate,
@@ -22,9 +24,15 @@ import { Typeahead } from "./Typeahead";
 import type { LocalItem, LocalPack, WorkKind } from "./types";
 import { deleteDisease, diseaseKey, findDisease, listDiseases, saveDisease, type Disease } from "./diseases";
 import StudiesTab from "@/legacy/components/StudiesTab";
+import { FitTextarea } from "./StudyCard";
 import { useAppStore } from "./store";
 
-type BlockTab = "objective" | "status" | "chronic" | "complaints" | "docs" | "questionnaires" | "studies" | "vitae";
+type BlockTab = "vitae" | "packs" | "docs" | "questionnaires" | "studies";
+
+function blockTab(id: string | undefined): BlockTab {
+  if (id === "packs" || id === "docs" || id === "questionnaires" || id === "studies") return id;
+  return "vitae";
+}
 
 function IcdCodesField({
   codes,
@@ -104,7 +112,7 @@ export function TemplatesEditor({
   layer?: "blocks" | "packs" | "global";
   initialSection?: BlockTab;
 }) {
-  const [tab, setTab] = useState<BlockTab>(initialSection || "status");
+  const [tab, setTab] = useState<BlockTab>(blockTab(initialSection));
   const [data, setData] = useState<TemplatesState>(() => getTemplates());
 
   const echo = useRef(false);
@@ -139,7 +147,7 @@ export function TemplatesEditor({
             resetTemplates();
             setData(seedTemplates());
           }}
-          hidden={layer === "global" || (layer === "blocks" && (tab === "studies" || tab === "vitae"))}
+          hidden={layer === "global" || (layer === "blocks" && (tab === "studies" || tab === "vitae" || tab === "packs"))}
         >
           сбросить к заводским
         </button>
@@ -147,14 +155,13 @@ export function TemplatesEditor({
       {layer === "blocks" && (
         <>
           <p className="mb-2 text-xs text-ink-soft">
-            Словари чипов и исследования. Из чипов потом собирается набор, из исследований — протокол.
+            Жалобы, анамнез жизни и статусы — в спойлерах. Наборы блоков — отдельная вкладка здесь же.
           </p>
           <div className="mb-3 flex flex-wrap gap-1">
             {(
               [
-                ["complaints", "жалобы"],
                 ["vitae", "анамнез жизни"],
-                ["status", "статус"],
+                ["packs", "наборы"],
                 ["questionnaires", "анкеты"],
                 ["studies", "исследования"],
                 ["docs", "виды блоков"],
@@ -172,21 +179,14 @@ export function TemplatesEditor({
               </button>
             ))}
           </div>
-          {tab === "status" && (
-            <div className="space-y-4">
-              <div>
-                <div className="mb-1 text-xs font-semibold">Объективный статус</div>
-                <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
-              </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold">Локальный статус</div>
-                <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />
-              </div>
-            </div>
-          )}
           {tab === "vitae" && (
             <div className="space-y-2">
-              <StudiesTab scope="vitae" />
+              <Fold title="Жалобы" hint="Словарь жалоб для приёма. Опции и подпункты выпадают списком в протоколе.">
+                <ComplaintDictEditor items={data.complaints} onChange={(complaints) => persist({ complaints })} />
+              </Fold>
+              <Fold title="Анамнез жизни" hint="Шаблоны текста анамнеза жизни. На приёме выбирается один.">
+                <StudiesTab scope="vitae" />
+              </Fold>
               <Fold title="Перенесённые заболевания" hint="Один список с карточками болезней. Чипы на приёме берутся отсюда. «i» есть, если кроме названия что-то заполнено.">
                 <PastDiseaseEditor items={data.chronic} onChange={(chronic) => persist({ chronic })} />
               </Fold>
@@ -197,12 +197,20 @@ export function TemplatesEditor({
                   describe
                 />
               </Fold>
+              <Fold title="Объективный статус" hint="Список названий. Клик открывает окно.">
+                <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
+              </Fold>
+              <Fold title="Локальный статус" hint="Список названий. Клик открывает окно.">
+                <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />
+              </Fold>
             </div>
           )}
-          {tab === "complaints" && (
-            <ComplaintDictEditor
-              items={data.complaints}
-              onChange={(complaints) => persist({ complaints })}
+          {tab === "packs" && (
+            <VisitPacksEditor
+              packs={data.visitPacks}
+              localPacks={data.localPacks}
+              docKinds={data.docKinds}
+              onChange={(visitPacks) => persist({ visitPacks })}
             />
           )}
           {tab === "questionnaires" && (
@@ -680,8 +688,8 @@ function VisitPacksEditor({
   docKinds: DocKind[];
   onChange: (p: VisitPack[]) => void;
 }) {
-  const [sel, setSel] = useState(packs[0]?.id || "");
-  const current = packs.find((p) => p.id === sel) || packs[0];
+  const [openId, setOpenId] = useState<string | null>(null);
+  const current = packs.find((p) => p.id === openId);
 
   function patch(p: Partial<VisitPack>) {
     if (!current) return;
@@ -697,66 +705,97 @@ function VisitPacksEditor({
   }
 
   return (
-    <div>
-      <p className="mb-2 text-xs text-ink-soft">
-        Набор — какие блоки открыть, без готового текста. На протоколе кнопка «набор». Готовый текст — во вкладке
-        «Глобальные».
+    <div className="space-y-1">
+      <p className="text-xs text-ink-soft">
+        Набор — какие блоки открыть, без готового текста. Список названий, правка в окне. На протоколе кнопка «набор».
+        Готовый текст — во вкладке «Глобальные».
       </p>
-      <div className="mb-2 flex flex-wrap gap-1">
-        {packs.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setSel(p.id)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              current?.id === p.id ? "bg-teal text-paper" : "border border-line bg-paper"
-            }`}
-          >
-            {p.name || "без названия"}
-          </button>
-        ))}
+      {packs.map((p) => (
         <button
+          key={p.id}
           type="button"
-          className="rounded-full border border-dashed border-teal/50 px-2.5 py-1 text-xs font-medium text-teal"
-          onClick={() => {
-            const id = `pack_${Date.now()}`;
-            const next: VisitPack = {
-              id,
-              name: "новый набор",
-              kind: "primary",
-              codes: [],
-              stdBlocks: STD_DOC_BLOCKS.map((b) => b.id),
-              extraKinds: [],
-              localPackIds: [],
-            };
-            onChange([...packs, next]);
-            setSel(id);
-          }}
+          onClick={() => setOpenId(p.id)}
+          className="flex w-full items-center rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
         >
-          + набор
+          <span className="min-w-0 flex-1 truncate">{p.name.trim() || "без названия"}</span>
         </button>
-      </div>
-      {current ? (
-        <div className="space-y-2 rounded-lg border border-line bg-paper p-2">
-          <div className="flex flex-wrap gap-1">
-            <input
-              value={current.name}
-              onChange={(e) => patch({ name: e.target.value })}
-              placeholder="название, напр. ДГПЖ первичный"
-              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
-            />
-            <button
-              type="button"
-              className="text-xs text-danger"
-              onClick={() => {
-                const next = packs.filter((p) => p.id !== current.id);
-                onChange(next);
-                setSel(next[0]?.id || "");
-              }}
-            >
-              ×
-            </button>
-          </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs font-medium text-teal"
+        onClick={() => {
+          const id = `pack_${Date.now()}`;
+          const next: VisitPack = {
+            id,
+            name: "новый набор",
+            kind: "primary",
+            codes: [],
+            stdBlocks: STD_DOC_BLOCKS.map((b) => b.id),
+            extraKinds: [],
+            localPackIds: [],
+          };
+          onChange([...packs, next]);
+          setOpenId(id);
+        }}
+      >
+        + набор
+      </button>
+      {current && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center">
+              <div
+                className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="text-sm font-semibold">Набор</div>
+                  <button type="button" className="ml-auto text-xs text-mute" onClick={() => setOpenId(null)}>
+                    закрыть
+                  </button>
+                </div>
+                <div className="space-y-2 rounded-lg border border-line bg-paper p-2">
+                  <div className="flex flex-wrap gap-1">
+                    <input
+                      value={current.name}
+                      onChange={(e) => patch({ name: e.target.value })}
+                      placeholder="название, напр. ДГПЖ первичный"
+                      className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+                    />
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-teal"
+                      onClick={() => {
+                        const id = `pack_${Date.now().toString(36)}`;
+                        const copy: VisitPack = {
+                          ...current,
+                          id,
+                          name: `${current.name || "набор"} (копия)`,
+                          codes: [...current.codes],
+                          stdBlocks: [...current.stdBlocks],
+                          extraKinds: [...current.extraKinds],
+                          localPackIds: [...current.localPackIds],
+                        };
+                        const at = packs.findIndex((x) => x.id === current.id);
+                        const next = packs.slice();
+                        next.splice(at + 1, 0, copy);
+                        onChange(next);
+                        setOpenId(id);
+                      }}
+                    >
+                      копия
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-danger"
+                      onClick={() => {
+                        onChange(packs.filter((x) => x.id !== current.id));
+                        setOpenId(null);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
           <div>
             <div className="text-[10px] tracking-wide text-mute uppercase">блоки протокола</div>
             <p className="mt-0.5 text-[10px] text-ink-soft">Порядок здесь — порядок на протоколе, когда выбран этот набор.</p>
@@ -857,10 +896,13 @@ function VisitPacksEditor({
               </div>
             </div>
           )}
-        </div>
-      ) : (
-        <p className="text-xs text-mute">Пока нет наборов — нажми «+ набор».</p>
-      )}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+      {packs.length === 0 && <p className="text-xs text-mute">Пока нет наборов — нажми «+ набор».</p>}
     </div>
   );
 }
@@ -1185,17 +1227,10 @@ function QuestionnaireEditor({
   );
 }
 
-type StatusPoint = { id: string; label: string; options: { text: string; options?: string[] }[] };
+type StatusPoint = { id: string; label: string; options: { text: string; options?: string[] }[]; defaultOption?: string };
 
 function pointsText(points: StatusPoint[]) {
-  const joined = points
-    .map((p) => p.label.trim())
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!joined) return "";
-  return /[.!?…]$/.test(joined) ? joined : `${joined}.`;
+  return objectivePointsText(points);
 }
 
 function PointTree({
@@ -1214,6 +1249,15 @@ function PointTree({
 
   function patch(i: number, p: Partial<StatusPoint>) {
     onChange(points.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  }
+
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= points.length) return;
+    const next = points.slice();
+    const [row] = next.splice(i, 1);
+    next.splice(j, 0, row);
+    onChange(next);
   }
 
   function addOption(i: number, raw: string) {
@@ -1241,14 +1285,44 @@ function PointTree({
     setSubDraft((d) => ({ ...d, [`${cur.id}:${option}`]: "" }));
   }
 
+  function dropOption(i: number, text: string) {
+    const cur = points[i];
+    if (!cur) return;
+    const options = cur.options.filter((x) => x.text.toLowerCase() !== text.toLowerCase());
+    const still = (cur.defaultOption || "").trim();
+    const defaultOption = still && options.some((o) => o.text.toLowerCase() === still.toLowerCase()) ? still : "";
+    patch(i, { options, defaultOption });
+  }
+
   return (
     <div className="space-y-1.5">
+      <p className="text-[10px] text-ink-soft">↑↓ меняют порядок. «умолч.» на опции — значение по умолчанию.</p>
       {points.map((it, i) => (
         <div key={it.id} className="rounded-md border border-line/70 bg-surface px-2 py-1.5">
-          <div className="flex items-center gap-1">
-            <input
+          <div className="flex items-start gap-1">
+            <div className="flex shrink-0 flex-col">
+              <button
+                type="button"
+                className="px-1 text-[11px] leading-none text-mute disabled:opacity-30"
+                disabled={i === 0}
+                title="Выше"
+                onClick={() => move(i, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="px-1 text-[11px] leading-none text-mute disabled:opacity-30"
+                disabled={i === points.length - 1}
+                title="Ниже"
+                onClick={() => move(i, 1)}
+              >
+                ↓
+              </button>
+            </div>
+            <FitTextarea
               value={it.label}
-              onChange={(e) => patch(i, { label: e.target.value })}
+              onChange={(v) => patch(i, { label: v })}
               placeholder="пункт"
               className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
             />
@@ -1259,11 +1333,7 @@ function PointTree({
             >
               +опция
             </button>
-            <button
-              type="button"
-              className="text-xs text-danger"
-              onClick={() => onChange(points.filter((_, j) => j !== i))}
-            >
+            <button type="button" className="text-xs text-danger" onClick={() => onChange(points.filter((_, j) => j !== i))}>
               ×
             </button>
           </div>
@@ -1272,23 +1342,32 @@ function PointTree({
               {it.options.map((raw) => {
                 const kids = raw.options || [];
                 const subKey = `${it.id}:${raw.text}`;
+                const isDef = (it.defaultOption || "").trim().toLowerCase() === raw.text.toLowerCase();
                 return (
                   <div key={raw.text}>
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal">
+                    <span
+                      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] ${
+                        isDef ? "bg-teal font-medium text-paper" : "bg-teal-soft text-teal"
+                      }`}
+                    >
                       {raw.text}
                       <button
                         type="button"
-                        className="text-mute"
+                        className={isDef ? "text-paper/80" : "text-mute"}
+                        title={isDef ? "Убрать значение по умолчанию" : "Значение по умолчанию"}
+                        onClick={() => patch(i, { defaultOption: isDef ? "" : raw.text })}
+                      >
+                        {isDef ? "по умолч." : "умолч."}
+                      </button>
+                      <button
+                        type="button"
+                        className={isDef ? "text-paper/80" : "text-mute"}
                         title="Подпункт"
                         onClick={() => setOpenSub((v) => (v === subKey ? null : subKey))}
                       >
                         +
                       </button>
-                      <button
-                        type="button"
-                        className="text-mute"
-                        onClick={() => patch(i, { options: it.options.filter((x) => x.text.toLowerCase() !== raw.text.toLowerCase()) })}
-                      >
+                      <button type="button" className={isDef ? "text-paper/80" : "text-mute"} onClick={() => dropOption(i, raw.text)}>
                         ×
                       </button>
                     </span>
@@ -1381,7 +1460,7 @@ function itemPoints(items: LocalItem[]): StatusPoint[] {
       if (options.length) options[0] = { text: options[0].text, options: [...options[0].options, ...flat] };
       else flat.forEach((text) => options.push({ text, options: [] }));
     }
-    return { id: it.id, label: it.label, options };
+    return { id: it.id, label: it.label, options, defaultOption: it.defaultOption || "" };
   });
 }
 
@@ -1391,6 +1470,7 @@ function pointsToItems(points: StatusPoint[]): LocalItem[] {
     label: p.label,
     options: p.options.map((o) => o.text).filter(Boolean),
     optionSubs: p.options.map((o) => (o.options || []).filter(Boolean)),
+    ...(p.defaultOption ? { defaultOption: p.defaultOption } : {}),
   }));
 }
 
@@ -1407,14 +1487,19 @@ function ObjectiveEditor({
   }
   function pointsOf(item: ObjectiveTemplate): StatusPoint[] {
     if (item.points?.length) {
-      return item.points.map((p) => ({ id: p.id, label: p.label, options: (p.options || []).map((o) => ({ text: o.text, options: o.options ? [...o.options] : [] })) }));
+      return item.points.map((p) => ({
+        id: p.id,
+        label: p.label,
+        defaultOption: p.defaultOption || "",
+        options: (p.options || []).map((o) => ({ text: o.text, options: o.options ? [...o.options] : [] })),
+      }));
     }
     return [{ id: `${item.id}_line`, label: item.text || "", options: [] }];
   }
   return (
     <div className="space-y-1">
       <p className="text-xs text-ink-soft">
-        Список названий. Клик открывает окно. Пункты с опциями и подпунктами — как у жалоб. В протокол вставляются названия пунктов.
+        Список названий. Окно не закрывается по клику мимо. Поле пункта растёт по тексту.
       </p>
       {items.map((item) => (
         <button
@@ -1440,7 +1525,7 @@ function ObjectiveEditor({
       {items.map((item, i) => {
         if (openId !== item.id || typeof document === "undefined") return null;
         return createPortal(
-          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center" onClick={() => setOpenId(null)}>
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center">
             <div
               className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
               onClick={(e) => e.stopPropagation()}
@@ -1523,7 +1608,14 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
   }
   function setItems(i: number, items: LocalItem[]) {
     const chips = items
-      .map((it) => (it.options[0] ? `${it.label} ${it.options[0]}` : it.label))
+      .map((it) => {
+        const label = it.label.trim();
+        if (!label) return "";
+        if (!it.options.length) return label;
+        const v = defaultLocalValue(it);
+        if (!v || v.toLowerCase() === label.toLowerCase()) return label;
+        return `${label} ${v}`;
+      })
       .map((s) => s.trim())
       .filter(Boolean);
     patch(i, { items, chips });
@@ -1531,7 +1623,7 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-soft">
-        Список названий. Клик открывает окно. Пункты, опции и подпункты — как у жалоб. На приёме подпункты появляются у выбранной опции.
+        Список названий. Окно не закрывается по клику мимо. Поле пункта растёт по тексту. «умолч.» выбирается на приёме.
       </p>
       <div className="space-y-1">
         {packs.map((p) => (
@@ -1647,10 +1739,7 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
         );
         if (typeof document === "undefined") return editor;
         return createPortal(
-          <div
-            className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center"
-            onClick={() => setOpenId(null)}
-          >
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center">
             <div
               className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
               onClick={(e) => e.stopPropagation()}

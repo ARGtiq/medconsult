@@ -55,6 +55,8 @@ export type ObjectivePoint = {
   id: string;
   label: string;
   options?: { text: string; options?: string[] }[];
+  /** Опция, которая попадает в текст шаблона. */
+  defaultOption?: string;
 };
 
 export type ObjectiveTemplate = {
@@ -308,7 +310,7 @@ function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
     ? o.points
         .map((p) => {
           if (!p || typeof p !== "object") return null;
-          const row = p as { id?: unknown; label?: unknown; options?: unknown };
+          const row = p as { id?: unknown; label?: unknown; options?: unknown; defaultOption?: unknown };
           const label = typeof row.label === "string" ? row.label : "";
           const id = typeof row.id === "string" && row.id.trim() ? row.id.trim() : `pt_${label}`;
           const options = Array.isArray(row.options)
@@ -325,14 +327,14 @@ function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
                 })
                 .filter(Boolean)
             : [];
-          return { id, label, options } as ObjectivePoint;
+          const defaultOption = typeof row.defaultOption === "string" ? row.defaultOption.trim() : "";
+          const point: ObjectivePoint = { id, label, options: options as ObjectivePoint["options"] };
+          if (defaultOption) point.defaultOption = defaultOption;
+          return point;
         })
         .filter(Boolean)
     : [];
-  const fromPoints = points
-    .map((p) => (p?.label || "").trim())
-    .filter(Boolean)
-    .join(" ");
+  const fromPoints = objectivePointsText((points as ObjectivePoint[]) || []);
   const text = typeof o.text === "string" && o.text.trim() ? o.text.trim() : fromPoints;
   if (!text && !points.length) return null;
   const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : (text || "статус").slice(0, 42);
@@ -506,6 +508,34 @@ export function localItems(pack: { id: string; chips?: string[]; items?: LocalIt
     .map((c) => c.trim())
     .filter(Boolean)
     .map((c, i) => ({ id: `${pack.id}_c${i}`, label: c, options: [] as string[] }));
+}
+
+/** Опция, которая выбирается при вставке. Явная, иначе первая, иначе название пункта. */
+export function defaultLocalValue(item: LocalItem): string {
+  const wanted = (item.defaultOption || "").trim();
+  if (wanted) {
+    const hit = item.options.find((o) => o.toLowerCase() === wanted.toLowerCase());
+    if (hit) return hit;
+  }
+  return item.options[0] || item.label;
+}
+
+export function objectivePointsText(points: { label?: string; defaultOption?: string }[]): string {
+  const joined = points
+    .map((p) => {
+      const label = (p.label || "").trim();
+      const def = (p.defaultOption || "").trim();
+      if (!label) return def;
+      if (!def || def.toLowerCase() === label.toLowerCase()) return label;
+      if (def.toLowerCase().startsWith(`${label.toLowerCase()} `)) return def;
+      return `${label} ${def}`;
+    })
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!joined) return "";
+  return /[.!?…]$/.test(joined) ? joined : `${joined}.`;
 }
 
 export function localLine(item: LocalItem, value: string, subs?: string[]): string {
@@ -739,6 +769,13 @@ export function addObjectiveTemplate(label: string, text: string): "added" | "ex
     ],
   });
   return "added";
+}
+
+export function addGlobalTemplate(tpl: GlobalTemplate) {
+  const state = read();
+  const next = normalizeGlobal(tpl);
+  if (!next) return;
+  write({ ...state, globalTemplates: [...(state.globalTemplates || []), next] });
 }
 
 export function resetTemplates() {

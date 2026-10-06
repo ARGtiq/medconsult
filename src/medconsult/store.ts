@@ -4,7 +4,7 @@ import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS } from "./data/templates";
+import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS, defaultLocalValue } from "./data/templates";
 import { composeVitae, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { complaintBaseOf, complaintPicks, composeComplaintPicks, findComplaintVariant, getStudyLive, optionsForComplaint, subsForComplaint, type ComplaintPick } from "./live";
@@ -1035,7 +1035,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         if (!activeLocalPacks.includes(id)) activeLocalPacks.push(id);
         localPicks = localPicks.filter((x) => x.packId !== id);
         for (const it of localItems(lp)) {
-          localPicks.push({ packId: id, itemId: it.id, value: it.options[0] || it.label });
+          localPicks.push({ packId: id, itemId: it.id, value: defaultLocalValue(it) });
         }
       }
       localStatus = localStatusLines(localPicks, locals, free);

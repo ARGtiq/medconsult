@@ -1,8 +1,9 @@
 import { FileText, Layers, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { STD_DOC_BLOCKS, globalsMatchingCode, useTemplates } from "./data/templates";
+import { STD_DOC_BLOCKS, addGlobalTemplate, globalsMatchingCode, useTemplates } from "./data/templates";
 import { useAppStore } from "./store";
+import type { WorkKind } from "./types";
 
 export function PlusDocBlockButton() {
   const [open, setOpen] = useState(false);
@@ -233,7 +234,7 @@ export function PlusPackButton() {
                   {p.name}
                 </button>
               ))}
-              {visitPacks.length === 0 && <p className="px-1 py-2 text-xs text-mute">Справочник → Наборы</p>}
+              {visitPacks.length === 0 && <p className="px-1 py-2 text-xs text-mute">Справочник → Блоки → наборы</p>}
             </div>
           </div>,
           document.body,
@@ -366,6 +367,92 @@ export function PlusGlobalButton() {
           document.body,
         )}
     </div>
+  );
+}
+
+export function SaveGlobalButton() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const setToast = useAppStore((s) => s.setToast);
+  const setSession = useAppStore((s) => s.setSession);
+
+  function save() {
+    const s = useAppStore.getState().session;
+    const n = name.trim() || s.diagnosisTitle.trim() || "протокол";
+    const all = STD_DOC_BLOCKS.map((b) => b.id);
+    const stdBlocks = s.mode === "document" ? s.docStd || [] : all.filter((id) => !s.hiddenBlocks.includes(id));
+    const kind: WorkKind = s.mode === "document" ? "document" : s.mode === "study" ? "study" : s.visitKind;
+    const id = `gtpl_${Date.now().toString(36)}`;
+    addGlobalTemplate({
+      id,
+      name: n,
+      codes: s.diagnosisCode.trim() ? [s.diagnosisCode.trim()] : [],
+      kind,
+      stdBlocks,
+      extraKinds: (s.extraBlocks || []).map((b) => b.kindId),
+      complaints: [...(s.complaints || [])],
+      anamnesis: s.anamnesis || "",
+      anamnesisVitae: s.anamnesisVitae || "",
+      objective: s.objective || "",
+      localStatus: [...(s.localStatus || [])],
+      diagnosisCode: s.diagnosisCode || "",
+      diagnosisTitle: s.diagnosisTitle || "",
+      recommendations: [...(s.recommendations || [])],
+      notes: s.notes || "",
+    });
+    setSession({ globalTemplateId: id });
+    setToast(`Глобальный шаблон «${n}» сохранён`);
+    setOpen(false);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-semibold"
+        onClick={() => {
+          const s = useAppStore.getState().session;
+          setName(s.diagnosisTitle.trim() || s.diagnosisCode.trim() || "протокол");
+          setOpen(true);
+        }}
+      >
+        сохранить как глобальный шаблон
+      </button>
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center">
+            <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-3 shadow-lg" role="dialog" aria-modal="true">
+              <div className="mb-1 text-sm font-semibold">Глобальный шаблон</div>
+              <p className="mb-2 text-xs text-ink-soft">
+                Сохранятся открытые блоки и уже написанный текст. Пустые поля при вставке не затирают протокол.
+              </p>
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    save();
+                  }
+                }}
+                placeholder="название"
+                className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <button type="button" className="rounded-lg bg-teal px-3 py-1.5 text-sm font-semibold text-paper" onClick={save}>
+                  сохранить
+                </button>
+                <button type="button" className="text-xs text-mute" onClick={() => setOpen(false)}>
+                  отмена
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
