@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import LegacySettings from "@/legacy/components/SettingsPage";
+import ThemeSettings from "@/legacy/components/ThemeSettings";
 import "@/legacy/legacy.css";
 import { AppShell } from "./AppShell";
 import { useAppStore } from "./store";
@@ -11,6 +12,12 @@ export function SettingsPage() {
       <div className="mx-auto max-w-4xl space-y-3 p-4 pb-24 md:p-8">
         <h1 className="font-display text-2xl">Как ведёт себя станок</h1>
         <div className="grid gap-3 md:grid-cols-2">
+          <Card title="Оформление">
+            <p className="mt-1 text-xs text-ink-soft">Акцентный цвет, тёмная тема и анимации. Действует на весь станок.</p>
+            <div className="legacy-surface mt-2">
+              <ThemeSettings />
+            </div>
+          </Card>
           <Card title="Кнопка AI на протоколе">
             {(
               [

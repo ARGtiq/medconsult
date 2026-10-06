@@ -5,8 +5,8 @@
   --paper: #f6f8f7;
   --panel: #ffffff;
   --line: #dde4e2;
-  --teal: #0f6e5f;
-  --teal-soft: #e3f2ee;
+  --teal: var(--color-teal, #0f6e5f);
+  --teal-soft: var(--color-teal-soft, #e3f2ee);
   --amber: #b9781f;
   --amber-soft: #fbf0dd;
   --red: #b23a3a;

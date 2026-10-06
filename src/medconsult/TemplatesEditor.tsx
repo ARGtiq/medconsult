@@ -251,7 +251,7 @@ function Fold({ title, hint, children }: { title: string; hint?: string; childre
         {title}
       </button>
       {open && (
-        <div className="border-t border-line/70 px-2 py-2">
+        <div className="mc-rise border-t border-line/70 px-2 py-2">
           {hint ? <p className="mb-2 text-xs text-ink-soft">{hint}</p> : null}
           {children}
         </div>
@@ -268,7 +268,7 @@ function ItemFold({ title, children }: { title: string; children: ReactNode }) {
         <span className="w-3 text-[10px] text-mute">{open ? "▾" : "▸"}</span>
         <span className="min-w-0 flex-1 truncate">{title.trim() || "без названия"}</span>
       </button>
-      {open && <div className="px-2 pb-2">{children}</div>}
+      {open && <div className="mc-rise px-2 pb-2">{children}</div>}
     </div>
   );
 }

@@ -657,7 +657,7 @@ export function Sec({
           )}
         </span>
       </div>
-      {shown && <div className="mt-2">{children}</div>}
+      {shown && <div className="mc-rise mt-2">{children}</div>}
     </section>
   );
 }

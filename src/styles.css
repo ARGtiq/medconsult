@@ -50,6 +50,69 @@
     cursor: pointer;
   }
 
+  @keyframes mc-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes mc-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes mc-rise {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html:not(.motion-off) button,
+    html:not(.motion-off) a,
+    html:not(.motion-off) input,
+    html:not(.motion-off) textarea,
+    html:not(.motion-off) select {
+      transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        opacity 160ms ease;
+    }
+
+    html:not(.motion-off) .mc-page,
+    html:not(.motion-off) .mc-rise {
+      animation: mc-rise 200ms ease;
+    }
+
+    html:not(.motion-off) .fixed.inset-0 {
+      animation: mc-fade 160ms ease;
+    }
+
+    html:not(.motion-off) [role="dialog"] {
+      animation: mc-pop 200ms ease;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html:not(.motion-on) *,
+    html:not(.motion-on) *::before,
+    html:not(.motion-on) *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  html.motion-off *,
+  html.motion-off *::before,
+  html.motion-off *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   h1,
   h2,
   h3 {
@@ -76,4 +139,24 @@
     border-color: var(--color-danger);
     color: var(--color-danger);
   }
+}
+
+html.theme-dark {
+  --color-ink: #e7edf1;
+  --color-ink-soft: #b7c5ce;
+  --color-mute: #8ea0ab;
+  --color-paper: #0e171e;
+  --color-surface: #172430;
+  --color-line: #2c3c48;
+  --color-rail: #121c24;
+  --color-preview: #101920;
+  --color-danger: #e07a7a;
+  --color-danger-soft: #3a2424;
+  --color-ok: #7dcea0;
+  --color-ok-soft: #163024;
+  --color-warn: #2c2618;
+  --color-warn-line: #6a5830;
+  --color-ai: #15202a;
+  --color-ai-line: #314252;
+  color-scheme: dark;
 }

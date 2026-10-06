@@ -100,7 +100,7 @@ export function AppShell({
   return (
     <div className="flex min-h-dvh bg-paper text-ink">
       <aside
-        className={`sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-rail md:flex ${
+        className={`sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-rail transition-[width] duration-200 md:flex ${
           collapsed ? "w-16 items-center px-2 py-3" : "w-48 px-3 py-4"
         }`}
       >
@@ -163,7 +163,7 @@ export function AppShell({
             Ctrl+K вставить
           </button>
         </header>
-        <div className="min-h-0 flex-1">{children}</div>
+        <div key={pathname} className="mc-page min-h-0 flex-1">{children}</div>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-line bg-surface px-2 pb-3 pt-2 md:hidden">

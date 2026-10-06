@@ -114,7 +114,7 @@ declare module "@/legacy/lib/uiPrefs" {
 
 declare module "@/legacy/lib/theme" {
   export function initTheme(): void;
-  export function applyTheme(theme: { accent?: string; dark?: boolean }): void;
+  export function applyTheme(theme: { accent?: string; dark?: boolean; motion?: boolean }): void;
 }
 
 declare module "@/legacy/data/drugSafety" {

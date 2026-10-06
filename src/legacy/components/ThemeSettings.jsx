@@ -28,6 +28,14 @@ export default function ThemeSettings() {
         <input type="checkbox" checked={!!theme.dark} onChange={(e) => update({ dark: e.target.checked })} />
         Тёмная тема
       </label>
+      <label className="theme-dark-toggle">
+        <input
+          type="checkbox"
+          checked={theme.motion === false}
+          onChange={(e) => update({ motion: !e.target.checked })}
+        />
+        Отключить анимации
+      </label>
     </div>
   )
 }

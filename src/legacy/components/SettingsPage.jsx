@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import AiSettings from './AiSettings'
 import DataExport from './DataExport'
-import ThemeSettings from './ThemeSettings'
 import ChangelogModal from './ChangelogModal'
 import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
@@ -29,11 +28,6 @@ export default function SettingsPage() {
   return (
     <div className="settings-tab settings-page-single">
       <h2 className="guidelines-title">Настройки</h2>
-      <div className="general-settings-block">
-        <h4>Оформление</h4>
-        <p className="settings-note-inline">Акцентный цвет интерфейса и тёмная тема.</p>
-        <ThemeSettings />
-      </div>
       <div className="general-settings-block">
         <h4>AI-провайдер</h4>
         <p className="settings-note-inline">OpenRouter или Gemini напрямую через Google API. У каждого свой ключ и своя модель, список обновляется сам.</p>

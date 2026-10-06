@@ -154,7 +154,7 @@
 .legacy-surface .theme-swatch.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel); }
 .legacy-surface .theme-dark-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
 
-.legacy-surface .theme-dark {
+html.theme-dark .legacy-surface {
   --ink: #e7edf1;
   --ink-soft: #9fb0ba;
   --paper: #121c24;
@@ -164,9 +164,12 @@
   --amber-soft: #3a2f1c;
 }
 
-.legacy-surface .theme-dark .brand-mark { color: var(--teal); }
-.legacy-surface .theme-dark .chip, .legacy-surface .theme-dark .tab, .legacy-surface .theme-dark .btn-secondary { color: var(--ink); }
-.legacy-surface .theme-dark .selected-chip, .legacy-surface .theme-dark .drug-card { background: var(--paper); }
+html.theme-dark .legacy-surface .brand-mark { color: var(--teal); }
+html.theme-dark .legacy-surface .chip,
+html.theme-dark .legacy-surface .tab,
+html.theme-dark .legacy-surface .btn-secondary { color: var(--ink); }
+html.theme-dark .legacy-surface .selected-chip,
+html.theme-dark .legacy-surface .drug-card { background: var(--paper); }
 
 .legacy-surface .app-version-link {
   border: none;
