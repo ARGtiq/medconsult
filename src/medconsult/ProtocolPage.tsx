@@ -64,7 +64,7 @@ function LocalOptionRow({
   item: LocalItem;
   value: string;
   subs: string[];
-  onChange: (v: string) => void;
+  onChange: (v: string, subs?: string[]) => void;
   onSubs: (v: string[]) => void;
   onAddOption: (v: string) => void;
 }) {
@@ -118,7 +118,7 @@ function LocalOptionRow({
                 if (on) {
                   setDraft(selected);
                   setEdit(true);
-                } else onChange(o);
+                } else onChange(o, []);
               }}
             >
               {on ? selected : o}
@@ -180,27 +180,51 @@ function LocalOptionRow({
         placeholder="свой вариант + Enter"
         className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
       />
-      {(item.subs || []).map((group, gi) => (
-        <div key={gi} className="mt-1 flex flex-wrap gap-1">
-          {group.map((opt) => {
-            const on = (subs[gi] || "").toLowerCase() === opt.toLowerCase();
-            return (
-              <button
-                key={opt}
-                type="button"
-                className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal text-paper" : "border border-dashed border-line bg-paper"}`}
-                onClick={() => {
-                  const next = [...subs];
-                  next[gi] = on ? "" : opt;
-                  onSubs(next);
-                }}
-              >
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+      {(() => {
+        const idx = options.findIndex((o) => o.toLowerCase() === selected.toLowerCase());
+        const kids = idx >= 0 ? item.optionSubs?.[idx] || [] : [];
+        const legacy = (item.optionSubs || []).some((g) => g.length) ? [] : item.subs || [];
+        if (kids.length) {
+          return (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {kids.map((opt) => {
+                const on = subs.some((s) => s.toLowerCase() === opt.toLowerCase());
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal text-paper" : "border border-dashed border-line bg-paper"}`}
+                    onClick={() => onSubs(on ? subs.filter((s) => s.toLowerCase() !== opt.toLowerCase()) : [...subs, opt])}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }
+        return legacy.map((group, gi) => (
+          <div key={gi} className="mt-1 flex flex-wrap gap-1">
+            {group.map((opt) => {
+              const on = (subs[gi] || "").toLowerCase() === opt.toLowerCase();
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  className={`rounded-full px-2 py-0.5 text-xs ${on ? "bg-teal text-paper" : "border border-dashed border-line bg-paper"}`}
+                  onClick={() => {
+                    const next = [...subs];
+                    next[gi] = on ? "" : opt;
+                    onSubs(next);
+                  }}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        ));
+      })()}
     </div>
   );
 }
@@ -1142,7 +1166,7 @@ export function ProtocolPage() {
                         item={it}
                         value={pick?.value || ""}
                         subs={pick?.subs || []}
-                        onChange={(v) => setLocalPickValue(id, it.id, v)}
+                        onChange={(v, subs) => setLocalPickValue(id, it.id, v, subs)}
                         onSubs={(subs) => setLocalPickValue(id, it.id, pick?.value || "", subs)}
                         onAddOption={(v) => {
                           addLocalOption(id, it.id, v);

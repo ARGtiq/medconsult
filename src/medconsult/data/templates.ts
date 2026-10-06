@@ -51,11 +51,19 @@ export function complaintOptionSubs(o: string | ComplaintOption): string[] {
 }
 
 /** Named paragraph for the objective-status block. */
+export type ObjectivePoint = {
+  id: string;
+  label: string;
+  options?: { text: string; options?: string[] }[];
+};
+
 export type ObjectiveTemplate = {
   id: string;
   label: string;
   text: string;
   codes?: string[];
+  /** Пункты как у жалобы. Если есть — текст шаблона собирается из названий пунктов. */
+  points?: ObjectivePoint[];
 };
 
 /** Named set of protocol blocks plus text already filled in. */
@@ -295,13 +303,42 @@ function mergeQuestionnaires(saved: ScaleDef[], seed: ScaleDef[]): ScaleDef[] {
 
 function normalizeObjective(raw: unknown): ObjectiveTemplate | null {
   if (!raw || typeof raw !== "object") return null;
-  const o = raw as { id?: unknown; label?: unknown; text?: unknown; codes?: unknown };
-  const text = typeof o.text === "string" ? o.text.trim() : "";
-  if (!text) return null;
-  const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : text.slice(0, 42);
+  const o = raw as { id?: unknown; label?: unknown; text?: unknown; codes?: unknown; points?: unknown };
+  const points = Array.isArray(o.points)
+    ? o.points
+        .map((p) => {
+          if (!p || typeof p !== "object") return null;
+          const row = p as { id?: unknown; label?: unknown; options?: unknown };
+          const label = typeof row.label === "string" ? row.label : "";
+          const id = typeof row.id === "string" && row.id.trim() ? row.id.trim() : `pt_${label}`;
+          const options = Array.isArray(row.options)
+            ? row.options
+                .map((opt) => {
+                  if (!opt || typeof opt !== "object") return null;
+                  const x = opt as { text?: unknown; options?: unknown };
+                  const text = typeof x.text === "string" ? x.text.trim() : "";
+                  if (!text) return null;
+                  const kids = Array.isArray(x.options)
+                    ? x.options.map((s) => (typeof s === "string" ? s.trim() : "")).filter(Boolean)
+                    : [];
+                  return kids.length ? { text, options: kids } : { text };
+                })
+                .filter(Boolean)
+            : [];
+          return { id, label, options } as ObjectivePoint;
+        })
+        .filter(Boolean)
+    : [];
+  const fromPoints = points
+    .map((p) => (p?.label || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const text = typeof o.text === "string" && o.text.trim() ? o.text.trim() : fromPoints;
+  if (!text && !points.length) return null;
+  const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : (text || "статус").slice(0, 42);
   const id = typeof o.id === "string" && o.id.trim() ? o.id.trim() : `obj_${label}`;
   const codes = Array.isArray(o.codes) ? o.codes.map((c) => String(c).trim()).filter(Boolean) : [];
-  return { id, label, text, codes };
+  return { id, label, text, codes, points: points.length ? (points as ObjectivePoint[]) : undefined };
 }
 
 function asLines(raw: unknown): string[] {

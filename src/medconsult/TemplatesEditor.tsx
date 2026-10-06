@@ -154,8 +154,7 @@ export function TemplatesEditor({
               [
                 ["complaints", "жалобы"],
                 ["vitae", "анамнез жизни"],
-                ["objective", "объективный статус"],
-                ["status", "локальный статус"],
+                ["status", "статус"],
                 ["questionnaires", "анкеты"],
                 ["studies", "исследования"],
                 ["docs", "виды блоков"],
@@ -173,8 +172,17 @@ export function TemplatesEditor({
               </button>
             ))}
           </div>
-          {tab === "objective" && (
-            <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
+          {tab === "status" && (
+            <div className="space-y-4">
+              <div>
+                <div className="mb-1 text-xs font-semibold">Объективный статус</div>
+                <ObjectiveEditor items={data.objective || []} onChange={(objective) => persist({ objective })} />
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold">Локальный статус</div>
+                <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />
+              </div>
+            </div>
           )}
           {tab === "vitae" && (
             <div className="space-y-2">
@@ -191,7 +199,6 @@ export function TemplatesEditor({
               </Fold>
             </div>
           )}
-          {tab === "status" && <PacksEditor packs={data.localPacks} onChange={(localPacks) => persist({ localPacks })} />}
           {tab === "complaints" && (
             <ComplaintDictEditor
               items={data.complaints}
@@ -1046,6 +1053,53 @@ function QuestionnaireEditor({
                   </select>
                   <button
                     type="button"
+                    className="text-[11px] text-mute disabled:opacity-30"
+                    disabled={i === 0}
+                    title="Выше"
+                    onClick={() => {
+                      if (i === 0) return;
+                      const next = [...current.items];
+                      const [row] = next.splice(i, 1);
+                      next.splice(i - 1, 0, row);
+                      patch({ items: next });
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] text-mute disabled:opacity-30"
+                    disabled={i === current.items.length - 1}
+                    title="Ниже"
+                    onClick={() => {
+                      if (i === current.items.length - 1) return;
+                      const next = [...current.items];
+                      const [row] = next.splice(i, 1);
+                      next.splice(i + 1, 0, row);
+                      patch({ items: next });
+                    }}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-teal"
+                    title="Копия пункта"
+                    onClick={() => {
+                      const copy: ScaleItem = {
+                        ...it,
+                        key: `${it.key}_c_${Date.now().toString(36)}`,
+                        options: it.options?.map((o) => ({ ...o })),
+                      };
+                      const next = [...current.items];
+                      next.splice(i + 1, 0, copy);
+                      patch({ items: next });
+                    }}
+                  >
+                    копия
+                  </button>
+                  <button
+                    type="button"
                     className="text-xs text-danger"
                     onClick={() => patch({ items: current.items.filter((_, j) => j !== i) })}
                   >
@@ -1131,6 +1185,215 @@ function QuestionnaireEditor({
   );
 }
 
+type StatusPoint = { id: string; label: string; options: { text: string; options?: string[] }[] };
+
+function pointsText(points: StatusPoint[]) {
+  const joined = points
+    .map((p) => p.label.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!joined) return "";
+  return /[.!?…]$/.test(joined) ? joined : `${joined}.`;
+}
+
+function PointTree({
+  points,
+  onChange,
+  addLabel = "+ пункт",
+}: {
+  points: StatusPoint[];
+  onChange: (next: StatusPoint[]) => void;
+  addLabel?: string;
+}) {
+  const [openOpt, setOpenOpt] = useState<string | null>(null);
+  const [openSub, setOpenSub] = useState<string | null>(null);
+  const [optDraft, setOptDraft] = useState<Record<string, string>>({});
+  const [subDraft, setSubDraft] = useState<Record<string, string>>({});
+
+  function patch(i: number, p: Partial<StatusPoint>) {
+    onChange(points.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  }
+
+  function addOption(i: number, raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    const cur = points[i];
+    if (!cur || cur.options.some((o) => o.text.toLowerCase() === t.toLowerCase())) return;
+    patch(i, { options: [...cur.options, { text: t }] });
+    setOptDraft((d) => ({ ...d, [cur.id]: "" }));
+  }
+
+  function addSub(i: number, option: string, raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    const cur = points[i];
+    if (!cur) return;
+    patch(i, {
+      options: cur.options.map((o) => {
+        if (o.text.toLowerCase() !== option.toLowerCase()) return o;
+        const kids = o.options || [];
+        if (kids.some((s) => s.toLowerCase() === t.toLowerCase())) return o;
+        return { ...o, options: [...kids, t] };
+      }),
+    });
+    setSubDraft((d) => ({ ...d, [`${cur.id}:${option}`]: "" }));
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {points.map((it, i) => (
+        <div key={it.id} className="rounded-md border border-line/70 bg-surface px-2 py-1.5">
+          <div className="flex items-center gap-1">
+            <input
+              value={it.label}
+              onChange={(e) => patch(i, { label: e.target.value })}
+              placeholder="пункт"
+              className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              className="shrink-0 rounded-full border border-dashed border-teal/50 px-2 py-0.5 text-[11px] font-medium text-teal"
+              onClick={() => setOpenOpt((v) => (v === it.id ? null : it.id))}
+            >
+              +опция
+            </button>
+            <button
+              type="button"
+              className="text-xs text-danger"
+              onClick={() => onChange(points.filter((_, j) => j !== i))}
+            >
+              ×
+            </button>
+          </div>
+          {(it.options.length > 0 || openOpt === it.id) && (
+            <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-line pl-2">
+              {it.options.map((raw) => {
+                const kids = raw.options || [];
+                const subKey = `${it.id}:${raw.text}`;
+                return (
+                  <div key={raw.text}>
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal">
+                      {raw.text}
+                      <button
+                        type="button"
+                        className="text-mute"
+                        title="Подпункт"
+                        onClick={() => setOpenSub((v) => (v === subKey ? null : subKey))}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className="text-mute"
+                        onClick={() => patch(i, { options: it.options.filter((x) => x.text.toLowerCase() !== raw.text.toLowerCase()) })}
+                      >
+                        ×
+                      </button>
+                    </span>
+                    {(kids.length > 0 || openSub === subKey) && (
+                      <div className="mt-0.5 ml-4 flex flex-wrap items-center gap-1 border-l border-line pl-2">
+                        {kids.map((s) => (
+                          <span key={s} className="inline-flex items-center gap-0.5 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]">
+                            {s}
+                            <button
+                              type="button"
+                              className="text-mute"
+                              onClick={() =>
+                                patch(i, {
+                                  options: it.options.map((x) =>
+                                    x.text.toLowerCase() === raw.text.toLowerCase()
+                                      ? { ...x, options: (x.options || []).filter((k) => k !== s) }
+                                      : x,
+                                  ),
+                                })
+                              }
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        {openSub === subKey ? (
+                          <input
+                            autoFocus
+                            value={subDraft[subKey] || ""}
+                            onChange={(e) => setSubDraft((d) => ({ ...d, [subKey]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addSub(i, raw.text, subDraft[subKey] || "");
+                              }
+                              if (e.key === "Escape") setOpenSub(null);
+                            }}
+                            onBlur={() => {
+                              if ((subDraft[subKey] || "").trim()) addSub(i, raw.text, subDraft[subKey] || "");
+                            }}
+                            placeholder="подпункт + Enter"
+                            className="w-36 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]"
+                          />
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {openOpt === it.id ? (
+                <input
+                  autoFocus
+                  value={optDraft[it.id] || ""}
+                  onChange={(e) => setOptDraft((d) => ({ ...d, [it.id]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addOption(i, optDraft[it.id] || "");
+                    }
+                    if (e.key === "Escape") setOpenOpt(null);
+                  }}
+                  onBlur={() => {
+                    if ((optDraft[it.id] || "").trim()) addOption(i, optDraft[it.id] || "");
+                  }}
+                  placeholder="опция + Enter"
+                  className="w-32 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]"
+                />
+              ) : null}
+            </div>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-xs font-medium text-teal"
+        onClick={() => onChange([...points, { id: `pt_${Date.now().toString(36)}`, label: "пункт", options: [] }])}
+      >
+        {addLabel}
+      </button>
+    </div>
+  );
+}
+
+function itemPoints(items: LocalItem[]): StatusPoint[] {
+  return items.map((it) => {
+    const options = it.options.map((text, n) => ({ text, options: [...(it.optionSubs?.[n] || [])] }));
+    const hasNew = (it.optionSubs || []).some((g) => g.length);
+    if (!hasNew && it.subs?.some((g) => g.length)) {
+      const flat = it.subs.flat().map((s) => s.trim()).filter(Boolean);
+      if (options.length) options[0] = { text: options[0].text, options: [...options[0].options, ...flat] };
+      else flat.forEach((text) => options.push({ text, options: [] }));
+    }
+    return { id: it.id, label: it.label, options };
+  });
+}
+
+function pointsToItems(points: StatusPoint[]): LocalItem[] {
+  return points.map((p) => ({
+    id: p.id,
+    label: p.label,
+    options: p.options.map((o) => o.text).filter(Boolean),
+    optionSubs: p.options.map((o) => (o.options || []).filter(Boolean)),
+  }));
+}
+
 function ObjectiveEditor({
   items,
   onChange,
@@ -1138,71 +1401,113 @@ function ObjectiveEditor({
   items: ObjectiveTemplate[];
   onChange: (p: ObjectiveTemplate[]) => void;
 }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   function patch(i: number, p: Partial<ObjectiveTemplate>) {
     onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
+  function pointsOf(item: ObjectiveTemplate): StatusPoint[] {
+    if (item.points?.length) {
+      return item.points.map((p) => ({ id: p.id, label: p.label, options: (p.options || []).map((o) => ({ text: o.text, options: o.options ? [...o.options] : [] })) }));
+    }
+    return [{ id: `${item.id}_line`, label: item.text || "", options: [] }];
+  }
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <p className="text-xs text-ink-soft">
-        Готовые тексты объективного статуса. На протоколе клик подставляет текст целиком, его можно сразу править. Пустые
-        коды МКБ — шаблон для любого диагноза.
+        Список названий. Клик открывает окно. Пункты с опциями и подпунктами — как у жалоб. В протокол вставляются названия пунктов.
       </p>
-      {items.map((item, i) => (
-        <div key={item.id} className="rounded-lg border border-line bg-paper p-2">
-          <div className="flex gap-2">
-            <input
-              value={item.label}
-              onChange={(e) => patch(i, { label: e.target.value })}
-              placeholder="название"
-              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
-            />
-            <button
-              type="button"
-              className="text-[11px] font-medium text-teal"
-              onClick={() => {
-                const copy: ObjectiveTemplate = {
-                  ...item,
-                  id: `obj_${Date.now().toString(36)}`,
-                  label: `${item.label || "статус"} (копия)`,
-                  codes: [...(item.codes || [])],
-                };
-                onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
-              }}
-            >
-              копия
-            </button>
-            <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-              ×
-            </button>
-          </div>
-          <div className="mt-1">
-            <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
-            <IcdCodesField
-              codes={item.codes || []}
-              onChange={(codes) => patch(i, { codes })}
-              placeholder="МКБ, если шаблон только для этого кода"
-            />
-          </div>
-          <textarea
-            value={item.text}
-            onChange={(e) => patch(i, { text: e.target.value })}
-            rows={3}
-            className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs"
-          />
-        </div>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => setOpenId(item.id)}
+          className="flex w-full items-center rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+        >
+          <span className="min-w-0 flex-1 truncate">{item.label.trim() || "без названия"}</span>
+        </button>
       ))}
       <button
         type="button"
         className="text-xs font-medium text-teal"
-        onClick={() =>
-          onChange([
-            ...items,
-            { id: `obj_${Date.now().toString(36)}`, label: "новый", text: "Состояние удовлетворительное.", codes: [] },
-          ])
-        }
+        onClick={() => {
+          const id = `obj_${Date.now().toString(36)}`;
+          onChange([...items, { id, label: "новый", text: "Состояние удовлетворительное.", codes: [], points: [{ id: `${id}_line`, label: "Состояние удовлетворительное.", options: [] }] }]);
+          setOpenId(id);
+        }}
       >
-        + шаблон статуса
+        + шаблон
       </button>
+      {items.map((item, i) => {
+        if (openId !== item.id || typeof document === "undefined") return null;
+        return createPortal(
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center" onClick={() => setOpenId(null)}>
+            <div
+              className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold">Шаблон объективного статуса</div>
+                <button type="button" className="ml-auto text-xs text-mute" onClick={() => setOpenId(null)}>
+                  закрыть
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={item.label}
+                  onChange={(e) => patch(i, { label: e.target.value })}
+                  placeholder="название"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-teal"
+                  onClick={() => {
+                    const copy: ObjectiveTemplate = {
+                      ...item,
+                      id: `obj_${Date.now().toString(36)}`,
+                      label: `${item.label || "статус"} (копия)`,
+                      codes: [...(item.codes || [])],
+                      points: pointsOf(item).map((p) => ({ ...p, id: `${p.id}_c`, options: p.options.map((o) => ({ ...o, options: o.options ? [...o.options] : [] })) })),
+                    };
+                    copy.text = pointsText(pointsOf(item)) || item.text;
+                    onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
+                    setOpenId(copy.id);
+                  }}
+                >
+                  копия
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-danger"
+                  onClick={() => {
+                    setOpenId(null);
+                    onChange(items.filter((_, j) => j !== i));
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="mt-1">
+                <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
+                <IcdCodesField
+                  codes={item.codes || []}
+                  onChange={(codes) => patch(i, { codes })}
+                  placeholder="МКБ, если шаблон только для этого кода"
+                />
+              </div>
+              <div className="mt-2">
+                <PointTree
+                  points={pointsOf(item)}
+                  onChange={(points) => patch(i, { points, text: pointsText(points) })}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        );
+      })}
     </div>
   );
 }
@@ -1226,7 +1531,7 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-soft">
-        Список названий. Клик открывает шаблон. На протоколе клик по шаблону вставляет пункты, повторный клик убирает.
+        Список названий. Клик открывает окно. Пункты, опции и подпункты — как у жалоб. На приёме подпункты появляются у выбранной опции.
       </p>
       <div className="space-y-1">
         {packs.map((p) => (
@@ -1275,7 +1580,13 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
                 type="button"
                 className="text-[11px] font-medium text-teal"
                 onClick={() => {
-                  const copyItems = items.map((it) => ({ ...it, id: `${it.id}_c`, options: [...it.options] }));
+                  const copyItems = items.map((it) => ({
+                    ...it,
+                    id: `${it.id}_c`,
+                    options: [...it.options],
+                    optionSubs: it.optionSubs?.map((g) => [...g]),
+                    subs: it.subs?.map((g) => [...g]),
+                  }));
                   const copy: LocalPack = {
                     ...p,
                     id: `pack_${Date.now().toString(36)}`,
@@ -1326,106 +1637,11 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
               <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
               <IcdCodesField codes={p.codes} onChange={(codes) => patch(i, { codes })} />
             </div>
-            <div className="mt-2 space-y-2">
-              {items.map((it, ii) => (
-                <div key={it.id} className="rounded-md border border-line/70 bg-surface px-2 py-1.5">
-                  <div className="flex gap-1">
-                    <input
-                      value={it.label}
-                      onChange={(e) => setItems(i, items.map((x, j) => (j === ii ? { ...x, label: e.target.value } : x)))}
-                      placeholder="пункт, напр. поколачивание"
-                      className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
-                    />
-                    <button
-                      type="button"
-                      className="text-xs text-danger"
-                      onClick={() => setItems(i, items.filter((_, j) => j !== ii))}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {it.options.map((o) => (
-                      <button
-                        key={o}
-                        type="button"
-                        title="Убрать вариант"
-                        className="rounded-full bg-teal-soft px-2 py-0.5 text-xs text-teal"
-                        onClick={() =>
-                          setItems(
-                            i,
-                            items.map((x, j) => (j === ii ? { ...x, options: x.options.filter((opt) => opt !== o) } : x)),
-                          )
-                        }
-                      >
-                        {o} ×
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    placeholder="вариант + Enter"
-                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
-                    onKeyDown={(e) => {
-                      if (e.key !== "Enter") return;
-                      const raw = e.currentTarget.value.trim();
-                      if (!raw) return;
-                      e.preventDefault();
-                      if (it.options.some((o) => o.toLowerCase() === raw.toLowerCase())) return;
-                      setItems(i, items.map((x, j) => (j === ii ? { ...x, options: [...x.options, raw] } : x)));
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                  <div className="mt-1">
-                    <div className="text-[10px] text-mute">подпункты</div>
-                    {(it.subs || []).map((group, gi) => (
-                      <div key={gi} className="mt-1 flex flex-wrap items-center gap-1">
-                        {group.map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            className="rounded-full bg-teal-soft px-2 py-0.5 text-[11px] text-teal"
-                            onClick={() => {
-                              const subs = (it.subs || []).map((g, j) => (j === gi ? g.filter((x) => x !== opt) : g)).filter((g) => g.length);
-                              setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
-                            }}
-                          >
-                            {opt} ×
-                          </button>
-                        ))}
-                        <input
-                          placeholder="вариант + Enter"
-                          className="w-28 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]"
-                          onKeyDown={(e) => {
-                            if (e.key !== "Enter") return;
-                            const raw = e.currentTarget.value.trim();
-                            if (!raw || group.some((o) => o.toLowerCase() === raw.toLowerCase())) return;
-                            e.preventDefault();
-                            const subs = (it.subs || []).map((g, j) => (j === gi ? [...g, raw] : g));
-                            setItems(i, items.map((x, j) => (j === ii ? { ...x, subs } : x)));
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="mt-1 text-[11px] text-teal"
-                      onClick={() => setItems(i, items.map((x, j) => (j === ii ? { ...x, subs: [...(x.subs || []), ["вариант"]] } : x)))}
-                    >
-                      + группа подпунктов
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-xs font-medium text-teal"
-                onClick={() =>
-                  setItems(i, [...items, { id: `it_${Date.now().toString(36)}`, label: "пункт", options: [] }])
-                }
-              >
-                + пункт
-              </button>
+            <div className="mt-2">
+              <PointTree
+                points={itemPoints(items)}
+                onChange={(points) => setItems(i, pointsToItems(points))}
+              />
             </div>
           </div>
         );
