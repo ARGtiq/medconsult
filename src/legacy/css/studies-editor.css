@@ -566,3 +566,17 @@
   min-width: 28px;
   font-weight: 700;
 }
+
+.legacy-surface input[type="text"],
+.legacy-surface input[type="search"],
+.legacy-surface input[type="number"],
+.legacy-surface input[type="url"],
+.legacy-surface input[type="password"],
+.legacy-surface input[type="email"],
+.legacy-surface textarea,
+.legacy-surface select {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}

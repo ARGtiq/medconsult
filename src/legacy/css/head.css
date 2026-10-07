@@ -1,19 +1,19 @@
 /* scoped old MedConsult chrome — only inside .legacy-surface */
 .legacy-surface {
-  --ink: #14202b;
-  --ink-soft: #4a5c6a;
-  --paper: #f6f8f7;
-  --panel: #ffffff;
-  --line: #dde4e2;
+  --ink: var(--color-ink, #14202b);
+  --ink-soft: var(--color-ink-soft, #4a5c6a);
+  --paper: var(--color-paper, #f6f8f7);
+  --panel: var(--color-surface, #ffffff);
+  --line: var(--color-line, #dde4e2);
   --teal: var(--color-teal, #0f6e5f);
   --teal-soft: var(--color-teal-soft, #e3f2ee);
   --amber: #b9781f;
   --amber-soft: #fbf0dd;
   --red: #b23a3a;
   --red-soft: #fbe8e6;
-  --radius: 14px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --radius-lg: 12px;
   --font-display: 'IBM Plex Serif', Georgia, serif;
   --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -409,11 +409,11 @@
 }
 
 .legacy-surface .btn-secondary {
-  border: 1px solid var(--teal);
-  color: var(--teal);
-  background: white;
-  padding: 8px 16px;
-  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--panel);
+  padding: 6px 12px;
+  border-radius: 10px;
   font-size: 13.5px;
   cursor: pointer;
   white-space: nowrap;
@@ -426,9 +426,9 @@
   border: none;
   background: var(--teal);
   color: white;
-  padding: 11px 22px;
-  border-radius: 999px;
-  font-size: 14.5px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 14px;
   cursor: pointer;
   align-self: flex-start;
 }

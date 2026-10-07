@@ -28,11 +28,11 @@ function _ss() {
 const KEY = 'medconsult_theme'
 
 export const ACCENT_PRESETS = [
-  { key: 'teal', label: 'Тил (по умолчанию)', main: '#0f6e5f', soft: '#e3f2ee', mainDark: '#5dcebb', softDark: '#14332d' },
-  { key: 'blue', label: 'Синий', main: '#1d5fa8', soft: '#e4edf7', mainDark: '#7eb0ea', softDark: '#15283d' },
-  { key: 'violet', label: 'Фиолетовый', main: '#6b4fa0', soft: '#ece5f5', mainDark: '#c4b0e4', softDark: '#261c36' },
-  { key: 'rose', label: 'Розовый', main: '#a8496b', soft: '#f5e5eb', mainDark: '#e7a3ba', softDark: '#3a1e28' },
-  { key: 'graphite', label: 'Графит', main: '#3d4750', soft: '#e8eaec', mainDark: '#c5ced4', softDark: '#1c242b' },
+  { key: 'teal', label: 'Тил (по умолчанию)', main: '#0f6e5f', soft: '#e3f2ee', mainDark: '#8fbfb4', softDark: '#24312e' },
+  { key: 'blue', label: 'Синий', main: '#1d5fa8', soft: '#e4edf7', mainDark: '#9eb4cc', softDark: '#1e2833' },
+  { key: 'violet', label: 'Фиолетовый', main: '#6b4fa0', soft: '#ece5f5', mainDark: '#b5a8c9', softDark: '#282230' },
+  { key: 'rose', label: 'Розовый', main: '#a8496b', soft: '#f5e5eb', mainDark: '#d4a8b6', softDark: '#322228' },
+  { key: 'graphite', label: 'Графит', main: '#3d4750', soft: '#e8eaec', mainDark: '#c4beb4', softDark: '#2a2723' },
 ]
 
 function getSaved() {

@@ -1,11 +1,11 @@
 .legacy-surface .settings-tabs button {
   border: 1px solid var(--line);
   background: var(--panel);
-  padding: 8px 16px;
-  border-radius: 999px;
+  padding: 6px 12px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 13.5px;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 .legacy-surface .settings-tabs button.active { background: var(--teal); border-color: var(--teal); color: white; }
 

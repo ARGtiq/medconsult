@@ -2,92 +2,89 @@ import { useState } from 'react'
 import PrintTemplatesTab from './PrintTemplatesTab'
 import Mkb10Page from './Mkb10Page'
 
-function startTab(initialTab) {
-  if (initialTab === 'studies' || initialTab === 'templates' || initialTab === 'packs') return 'blocks'
-  if (
-    initialTab === 'guidelines' ||
-    initialTab === 'schemes' ||
-    initialTab === 'drugs' ||
-    initialTab === 'groups' ||
-    initialTab === 'general'
-  ) {
-    return 'appointments'
-  }
-  return initialTab || 'mkb'
-}
+const GROUPS = [
+  {
+    id: 'visit',
+    label: 'Приём',
+    items: [
+      { id: 'blocks', label: 'Блоки' },
+      { id: 'global', label: 'Глобальные шаблоны' },
+    ],
+  },
+  {
+    id: 'refs',
+    label: 'Справочники',
+    items: [
+      { id: 'mkb', label: 'МКБ-10' },
+      { id: 'guidelines', label: 'Клинреки' },
+      { id: 'drugs', label: 'Лекарства' },
+      { id: 'recpacks', label: 'Пакеты рекомендаций' },
+      { id: 'general', label: 'Общие рекомендации' },
+    ],
+  },
+  {
+    id: 'service',
+    label: 'Сервис',
+    items: [{ id: 'print', label: 'Печать' }],
+  },
+]
 
-function AppointmentsHub({ initialTab, initialItemId, drugsContent, recPacksContent, guidelinesContent, generalRecsContent }) {
-  const [sub, setSub] = useState(
-    initialTab === 'schemes' || initialTab === 'packs'
-      ? 'packs'
-      : initialTab === 'drugs' || initialTab === 'groups'
-        ? 'drugs'
-        : initialTab === 'general'
-          ? 'general'
-          : 'guidelines',
-  )
-  const drugsProps = {
-    initialSub: initialTab === 'groups' ? 'groups' : 'drugs',
-    initialItemId: initialTab === 'drugs' ? initialItemId : null,
-  }
-  return (
-    <div>
-      <div className="settings-tabs">
-        <button type="button" className={sub === 'guidelines' ? 'active' : ''} onClick={() => setSub('guidelines')}>
-          Клинреки
-        </button>
-        <button type="button" className={sub === 'drugs' ? 'active' : ''} onClick={() => setSub('drugs')}>
-          Лекарства
-        </button>
-        <button type="button" className={sub === 'packs' ? 'active' : ''} onClick={() => setSub('packs')}>
-          Пакеты рекомендаций
-        </button>
-        <button type="button" className={sub === 'general' ? 'active' : ''} onClick={() => setSub('general')}>
-          Общие рекомендации
-        </button>
-      </div>
-      {sub === 'guidelines' && (guidelinesContent ? guidelinesContent({ initialItemId: initialTab === 'guidelines' ? initialItemId : null }) : <p className="empty-hint">Нет редактора клинреков.</p>)}
-      {sub === 'drugs' && (drugsContent ? drugsContent(drugsProps) : <p className="empty-hint">Нет редактора лекарств.</p>)}
-      {sub === 'packs' && (recPacksContent ? recPacksContent() : <p className="empty-hint">Нет редактора пакетов.</p>)}
-      {sub === 'general' && (generalRecsContent ? generalRecsContent() : <p className="empty-hint">Нет редактора общих рекомендаций.</p>)}
-    </div>
-  )
+function startTab(initialTab) {
+  if (initialTab === 'studies' || initialTab === 'templates' || initialTab === 'packs' || initialTab === 'questionnaires') return 'blocks'
+  if (initialTab === 'schemes') return 'recpacks'
+  if (initialTab === 'groups') return 'drugs'
+  if (initialTab === 'appointments') return 'guidelines'
+  return initialTab || 'mkb'
 }
 
 export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent, generalRecsContent }) {
   const [tab, setTab] = useState(startTab(initialTab))
+  const drugsProps = {
+    initialSub: initialTab === 'groups' ? 'groups' : 'drugs',
+    initialItemId: initialTab === 'drugs' ? initialItemId : null,
+  }
 
   return (
     <div className="guidelines-page">
       <h2 className="guidelines-title">Справочник</h2>
-      <p className="settings-note-inline">
-        Блоки, глобальные шаблоны, назначения, МКБ-10, печать.
-        Наборы — во вкладке «Блоки». Болезни — в анамнезе жизни.
-      </p>
-      <div className="settings-tabs">
-        <button type="button" className={tab === 'blocks' ? 'active' : ''} onClick={() => setTab('blocks')}>
-          Блоки
-        </button>
-        <button type="button" className={tab === 'global' ? 'active' : ''} onClick={() => setTab('global')}>
-          Глобальные
-        </button>
-        <button type="button" className={tab === 'appointments' ? 'active' : ''} onClick={() => setTab('appointments')}>
-          Назначения
-        </button>
-        <button type="button" className={tab === 'mkb' ? 'active' : ''} onClick={() => setTab('mkb')}>
-          МКБ-10
-        </button>
-        <button type="button" className={tab === 'print' ? 'active' : ''} onClick={() => setTab('print')}>
-          Печать
-        </button>
+      <div className="mt-3 grid items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+        <nav className="flex flex-col gap-3">
+          {GROUPS.map((group) => (
+            <div key={group.id}>
+              <div className="mb-1 px-2 text-xs text-ink-soft">{group.label}</div>
+              <div className="flex flex-col">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setTab(item.id)}
+                    className={`rounded-[10px] px-2 py-1.5 text-left text-sm ${
+                      tab === item.id ? 'bg-teal-soft font-medium text-teal' : 'text-ink hover:bg-surface'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <div className="min-w-0">
+          {tab === 'mkb' && <Mkb10Page />}
+          {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
+          {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
+          {tab === 'guidelines' &&
+            (guidelinesContent ? (
+              guidelinesContent({ initialItemId: initialTab === 'guidelines' ? initialItemId : null })
+            ) : (
+              <p className="empty-hint">Нет редактора клинреков.</p>
+            ))}
+          {tab === 'drugs' && (drugsContent ? drugsContent(drugsProps) : <p className="empty-hint">Нет редактора лекарств.</p>)}
+          {tab === 'recpacks' && (recPacksContent ? recPacksContent() : packsContent || <p className="empty-hint">Нет редактора пакетов.</p>)}
+          {tab === 'general' && (generalRecsContent ? generalRecsContent() : <p className="empty-hint">Нет редактора общих рекомендаций.</p>)}
+          {tab === 'print' && <PrintTemplatesTab />}
+        </div>
       </div>
-      {tab === 'mkb' && <Mkb10Page />}
-      {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
-      {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
-      {tab === 'appointments' && (
-        <AppointmentsHub initialTab={initialTab} initialItemId={initialItemId} drugsContent={drugsContent} recPacksContent={recPacksContent} guidelinesContent={guidelinesContent} generalRecsContent={generalRecsContent} />
-      )}
-      {tab === 'print' && <PrintTemplatesTab />}
     </div>
   )
 }

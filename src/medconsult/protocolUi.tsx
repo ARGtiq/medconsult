@@ -621,23 +621,41 @@ export function Sec({
   const spoiler = useAppStore((s) => s.settings.blocksAsSpoiler);
   if (hidden) return null;
   const shown = !spoiler || open;
+  const removeBtn = (
+    <button
+      type="button"
+      className="mc-quiet flex size-[18px] shrink-0 items-center justify-center rounded text-sm leading-none text-mute opacity-60 hover:bg-danger-soft hover:text-danger"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}
+      aria-label="Убрать блок"
+    >
+      ×
+    </button>
+  );
+  if (spoiler && !open) {
+    return (
+      <section className="group">
+        <div className="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-surface">
+          <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left">
+            <h4 className="truncate text-sm text-ink-soft">{title}</h4>
+            {badge ? <span className="rounded bg-teal-soft px-1.5 text-[11px] font-semibold text-teal">{badge}</span> : null}
+          </button>
+          {removeBtn}
+        </div>
+      </section>
+    );
+  }
   return (
     <section
-      className={`relative rounded-[10px] border bg-surface py-2 pr-8 pl-2.5 ${
-        open ? "border-teal/40 shadow-[0_0_0_3px_var(--color-teal-soft)]" : "border-line"
+      className={`group relative rounded-[10px] border bg-surface py-2.5 pr-3 pl-3 ${
+        spoiler && open ? "border-teal/40" : "border-line"
       }`}
     >
-      <button
-        type="button"
-        className="absolute top-1.5 right-1.5 flex size-[18px] items-center justify-center rounded bg-danger-soft text-xs font-bold text-danger"
-        onClick={onRemove}
-        aria-label="Убрать блок"
-      >
-        ×
-      </button>
-      <div className="flex items-center gap-2 pr-1">
+      <div className="flex items-center gap-2">
         <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <h4 className="text-sm font-medium">{title}</h4>
+          <h4 className="font-display text-base leading-tight font-semibold">{title}</h4>
           {badge && <span className="rounded bg-teal-soft px-1.5 text-[11px] font-semibold text-teal">{badge}</span>}
         </button>
         <span className="flex shrink-0 items-center gap-1">
@@ -650,14 +668,15 @@ export function Sec({
             <button
               type="button"
               onClick={ai}
-              className="rounded-md border border-ai-line bg-ai px-2 py-0.5 text-[11px] font-medium"
+              className="rounded-[10px] border border-ai-line bg-ai px-2 py-0.5 text-[11px] font-medium"
             >
               AI · причесать
             </button>
           )}
+          {removeBtn}
         </span>
       </div>
-      {shown && <div className="mc-rise mt-2">{children}</div>}
+      {shown && <div className="mc-rise mt-2 text-sm">{children}</div>}
     </section>
   );
 }

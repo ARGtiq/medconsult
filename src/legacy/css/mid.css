@@ -155,13 +155,10 @@
 .legacy-surface .theme-dark-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
 
 html.theme-dark .legacy-surface {
-  --ink: #e7edf1;
-  --ink-soft: #9fb0ba;
-  --paper: #121c24;
-  --panel: #1a2630;
-  --line: #2c3945;
-  --red-soft: #3a2323;
-  --amber-soft: #3a2f1c;
+  --red: #e3a0a0;
+  --red-soft: #3a2a28;
+  --amber: #d4b483;
+  --amber-soft: #3a3224;
 }
 
 html.theme-dark .legacy-surface .brand-mark { color: var(--teal); }

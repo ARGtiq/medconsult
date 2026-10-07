@@ -142,21 +142,31 @@
 }
 
 html.theme-dark {
-  --color-ink: #e7edf1;
-  --color-ink-soft: #b7c5ce;
-  --color-mute: #8ea0ab;
-  --color-paper: #0e171e;
-  --color-surface: #172430;
-  --color-line: #2c3c48;
-  --color-rail: #121c24;
-  --color-preview: #101920;
-  --color-danger: #e07a7a;
-  --color-danger-soft: #3a2424;
-  --color-ok: #7dcea0;
-  --color-ok-soft: #163024;
-  --color-warn: #2c2618;
-  --color-warn-line: #6a5830;
-  --color-ai: #15202a;
-  --color-ai-line: #314252;
+  --color-ink: #e6e1d6;
+  --color-ink-soft: #b3aa9c;
+  --color-mute: #8c8478;
+  --color-paper: #1c1916;
+  --color-surface: #26221c;
+  --color-line: #3a342c;
+  --color-rail: #141210;
+  --color-preview: #221e19;
+  --color-danger: #e3a0a0;
+  --color-danger-soft: #3a2a28;
+  --color-ok: #9cbfa4;
+  --color-ok-soft: #243028;
+  --color-warn: #2e281c;
+  --color-warn-line: #5c4e32;
+  --color-ai: #221f1a;
+  --color-ai-line: #3d3830;
   color-scheme: dark;
+}
+
+@media (hover: hover) {
+  .mc-quiet {
+    opacity: 0;
+  }
+  .group:hover .mc-quiet,
+  .mc-quiet:focus-visible {
+    opacity: 1;
+  }
 }
