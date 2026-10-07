@@ -13,6 +13,8 @@ export function ReferencePage() {
       <div className="legacy-surface min-h-[calc(100dvh-3rem)] bg-paper p-3 pb-24 md:p-6">
         <LegacyReference
           blocksContent={<TemplatesEditor layer="blocks" />}
+          questionnairesContent={<TemplatesEditor layer="questionnaires" />}
+          studiesContent={<TemplatesEditor layer="studies" />}
           packsContent={<TemplatesEditor layer="packs" />}
           globalContent={<TemplatesEditor layer="global" />}
           drugsContent={(props: { initialSub?: "drugs" | "groups"; initialItemId?: string | null }) => (

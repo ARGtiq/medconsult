@@ -109,7 +109,7 @@ export function TemplatesEditor({
   layer = "blocks",
   initialSection,
 }: {
-  layer?: "blocks" | "packs" | "global";
+  layer?: "blocks" | "packs" | "global" | "questionnaires" | "studies";
   initialSection?: BlockTab;
 }) {
   const [tab, setTab] = useState<BlockTab>(blockTab(initialSection));
@@ -134,7 +134,16 @@ export function TemplatesEditor({
     echo.current = false;
   }
 
-  const title = layer === "packs" ? "Наборы" : layer === "global" ? "Глобальные шаблоны" : "Блоки";
+  const title =
+    layer === "packs"
+      ? "Наборы"
+      : layer === "global"
+        ? "Глобальные шаблоны"
+        : layer === "questionnaires"
+          ? "Анкеты"
+          : layer === "studies"
+            ? "Исследования"
+            : "Блоки";
 
   return (
     <section className="mb-4 rounded-[10px] border border-line bg-surface p-3">
@@ -147,7 +156,12 @@ export function TemplatesEditor({
             resetTemplates();
             setData(seedTemplates());
           }}
-          hidden={layer === "global" || (layer === "blocks" && (tab === "studies" || tab === "vitae" || tab === "packs"))}
+          hidden={
+            layer === "global" ||
+            layer === "questionnaires" ||
+            layer === "studies" ||
+            (layer === "blocks" && (tab === "vitae" || tab === "packs"))
+          }
         >
           сбросить к заводским
         </button>
@@ -155,15 +169,14 @@ export function TemplatesEditor({
       {layer === "blocks" && (
         <>
           <p className="mb-2 text-xs text-ink-soft">
-            Жалобы, анамнез жизни и статусы — в спойлерах. Наборы блоков — отдельная вкладка здесь же.
+            Жалобы, анамнез жизни и статусы — в спойлерах. Наборы и виды блоков — вкладки здесь. Анкеты и исследования —
+            отдельные пункты слева.
           </p>
           <div className="mb-3 flex flex-wrap gap-1">
             {(
               [
-                ["vitae", "анамнез жизни"],
+                ["vitae", "блоки"],
                 ["packs", "наборы"],
-                ["questionnaires", "анкеты"],
-                ["studies", "исследования"],
                 ["docs", "виды блоков"],
               ] as const
             ).map(([id, label]) => (
@@ -213,16 +226,13 @@ export function TemplatesEditor({
               onChange={(visitPacks) => persist({ visitPacks })}
             />
           )}
-          {tab === "questionnaires" && (
-            <QuestionnaireEditor
-              items={data.questionnaires}
-              onChange={(questionnaires) => persist({ questionnaires })}
-            />
-          )}
           {tab === "docs" && <DocKindsEditor items={data.docKinds} onChange={(docKinds) => persist({ docKinds })} />}
-          {tab === "studies" && <StudiesTab />}
         </>
       )}
+      {layer === "questionnaires" && (
+        <QuestionnaireEditor items={data.questionnaires} onChange={(questionnaires) => persist({ questionnaires })} />
+      )}
+      {layer === "studies" && <StudiesTab />}
       {layer === "packs" && (
         <VisitPacksEditor
           packs={data.visitPacks}

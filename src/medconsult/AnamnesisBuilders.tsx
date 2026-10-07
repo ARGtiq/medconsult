@@ -20,7 +20,7 @@ import {
   type VitaeItem,
 } from "./anamnesisChips";
 import { useTemplates, addSurgeryPreset, type VitaePreset } from "./data/templates";
-import { diseaseHasBody, findDisease, rememberDisease, type Disease } from "./diseases";
+import { diseaseHasBody, diseaseKey, findDisease, listDiseases, rememberDisease, type Disease } from "./diseases";
 import { InfoDot, drugMarked } from "./DrugInfo";
 import { searchAllergy, searchDrugs } from "./live";
 import { useAppStore } from "./store";
@@ -277,6 +277,7 @@ function PresetPicker({
   yearAlways,
   onRemember,
   disease,
+  suggest,
 }: {
   presets: VitaePreset[];
   selected: VitaeItem[];
@@ -284,6 +285,8 @@ function PresetPicker({
   yearAlways?: boolean;
   onRemember?: (label: string) => void;
   disease?: boolean;
+  /** Подсказывать названия из базы, пока печатаешь. */
+  suggest?: boolean;
 }) {
   const [custom, setCustom] = useState("");
   const sorted = useMemo(
@@ -299,6 +302,35 @@ function PresetPicker({
     onChange(selected.map((s) => (s.id === id ? { ...s, date } : s)));
   }
   const customSelected = selected.filter((s) => !presets.some((p) => p.id === s.id));
+  const suggestions = useMemo(() => {
+    if (!suggest) return [];
+    const q = custom.trim().toLowerCase();
+    if (q.length < 1) return [];
+    const seen = new Set<string>();
+    const rows: { id: string; label: string }[] = [];
+    const add = (id: string, label: string) => {
+      const key = label.trim().toLowerCase();
+      if (!key || seen.has(key) || !key.includes(q)) return;
+      if (selected.some((s) => s.id === id || s.label.toLowerCase() === key)) return;
+      seen.add(key);
+      rows.push({ id, label: label.trim() });
+    };
+    presets.forEach((p) => add(p.id, p.label));
+    if (disease) listDiseases().forEach((d) => add(diseaseKey(d.name), d.name));
+    return rows.slice(0, 8);
+  }, [suggest, custom, presets, selected, disease]);
+  function addNamed(label: string, id?: string) {
+    const key = label.trim().toLowerCase();
+    if (!key) return;
+    const preset = presets.find((p) => p.id === id || p.label.toLowerCase() === key);
+    if (preset) {
+      if (!selected.some((s) => s.id === preset.id)) onChange([...selected, { id: preset.id, label: preset.label, date: "" }]);
+    } else if (!selected.some((s) => s.label.toLowerCase() === key)) {
+      onChange([...selected, { id: `c_${Date.now()}`, label: label.trim() }]);
+      onRemember?.(label.trim());
+    }
+    setCustom("");
+  }
   return (
     <div className="mt-1">
       <div className="flex flex-wrap gap-1">
@@ -371,21 +403,32 @@ function PresetPicker({
           </div>
         );
       })}
-      <div className="mt-1 flex gap-1">
-        <input
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && custom.trim()) {
-              e.preventDefault();
-              onChange([...selected, { id: `c_${Date.now()}`, label: custom.trim() }]);
-              onRemember?.(custom.trim());
-              setCustom("");
-            }
-          }}
-          placeholder="своё + Enter"
-          className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-xs"
-        />
+      <div className="mt-1">
+        {suggest ? (
+          <Typeahead
+            value={custom}
+            onChange={setCustom}
+            items={suggestions}
+            onPick={(it) => addNamed(it.label, it.id)}
+            onSubmitCustom={(raw) => addNamed(raw)}
+            placeholder="из базы или своё + Enter"
+            emptyHint={custom.trim() ? "Enter — добавить своё" : undefined}
+            inputClassName="w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
+          />
+        ) : (
+          <input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && custom.trim()) {
+                e.preventDefault();
+                addNamed(custom.trim());
+              }
+            }}
+            placeholder="своё + Enter"
+            className="min-w-0 w-full flex-1 rounded-md border border-line bg-paper px-2 py-1 text-xs"
+          />
+        )}
       </div>
     </div>
   );
@@ -1494,6 +1537,7 @@ export function AnamnesisVitae({
             patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" });
           }}
           disease
+          suggest
         />
       )}
       </VitaeSection>
@@ -1590,6 +1634,7 @@ export function AnamnesisVitae({
           selected={d.surgeryItems}
           onChange={(surgeryItems) => patch({ surgeryItems })}
           yearAlways
+          suggest
           onRemember={(label) => addSurgeryPreset(label)}
         />
       )}

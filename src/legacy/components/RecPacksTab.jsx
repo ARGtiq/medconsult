@@ -9,19 +9,6 @@ import { rxText } from '../lib/rx'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
-function packLineCount(p) {
-  const phases = p.subtypes?.length
-    ? p.subtypes.flatMap((s) => s.phases || [])
-    : p.phases?.length
-      ? p.phases
-      : [{ items: p.items || [] }]
-  const n = phases.reduce(
-    (sum, phase) => sum + (phase.items || []).filter((it) => String(it?.text || it?.name || '').trim()).length,
-    0,
-  )
-  return n || (p.items || []).length
-}
-
 function blankUnit() {
   return { name: '', items: [{ ...EMPTY_ITEM }] }
 }
@@ -298,22 +285,29 @@ export default function RecPacksTab() {
       <p className="settings-note-inline">
         Коды МКБ подсказываются из базы. Подтип — один вариант пакета, у каждого своё примечание. Фаза и пункт — одно и то же: строка в протоколе.
       </p>
-      <button type="button" className="btn-primary" onClick={() => setForm(toForm({ name: '', items: [] }))}>
+      <button type="button" className="text-xs font-medium text-teal" onClick={() => setForm(toForm({ name: '', items: [] }))}>
         + пакет
       </button>
-      <div className="drug-db-list">
+      <div className="mt-2 space-y-2">
         {items.length === 0 && <p className="empty-hint">Пока пусто.</p>}
         {groups.map((g) => (
           <div key={g.name}>
-            <div className="settings-note-inline">{g.name}</div>
-            {g.packs.map((p) => (
-              <button type="button" key={p.id} className="home-draft-item" onClick={() => setForm(toForm(p))}>
-                <strong>{p.name}</strong>
-                <span className="guideline-panel-text-muted">
-                  {(p.mkb10Codes || []).join(', ') || 'без МКБ'} · {packLineCount(p)} строк
-                </span>
-              </button>
-            ))}
+            <div className="mb-1 px-1 text-xs text-ink-soft">{g.name}</div>
+            <div className="space-y-1">
+              {g.packs.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => setForm(toForm(p))}
+                  className="flex w-full items-center gap-2 rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate">{p.name || 'без названия'}</span>
+                  <span className="shrink-0 text-xs text-mute">
+                    {(p.mkb10Codes || []).join(', ') || 'без МКБ'}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         ))}
       </div>

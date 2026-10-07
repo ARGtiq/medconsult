@@ -8,6 +8,8 @@ const GROUPS = [
     label: 'Приём',
     items: [
       { id: 'blocks', label: 'Блоки' },
+      { id: 'questionnaires', label: 'Анкеты' },
+      { id: 'studies', label: 'Исследования' },
       { id: 'global', label: 'Глобальные шаблоны' },
     ],
   },
@@ -30,14 +32,14 @@ const GROUPS = [
 ]
 
 function startTab(initialTab) {
-  if (initialTab === 'studies' || initialTab === 'templates' || initialTab === 'packs' || initialTab === 'questionnaires') return 'blocks'
+  if (initialTab === 'templates' || initialTab === 'packs') return 'blocks'
   if (initialTab === 'schemes') return 'recpacks'
   if (initialTab === 'groups') return 'drugs'
   if (initialTab === 'appointments') return 'guidelines'
   return initialTab || 'mkb'
 }
 
-export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent, generalRecsContent }) {
+export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent, generalRecsContent, questionnairesContent, studiesContent }) {
   const [tab, setTab] = useState(startTab(initialTab))
   const drugsProps = {
     initialSub: initialTab === 'groups' ? 'groups' : 'drugs',
@@ -72,6 +74,8 @@ export default function ReferencePage({ initialTab, initialItemId, blocksContent
         <div className="min-w-0">
           {tab === 'mkb' && <Mkb10Page />}
           {tab === 'blocks' && (blocksContent || <p className="empty-hint">Нет редактора блоков.</p>)}
+          {tab === 'questionnaires' && (questionnairesContent || <p className="empty-hint">Нет редактора анкет.</p>)}
+          {tab === 'studies' && (studiesContent || <p className="empty-hint">Нет редактора исследований.</p>)}
           {tab === 'global' && (globalContent || <p className="empty-hint">Нет редактора шаблонов.</p>)}
           {tab === 'guidelines' &&
             (guidelinesContent ? (
