@@ -4,7 +4,7 @@ import { explicitChips } from "@/legacy/lib/guidelineChips";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, ICD, complaintsForCode } from "./data/catalog";
 import { getComplaintPresets, getComplaintTemplates, complaintOptionSubs, complaintOptionText, type ComplaintTemplate } from "./data/templates";
-import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal } from "./data/studies";
+import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal, type RefWho } from "./data/studies";
 import type { StudyDef, StudyEntry, StudyField } from "./types";
 
 export const DRUG_FORMS = ["таб.", "капс.", "супп.", "р-р", "амп.", "мазь", "крем", "гель", "капли", "спрей", "порошок", "сироп", "сусп."];
@@ -466,11 +466,11 @@ function valueLooksFound(value: string): boolean {
   return true;
 }
 
-function indicatorHit(value: string, field: StudyField, all: Record<string, string>): boolean {
+function indicatorHit(value: string, field: StudyField, all: Record<string, string>, who?: RefWho | null): boolean {
   const v = value.trim();
   if (!v) return false;
-  const hasRef = !!(field.normal?.trim() || field.refOp);
-  if (hasRef) return fieldAbnormal(v, field.normal, field, all);
+  const hasRef = !!(field.normal?.trim() || field.refOp || field.refBands?.length);
+  if (hasRef) return fieldAbnormal(v, field.normal, field, all, who);
   return valueLooksFound(v);
 }
 
@@ -484,6 +484,7 @@ export type StudyDrugHint = {
 function triggerWhy(
   triggers: { studyKeys?: string[]; fieldKeys?: string[] }[] | undefined,
   entries: StudyEntry[],
+  who?: RefWho | null,
 ): string[] {
   const hits: string[] = [];
   for (const trigger of triggers || []) {
@@ -507,7 +508,7 @@ function triggerWhy(
 }
 
 /** Drug cards whose selected indicators came back positive on this visit. */
-export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
+export function studyDrugHints(entries: StudyEntry[], who?: RefWho | null): StudyDrugHint[] {
   let drugs: {
     name?: string;
     dosage?: string;
@@ -542,7 +543,7 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
         for (const field of def.fields || []) {
           if (!fieldKeys.has(field.key)) continue;
           const val = inst.fields?.[field.key] || "";
-          if (!indicatorHit(val, field, inst.fields || {})) continue;
+          if (!indicatorHit(val, field, inst.fields || {}, who)) continue;
           hits.push(`${def.label}: ${field.label} ${val.trim()}`);
         }
       }
@@ -580,9 +581,9 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
   }
   const lineOf = (raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; dose?: string } | string) => rxText(raw);
   for (const pack of packs) {
-    const packHits = triggerWhy(pack.studyTriggers, entries);
+    const packHits = triggerWhy(pack.studyTriggers, entries, who);
     for (const item of pack.items || []) {
-      const itemHits = triggerWhy(item.studyTriggers, entries);
+      const itemHits = triggerWhy(item.studyTriggers, entries, who);
       const why = [...packHits, ...itemHits];
       if (why.length) {
         const subs = (item.subs || []).map(lineOf).filter(Boolean);
@@ -591,7 +592,7 @@ export function studyDrugHints(entries: StudyEntry[]): StudyDrugHint[] {
         if (line) out.push({ id: `${pack.id}|${line}`, name: pack.name || head, line, why: why.join("; ") });
       }
       for (const sub of item.subs || []) {
-        const subHits = triggerWhy(sub.studyTriggers, entries);
+        const subHits = triggerWhy(sub.studyTriggers, entries, who);
         if (!subHits.length) continue;
         const line = lineOf(sub);
         if (!line) continue;

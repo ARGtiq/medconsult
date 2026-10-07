@@ -44,6 +44,18 @@ export type StudyField = {
   refMax?: number;
   refOf?: string;
   refOfMode?: "percent" | "value";
+  /** Какие оси референса включены: пол, возраст или обе. */
+  refBy?: ("sex" | "age")[];
+  /** Отдельные нормы. Пустая ось в строке — для всех. Если ни одна не подошла, остаётся общий референс. */
+  refBands?: {
+    sex?: "m" | "f";
+    ageMin?: number;
+    ageMax?: number;
+    refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
+    refMin?: number;
+    refMax?: number;
+    normal?: string;
+  }[];
 };
 
 export type StudyDef = {
@@ -109,6 +121,8 @@ export type Patient = {
   lastName: string;
   firstName: string;
   age: string;
+  /** м или ж. Нужен, если у исследования референс зависит от пола. */
+  sex?: "m" | "f";
   name?: string;
   dob?: string;
   /** Закреплён в списке записанных на приём. */

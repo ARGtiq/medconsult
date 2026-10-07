@@ -449,6 +449,106 @@ export function StudyFieldList(props) {
                         </div>
                       )}
 
+                      {showRef && (
+                        <div className="study-field-ref-row">
+                          <span className="study-field-ref-label">зависит</span>
+                          {['sex', 'age'].map((axis) => {
+                            const on = (f.refBy || []).includes(axis)
+                            return (
+                              <button
+                                type="button"
+                                key={axis}
+                                className={`study-field-opt${on ? ' is-ref' : ''}`}
+                                onClick={() => {
+                                  const refBy = on ? (f.refBy || []).filter((x) => x !== axis) : [...(f.refBy || []), axis]
+                                  const refBands = (f.refBands || []).length
+                                    ? f.refBands
+                                    : [{ sex: '', ageMin: '', ageMax: '', refOp: f.refOp || 'range', refMin: f.refMin || '', refMax: f.refMax || '', normal: '' }]
+                                  updateField(idx, { refBy, refBands })
+                                }}
+                              >
+                                {axis === 'sex' ? 'пол' : 'возраст'}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {showRef && ((f.refBy || []).includes('sex') || (f.refBy || []).includes('age')) && (
+                        <div className="study-field-groups">
+                          <p className="settings-note-inline">
+                            Строка — свой референс в этом же пункте. Пустой пол или возраст значит «для всех». Если пациент ни в одну строку не попал, остаётся сравнение выше.
+                          </p>
+                          {(f.refBands || []).map((b, bi) => {
+                            const patchBand = (patch) => {
+                              const refBands = (f.refBands || []).map((row, i) => (i === bi ? { ...row, ...patch } : row))
+                              updateField(idx, { refBands })
+                            }
+                            return (
+                              <div key={bi} className="study-field-ref-row">
+                                {(f.refBy || []).includes('sex') && (
+                                  <select value={b.sex || ''} onChange={(e) => patchBand({ sex: e.target.value })}>
+                                    <option value="">любой пол</option>
+                                    <option value="m">муж</option>
+                                    <option value="f">жен</option>
+                                  </select>
+                                )}
+                                {(f.refBy || []).includes('age') && (
+                                  <>
+                                    <input inputMode="decimal" placeholder="лет от" value={b.ageMin ?? ''} onChange={(e) => patchBand({ ageMin: e.target.value })} />
+                                    <input inputMode="decimal" placeholder="до" value={b.ageMax ?? ''} onChange={(e) => patchBand({ ageMax: e.target.value })} />
+                                  </>
+                                )}
+                                <select value={b.refOp || ''} onChange={(e) => patchBand({ refOp: e.target.value })}>
+                                  {REF_OPS.map((op) => (
+                                    <option key={op.value || 'none'} value={op.value}>{op.label}</option>
+                                  ))}
+                                </select>
+                                {b.refOp === 'range' ? (
+                                  <>
+                                    <input inputMode="decimal" placeholder="от" value={b.refMin ?? ''} onChange={(e) => patchBand({ refMin: e.target.value })} />
+                                    <input inputMode="decimal" placeholder="до" value={b.refMax ?? ''} onChange={(e) => patchBand({ refMax: e.target.value })} />
+                                  </>
+                                ) : b.refOp ? (
+                                  <input
+                                    inputMode="decimal"
+                                    placeholder="порог"
+                                    value={b.refOp === 'gt' || b.refOp === 'gte' || b.refOp === 'eq' ? (b.refMin ?? '') : (b.refMax ?? '')}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      if (b.refOp === 'gt' || b.refOp === 'gte' || b.refOp === 'eq') patchBand({ refMin: v })
+                                      else patchBand({ refMax: v })
+                                    }}
+                                  />
+                                ) : null}
+                                <input placeholder="подпись нормы" value={b.normal || ''} onChange={(e) => patchBand({ normal: e.target.value })} />
+                                <button
+                                  type="button"
+                                  className="remove-btn"
+                                  title="Убрать строку"
+                                  onClick={() => updateField(idx, { refBands: (f.refBands || []).filter((_, i) => i !== bi) })}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            )
+                          })}
+                          <button
+                            type="button"
+                            className="btn-secondary btn-small"
+                            onClick={() =>
+                              updateField(idx, {
+                                refBands: [
+                                  ...(f.refBands || []),
+                                  { sex: '', ageMin: '', ageMax: '', refOp: 'range', refMin: '', refMax: '', normal: '' },
+                                ],
+                              })
+                            }
+                          >
+                            + строка
+                          </button>
+                        </div>
+                      )}
+
                       <input
                         className="study-field-normal"
                         placeholder={

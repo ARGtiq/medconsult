@@ -579,17 +579,66 @@ export function referenceInsertValue(f: StudyField): string {
   return normal;
 }
 
-export function formatRefHint(f: { refOp?: string; refMin?: number; refMax?: number; refOf?: string; refOfMode?: string; normal?: string }): string {
-  if (f.normal && String(f.normal).trim()) return String(f.normal).trim();
-  if (!f.refOp) return "";
-  const pct = f.refOf && f.refOfMode !== "value";
-  if (f.refOp === "range" && f.refMin != null && f.refMax != null) {
-    return pct ? `${f.refMin}–${f.refMax}%` : `${f.refMin}–${f.refMax}`;
+export type RefWho = { age?: number | null; sex?: "m" | "f" | "" };
+
+export function patientRefWho(p?: { age?: string; sex?: string } | null): RefWho {
+  const age = parseNumLoose(String(p?.age || ""));
+  const sex = p?.sex === "m" || p?.sex === "f" ? p.sex : "";
+  return { age, sex };
+}
+
+/** Полоса пола/возраста, если включена и пациент в неё попал. Иначе общий референс поля. */
+export function activeRef<T extends StudyField>(field: T, who?: RefWho | null): T {
+  const axes = field.refBy || [];
+  const bands = field.refBands || [];
+  if (!who || !axes.length || !bands.length) return field;
+  let best: (typeof bands)[number] | null = null;
+  let score = -1;
+  for (const band of bands) {
+    if (axes.includes("sex")) {
+      if (band.sex && who.sex && band.sex !== who.sex) continue;
+      if (band.sex && !who.sex) continue;
+    }
+    if (axes.includes("age")) {
+      const bounded = band.ageMin != null || band.ageMax != null;
+      if (bounded && who.age == null) continue;
+      if (who.age != null && band.ageMin != null && who.age < band.ageMin) continue;
+      if (who.age != null && band.ageMax != null && who.age > band.ageMax) continue;
+    }
+    let s = 0;
+    if (band.sex) s += 2;
+    if (band.ageMin != null || band.ageMax != null) s += 1;
+    if (s > score) {
+      best = band;
+      score = s;
+    }
+  }
+  if (!best) return field;
+  const own = !!(best.refOp || (best.normal || "").trim());
+  return {
+    ...field,
+    refOp: best.refOp || (own ? undefined : field.refOp),
+    refMin: best.refMin ?? (best.refOp ? undefined : field.refMin),
+    refMax: best.refMax ?? (best.refOp ? undefined : field.refMax),
+    normal: (best.normal || "").trim() || field.normal,
+  };
+}
+
+export function formatRefHint(
+  f: { refOp?: string; refMin?: number; refMax?: number; refOf?: string; refOfMode?: string; normal?: string; refBy?: StudyField["refBy"]; refBands?: StudyField["refBands"] },
+  who?: RefWho | null,
+): string {
+  const src = who ? activeRef(f as StudyField, who) : f;
+  if (src.normal && String(src.normal).trim()) return String(src.normal).trim();
+  if (!src.refOp) return "";
+  const pct = src.refOf && src.refOfMode !== "value";
+  if (src.refOp === "range" && src.refMin != null && src.refMax != null) {
+    return pct ? `${src.refMin}–${src.refMax}%` : `${src.refMin}–${src.refMax}`;
   }
   const op: Record<string, string> = { lt: "<", lte: "≤", gt: ">", gte: "≥", eq: "=" };
-  const n = f.refOp === "gt" || f.refOp === "gte" || f.refOp === "eq" ? (f.refMin ?? f.refMax) : (f.refMax ?? f.refMin);
+  const n = src.refOp === "gt" || src.refOp === "gte" || src.refOp === "eq" ? (src.refMin ?? src.refMax) : (src.refMax ?? src.refMin);
   if (n == null) return "";
-  return `${op[f.refOp] || ""}${n}${pct ? "%" : ""}`;
+  return `${op[src.refOp] || ""}${n}${pct ? "%" : ""}`;
 }
 
 export function relativeShare(value: string, ofValue: string): number | null {
@@ -667,29 +716,31 @@ export function fieldAbnormal(
   normal?: string,
   field?: StudyField,
   all?: Record<string, string>,
+  who?: RefWho | null,
 ): boolean {
   const v = (value || "").trim();
   if (!v) return false;
+  const src = field && who ? activeRef(field, who) : field;
   const num = parseNumLoose(v);
 
-  if (field?.refOp && num != null) {
+  if (src?.refOp && num != null) {
     let compared = num;
-    if (field.refOf && all) {
-      const of = parseNumLoose(all[field.refOf] || "");
-      if (of != null && of !== 0 && field.refOfMode !== "value") {
+    if (src.refOf && all) {
+      const of = parseNumLoose(all[src.refOf] || "");
+      if (of != null && of !== 0 && src.refOfMode !== "value") {
         compared = (num / of) * 100;
-      } else if (of == null && field.refOfMode !== "value") {
+      } else if (of == null && src.refOfMode !== "value") {
         /* fall through to string normal */
-      } else if (of != null && field.refOfMode === "value") {
+      } else if (of != null && src.refOfMode === "value") {
         compared = num;
       }
     }
-    const ofMissing = !!(field.refOf && field.refOfMode !== "value" && parseNumLoose(all?.[field.refOf] || "") == null);
+    const ofMissing = !!(src.refOf && src.refOfMode !== "value" && parseNumLoose(all?.[src.refOf] || "") == null);
     if (ofMissing) return false;
-    return isAbnormalVsRef(compared, field.refOp, field.refMin, field.refMax);
+    return isAbnormalVsRef(compared, src.refOp, src.refMin, src.refMax);
   }
 
-  const nrm = (normal || field?.normal || "").trim();
+  const nrm = ((who ? src?.normal : "") || normal || src?.normal || "").trim();
   if (!nrm) return false;
 
   const range = nrm.match(/(\d+(?:[.,]\d+)?)\s*[–\-]\s*(\d+(?:[.,]\d+)?)/);
@@ -723,7 +774,7 @@ export function fieldAbnormal(
   }
 
   if (field && (field.kind === "select" || field.kind === "multi" || field.kind === "text" || field.kind === "groups")) {
-    const nrmQ = (normal || field.normal || "").trim();
+    const nrmQ = ((who ? src?.normal : "") || normal || field.normal || "").trim();
     const numericHint = field.kind === "text" && num != null && /\d/.test(nrmQ);
     if (nrmQ && nrmQ.length <= 80 && !/^[~≈]/.test(nrmQ) && !numericHint) {
       const accepted = nrmQ
@@ -840,6 +891,7 @@ export function buildAddedInstance(
 export function collectDeviations(
   studies: { key: string; instances: { date?: string; fields: Record<string, string> }[] }[],
   lookup: (key: string) => StudyDef | null | undefined,
+  who?: RefWho | null,
 ): Deviation[] {
   const out: Deviation[] = [];
   for (const entry of studies || []) {
@@ -873,7 +925,7 @@ export function collectDeviations(
         if (f.kind === "heading") continue;
         const val = (fields[f.key] || "").trim();
         if (!val || !fieldShown(f, fields)) continue;
-        const abnormal = fieldAbnormal(val, f.normal, f, fields);
+        const abnormal = fieldAbnormal(val, f.normal, f, fields, who);
         const child = !!f.showIf?.field;
         if (!abnormal && !child) continue;
         out.push({
@@ -881,7 +933,7 @@ export function collectDeviations(
           studyKey: entry.key,
           label: f.label,
           value: f.unit ? `${val} ${f.unit}` : val,
-          normal: abnormal ? f.normal || "" : "",
+          normal: abnormal ? formatRefHint(f, who) : "",
           date,
           depth: fieldDepth(f, byKey),
         });
@@ -954,12 +1006,13 @@ function filledFieldBit(
   fields: Record<string, string>,
   prevFields?: Record<string, string>,
   prevDate?: string,
+  who?: RefWho | null,
 ): { label: string; shown: string } | null {
   const v = (fields[f.key] || "").trim();
   if (!v) return null;
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const bad = fieldAbnormal(v, f.normal, f, fields);
+  const bad = fieldAbnormal(v, f.normal, f, fields, who);
   const value = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
   const shown = fieldShownText(f, value);
   return { label: f.showHeading === false ? "" : f.label, shown };
@@ -973,6 +1026,7 @@ function studyAutoTag(
   prevFields: Record<string, string> | undefined,
   omit: Set<string>,
   prevDate?: string,
+  who?: RefWho | null,
 ): string | null {
   if (def.fields.some((f) => f.kind !== "heading" && f.key === tag)) return null;
   if (tag === "name") return def.label;
@@ -983,8 +1037,8 @@ function studyAutoTag(
     if (omit.has(f.key) || !fieldShown(f, fields)) continue;
     const v = (fields[f.key] || "").trim();
     if (!v) continue;
-    if (tag === "abnormal" && !fieldAbnormal(v, f.normal, f, fields)) continue;
-    const bit = filledFieldBit(f, fields, prevFields, prevDate);
+    if (tag === "abnormal" && !fieldAbnormal(v, f.normal, f, fields, who)) continue;
+    const bit = filledFieldBit(f, fields, prevFields, prevDate, who);
     if (bit) bits.push(bit);
   }
   const line = (b: { label: string; shown: string }) => (b.label ? `${b.label} - ${b.shown}` : b.shown);
@@ -1020,6 +1074,7 @@ export function fillStudyTemplate(
   def: StudyDef,
   instance: { date: string; fields: Record<string, string>; omit?: string[]; extras?: { name?: string; value?: string }[] },
   previous?: StudyInstance,
+  who?: RefWho | null,
 ) {
   const seeded = applyConditionalDefaults(def, instance.fields);
   const fields = applyComputed(def, seeded);
@@ -1083,7 +1138,7 @@ export function fillStudyTemplate(
       const unit = f.unit ? ` ${f.unit}` : "";
       const cur = `${v}${unit}`.trim();
       const prev = p ? `${p}${unit}`.trim() : "";
-      const bad = fieldAbnormal(v, f.normal, f, fields);
+      const bad = fieldAbnormal(v, f.normal, f, fields, who);
       const shown = markDeviant(cur, prev, prevDate, bad);
       const text = fieldShownText(f, shown);
       const label = f.showHeading === false ? "" : f.label;
@@ -1097,13 +1152,13 @@ export function fillStudyTemplate(
   for (const f of def.fields) {
     const named = `{+${f.key}}`;
     if (!text.includes(named)) continue;
-    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit, prevDate));
+    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit, prevDate, who));
   }
   for (const f of def.fields) {
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
-    const bad = !!v && fieldAbnormal(v, f.normal, f, fields);
+    const bad = !!v && fieldAbnormal(v, f.normal, f, fields, who);
     const valueBit = markDeviant(v, p, prevDate, bad);
     const replacement =
       f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
@@ -1113,7 +1168,7 @@ export function fillStudyTemplate(
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {
     if (!text.includes(`{${tag}}`)) continue;
-    const value = studyAutoTag(tag, def, fields, prevFields, omit, prevDate);
+    const value = studyAutoTag(tag, def, fields, prevFields, omit, prevDate, who);
     if (value == null) continue;
     text = text.replaceAll(`{${tag}}`, value);
   }
@@ -1148,13 +1203,14 @@ function namedFieldText(
   prevFields: Record<string, string> | undefined,
   omit: Set<string>,
   prevDate?: string,
+  who?: RefWho | null,
 ): string {
   if (f.kind === "heading" || omit.has(f.key) || !fieldShown(f, fields)) return "";
   const v = (fields[f.key] || "").trim();
   if (!v) return "";
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const bad = fieldAbnormal(v, f.normal, f, fields);
+  const bad = fieldAbnormal(v, f.normal, f, fields, who);
   const shown = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
   if (f.before || f.after || f.phrase) return fieldShownText(f, shown);
   if (f.showHeading === false) return shown;

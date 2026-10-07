@@ -4,6 +4,7 @@ import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
 import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, parseDrugLine, searchDrugs, studyDrugHints, variantsOf } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
+import { patientRefWho } from "./data/studies";
 import { useAppStore } from "./store";
 import type { SessionState } from "./types";
 
@@ -16,7 +17,8 @@ export function StudyDrugHints({
   selected: string[];
   onAdd: (line: string) => void;
 }) {
-  const hints = useMemo(() => studyDrugHints(studies), [studies]);
+  const patient = useAppStore((s) => s.patients.find((p) => p.id === s.session.patientId));
+  const hints = useMemo(() => studyDrugHints(studies, patientRefWho(patient)), [studies, patient]);
   const visible = hints.filter((h) => !selected.some((s) => s === h.line || s.toLowerCase().startsWith(h.name.toLowerCase())));
   if (!visible.length) return null;
   return (

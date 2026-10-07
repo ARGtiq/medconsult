@@ -30,7 +30,7 @@ import {
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
-import { collectDeviations } from "./data/studies";
+import { collectDeviations, patientRefWho } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
@@ -301,8 +301,8 @@ export function ProtocolPage() {
     [session, patient, settings.studyDeviations],
   );
   const deviationCount = useMemo(
-    () => (settings.studyDeviations === false ? 0 : collectDeviations(session.studies, getStudyLive).length),
-    [session.studies, settings.studyDeviations, templates.questionnaires],
+    () => (settings.studyDeviations === false ? 0 : collectDeviations(session.studies, getStudyLive, patientRefWho(patient)).length),
+    [session.studies, settings.studyDeviations, templates.questionnaires, patient],
   );
   const header = useMemo(() => composeHeader(session, patient), [session, patient]);
   const diagnosisText = [session.diagnosisCode, session.diagnosisTitle].filter(Boolean).join(" ");

@@ -1,5 +1,5 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
-import { fillStudyTemplate, collectDeviations, formatDeviations } from "./data/studies";
+import { fillStudyTemplate, collectDeviations, formatDeviations, patientRefWho } from "./data/studies";
 import { formatLocalStatus, getLocalPacks, localStatusLines, protocolBlockOrder } from "./data/templates";
 import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
@@ -85,6 +85,7 @@ export function composeBlocks(
     const title = obj && loc ? "Объективный + локальный статус" : obj ? "Объективный статус" : "Локальный статус";
     push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join("\n"));
   };
+  const who = patientRefWho(_patient);
   const emitStudies = () => {
     const studyParts = (session.studies || [])
       .map((entry) => {
@@ -93,14 +94,14 @@ export function composeBlocks(
         if (!def) return "";
         return entry.instances
           .map((inst, idx) =>
-            fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]),
+            fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1], who),
           )
           .join(" ");
       })
       .filter(Boolean);
     if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));
     if (opts?.deviations) {
-      const dev = collectDeviations(session.studies || [], getStudyLive);
+      const dev = collectDeviations(session.studies || [], getStudyLive, who);
       const text = formatDeviations(dev);
       if (text) push("deviations", "Отклонения", `${text}.`);
     }

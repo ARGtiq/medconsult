@@ -10,6 +10,7 @@ import {
   fillStudyTemplate,
   formatRefHint,
   groupDeviations,
+  patientRefWho,
   referenceInsertValue,
   relativeShare,
   STUDY_GROUP_LABEL,
@@ -258,7 +259,11 @@ function QuestionnaireControls({
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
   const def = getStudyLive(studyKey);
-  const { session, settings, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
+  const { session, settings, patients, updatePatient, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
+  const patient = patients.find((p) => p.id === session.patientId);
+  const who = patientRefWho(patient);
+  const needsSex = !!def?.fields.some((f) => f.refBy?.includes("sex"));
+  const needsAge = !!def?.fields.some((f) => f.refBy?.includes("age"));
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
@@ -281,7 +286,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   };
   const asText = () => {
     const text = entry.instances
-      .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1]))
+      .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1], who))
       .filter(Boolean)
       .join("\n");
     patchStudy({ textMode: true, text: text || entry.text || "" });
@@ -326,6 +331,30 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       ) : null}
       {open && !entry.textMode && (
         <div className="mt-2 space-y-2">
+          {(needsSex || needsAge) && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
+              <span>референс</span>
+              {needsSex &&
+                ([
+                  ["m", "муж"],
+                  ["f", "жен"],
+                ] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={!patient}
+                    title={patient ? "Пол для норм этого исследования" : "Сначала выбери пациента"}
+                    className={`rounded-full px-2 py-0.5 ${
+                      patient?.sex === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+                    }`}
+                    onClick={() => patient && updatePatient(patient.id, { sex: patient.sex === id ? undefined : id })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              {needsAge && <span>возраст {patient?.age || "—"}</span>}
+            </div>
+          )}
           {def.category === "questionnaire" ? (
             <>
               <QuestionnaireControls studyKey={studyKey} def={def} entry={entry} />
@@ -376,7 +405,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields));
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
-                  const bad = fieldAbnormal(value, f.normal, f, fields);
+                  const bad = fieldAbnormal(value, f.normal, f, fields, who);
                   const omitted = (inst.omit || []).includes(f.key);
                   const pickable = !f.computed;
                   const wide = f.long || f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
@@ -384,7 +413,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                     f.refOf && f.refOfMode !== "value" && !f.computed
                       ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")
                       : null;
-                  const hint = formatRefHint(f);
+                  const hint = formatRefHint(f, who);
                   const insert = f.computed ? "" : referenceInsertValue(f);
                   const foldId = `${inst.id}:${f.key}`;
                   const isFolded = !!folded[foldId];
@@ -739,11 +768,11 @@ export function PlusStudyButton() {
 }
 
 export function DeviationsSpoiler() {
-  const { session, settings } = useAppStore();
+  const { session, settings, patients } = useAppStore();
   const templates = useTemplates();
   const list = useMemo(
-    () => collectDeviations(session.studies, getStudyLive),
-    [session.studies, templates.questionnaires],
+    () => collectDeviations(session.studies, getStudyLive, patientRefWho(patients.find((p) => p.id === session.patientId))),
+    [session.studies, session.patientId, patients, templates.questionnaires],
   );
   const groups = useMemo(() => groupDeviations(list), [list]);
   const [open, setOpen] = useState(false);

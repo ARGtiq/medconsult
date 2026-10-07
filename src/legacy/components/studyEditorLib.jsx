@@ -52,6 +52,8 @@ export function blankField() {
     refMax: '',
     refOf: '',
     refOfMode: 'percent',
+    refBy: [],
+    refBands: [],
   }
 }
 
@@ -205,6 +207,18 @@ export function toEditorField(f) {
     refMax: f.refMax ?? '',
     refOf: f.refOf || '',
     refOfMode: f.refOfMode || 'percent',
+    refBy: Array.isArray(f.refBy) ? f.refBy.filter((x) => x === 'sex' || x === 'age') : [],
+    refBands: Array.isArray(f.refBands)
+      ? f.refBands.map((b) => ({
+          sex: b.sex === 'm' || b.sex === 'f' ? b.sex : '',
+          ageMin: b.ageMin ?? '',
+          ageMax: b.ageMax ?? '',
+          refOp: b.refOp || '',
+          refMin: b.refMin ?? '',
+          refMax: b.refMax ?? '',
+          normal: b.normal || '',
+        }))
+      : [],
   }
 }
 
@@ -301,6 +315,35 @@ export function serializeField(f) {
     ? [before, '{value}', after].filter(Boolean).join(' ')
     : (f.phrase || '').trim()
   if (phrase) out.phrase = phrase
+  const axes = (Array.isArray(f.refBy) ? f.refBy : []).filter((x) => x === 'sex' || x === 'age')
+  if (axes.length && Array.isArray(f.refBands)) {
+    const bands = f.refBands
+      .map((b) => {
+        const band = {}
+        if (axes.includes('sex') && (b.sex === 'm' || b.sex === 'f')) band.sex = b.sex
+        if (axes.includes('age')) {
+          const from = parseNum(b.ageMin)
+          const to = parseNum(b.ageMax)
+          if (from != null) band.ageMin = from
+          if (to != null) band.ageMax = to
+        }
+        if (b.refOp) {
+          band.refOp = b.refOp
+          const min = parseNum(b.refMin)
+          const max = parseNum(b.refMax)
+          if (min != null) band.refMin = min
+          if (max != null) band.refMax = max
+        }
+        const note = String(b.normal || '').trim()
+        if (note) band.normal = note
+        return band.sex || band.ageMin != null || band.ageMax != null || band.refOp || band.normal ? band : null
+      })
+      .filter(Boolean)
+    if (bands.length) {
+      out.refBy = axes
+      out.refBands = bands
+    }
+  }
   if (f.showIf?.field) {
     const values = (f.showIf.values || []).map((s) => String(s).trim()).filter(Boolean)
     const op = f.showIf.op || ''
@@ -381,6 +424,8 @@ export function fieldBrief(f) {
     const rule = describeShow(f.showIf)
     bits.push(rule ? `если ${rule}` : `если ${f.showIf.field}`)
   }
+  if ((f.refBy || []).includes('sex')) bits.push('пол')
+  if ((f.refBy || []).includes('age')) bits.push('возраст')
   const normal = String(f.normal || '').trim()
   if (normal) bits.push(normal.length > 48 ? `${normal.slice(0, 48)}…` : normal)
   return bits.join(' · ')
