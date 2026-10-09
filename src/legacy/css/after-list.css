@@ -56,6 +56,56 @@
 .legacy-surface .drug-db-card-name { cursor: pointer; }
 .legacy-surface .drug-db-card-name:hover { text-decoration: underline; color: var(--teal); }
 .legacy-surface .drug-form-actions { display: flex; gap: 8px; }
+
+.legacy-surface .drug-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+.legacy-surface .drug-quick-hint { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.legacy-surface .drug-quick-hint.is-bad { color: var(--danger, #9a3b32); }
+.legacy-surface .drug-quick-input,
+.legacy-surface .drug-quick-raw {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.legacy-surface .drug-quick-rows { display: flex; flex-direction: column; gap: 6px; }
+.legacy-surface .drug-quick-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.legacy-surface .drug-quick-punct { color: var(--ink-soft); }
+.legacy-surface .drug-quick-bit { border-radius: 6px; }
+.legacy-surface .drug-quick-bit input {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  padding: 2px 6px;
+  min-width: 3ch;
+  border-radius: 6px;
+}
+.legacy-surface .drug-quick-bit.name { background: var(--teal-soft); color: var(--teal); }
+.legacy-surface .drug-quick-bit.dose { background: color-mix(in srgb, var(--teal) 18%, var(--paper)); }
+.legacy-surface .drug-quick-bit.freq { background: color-mix(in srgb, #c4a15a 28%, var(--paper)); }
+.legacy-surface .drug-quick-bit.days { background: color-mix(in srgb, #6a8f72 28%, var(--paper)); }
+.legacy-surface .drug-quick-bit.note { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); color: var(--ink-soft); }
+.legacy-surface .drug-quick-exists { font-size: 11px; color: var(--ink-soft); }
+
 .legacy-surface .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
 .legacy-surface .drug-db-line-highlight { color: var(--teal); font-weight: 500; }
 .legacy-surface .drug-db-extra { font-size: 11px; line-height: 1.35; color: var(--ink-soft); margin-top: 3px; font-weight: 400; }

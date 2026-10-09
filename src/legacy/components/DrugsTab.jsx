@@ -240,6 +240,181 @@ function regimensFromDrug(d) {
   return [blankRegimen()]
 }
 
+/** "название" дозировка - кратность, дни (примечание). Кавычки у названия необязательны. */
+export function parseQuickDrug(raw) {
+  let body = String(raw || '').trim()
+  if (!body) return null
+  let note = ''
+  const noteMatch = body.match(/^(.*)\(([^)]*)\)\s*$/)
+  if (noteMatch) {
+    note = noteMatch[2].trim()
+    body = noteMatch[1].trim()
+  }
+  const split = body.split(/\s+[—–-]\s+/)
+  if (split.length < 2) return null
+  const left = split[0].trim()
+  const right = split.slice(1).join(' - ').trim()
+  if (!left || !right) return null
+  let name = left
+  let dosage = ''
+  const quoted = left.match(/^[«"]([^»"]+)[»"]\s*(.*)$/)
+  if (quoted) {
+    name = quoted[1].trim()
+    dosage = quoted[2].trim()
+  } else {
+    const digit = left.search(/\d/)
+    if (digit > 0) {
+      name = left.slice(0, digit).trim()
+      dosage = left.slice(digit).trim()
+    }
+  }
+  name = name.replace(/^["«]+|["»]+$/g, '').trim()
+  if (!name) return null
+  const comma = right.match(/^(.*?),\s*(.*)$/)
+  const frequency = (comma ? comma[1] : right).trim()
+  const duration = comma ? comma[2].trim() : ''
+  return { name, dosage, frequency, duration, note }
+}
+
+function composeQuickDrug(p) {
+  const name = `«${(p.name || '').trim()}»`
+  const dose = (p.dosage || '').trim()
+  const freq = (p.frequency || '').trim()
+  const days = (p.duration || '').trim()
+  const note = (p.note || '').trim()
+  return [name, dose].filter(Boolean).join(' ') + (freq ? ` - ${freq}` : '') + (days ? `, ${days}` : '') + (note ? ` (${note})` : '')
+}
+
+function QuickDrugAdd({ onSave, onClose, known }) {
+  const [raw, setRaw] = useState('')
+  const [rows, setRows] = useState(null)
+  const [hint, setHint] = useState('')
+
+  function apply(text) {
+    const lines = String(text || '')
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (!lines.length) return
+    const next = lines.map((line) => {
+      const parsed = parseQuickDrug(line)
+      return parsed ? { ...parsed, ok: true } : { raw: line, ok: false }
+    })
+    if (!next.some((r) => r.ok)) {
+      setRaw(text)
+      setHint('Не разобрал. Формат: «название» дозировка - кратность, дни (примечание)')
+      return
+    }
+    setHint('')
+    setRows(next)
+  }
+
+  function patchRow(i, patch) {
+    setRows((list) => list.map((row, idx) => (idx === i ? { ...row, ...patch, ok: true } : row)))
+  }
+
+  function save() {
+    const ready = (rows || []).filter((r) => r.ok && String(r.name || '').trim())
+    if (!ready.length) return
+    onSave(ready)
+  }
+
+  return (
+    <div className="drug-quick">
+      <p className="drug-quick-hint">
+        Одна строка: «название» дозировка - кратность, дни (примечание). После вставки части подсвечиваются — поправь, что нужно.
+      </p>
+      {rows ? (
+        <div className="drug-quick-rows">
+          {rows.map((row, i) =>
+            row.ok ? (
+              <div key={i} className="drug-quick-line">
+                <span className="drug-quick-punct">«</span>
+                <span className="drug-quick-bit name">
+                  <input value={row.name} aria-label="название" onChange={(e) => patchRow(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
+                </span>
+                <span className="drug-quick-punct">»</span>
+                <span className="drug-quick-bit dose">
+                  <input value={row.dosage} aria-label="дозировка" placeholder="доза" onChange={(e) => patchRow(i, { dosage: e.target.value })} size={Math.max(String(row.dosage || '').length, 4)} />
+                </span>
+                <span className="drug-quick-punct">-</span>
+                <span className="drug-quick-bit freq">
+                  <input value={row.frequency} aria-label="кратность" placeholder="кратность" onChange={(e) => patchRow(i, { frequency: e.target.value })} size={Math.max(String(row.frequency || '').length, 6)} />
+                </span>
+                <span className="drug-quick-punct">,</span>
+                <span className="drug-quick-bit days">
+                  <input value={row.duration} aria-label="дни" placeholder="дни" onChange={(e) => patchRow(i, { duration: e.target.value })} size={Math.max(String(row.duration || '').length, 4)} />
+                </span>
+                <span className="drug-quick-punct">(</span>
+                <span className="drug-quick-bit note">
+                  <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchRow(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
+                </span>
+                <span className="drug-quick-punct">)</span>
+                {known(row.name) ? <span className="drug-quick-exists">уже есть — добавится схема</span> : null}
+              </div>
+            ) : (
+              <input
+                key={i}
+                className="drug-quick-raw"
+                value={row.raw}
+                onChange={(e) => {
+                  const parsed = parseQuickDrug(e.target.value)
+                  setRows((list) => list.map((r, idx) => (idx === i ? (parsed ? { ...parsed, ok: true } : { raw: e.target.value, ok: false }) : r)))
+                }}
+              />
+            ),
+          )}
+        </div>
+      ) : (
+        <textarea
+          autoFocus
+          className="drug-quick-input"
+          rows={2}
+          placeholder={'«тамсулозин» 0,4 мг - 1 раз в сутки, 30 дней (после еды)'}
+          value={raw}
+          onChange={(e) => {
+            setRaw(e.target.value)
+            setHint('')
+          }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text')
+            if (!text.trim()) return
+            e.preventDefault()
+            apply(text)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              apply(raw)
+            }
+          }}
+        />
+      )}
+      {hint ? <p className="drug-quick-hint is-bad">{hint}</p> : null}
+      <div className="drug-form-actions">
+        <button type="button" className="btn-primary" disabled={!rows?.some((r) => r.ok && r.name.trim())} onClick={save}>
+          добавить
+        </button>
+        {rows ? (
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setRaw((rows || []).map((r) => (r.ok ? composeQuickDrug(r) : r.raw)).join('\n'))
+              setRows(null)
+            }}
+          >
+            править строкой
+          </button>
+        ) : null}
+        <button type="button" className="btn-secondary" onClick={onClose}>
+          закрыть
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
   const [form, setForm] = useState(() => {
@@ -268,6 +443,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [shortening, setShortening] = useState(null)
   const [filterGroup, setFilterGroup] = useState('')
   const [filterMkb, setFilterMkb] = useState('')
+  const [quickOpen, setQuickOpen] = useState(false)
 
   async function runShorten(field) {
     setShortening(field)
@@ -353,6 +529,59 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     }
   }
 
+  function saveQuick(rows) {
+    const added = []
+    const extended = []
+    rows.forEach((row) => {
+      const name = row.name.trim()
+      if (!name) return
+      const regimen = {
+        label: (row.note || '').trim(),
+        dosage: (row.dosage || '').trim(),
+        frequency: (row.frequency || '').trim(),
+        duration: (row.duration || '').trim(),
+      }
+      const existing = store.getDrugInfo(name)
+      if (existing) {
+        const regimens = regimensFromDrug(existing)
+        const same = regimens.some(
+          (r) =>
+            (r.dosage || '').trim().toLowerCase() === regimen.dosage.toLowerCase() &&
+            (r.frequency || '').trim().toLowerCase() === regimen.frequency.toLowerCase() &&
+            (r.duration || '').trim().toLowerCase() === regimen.duration.toLowerCase() &&
+            (r.label || '').trim().toLowerCase() === regimen.label.toLowerCase(),
+        )
+        const next = same ? regimens : [...regimens, regimen]
+        const primary = next[0] || {}
+        store.saveDrugInfo({
+          ...existing,
+          name,
+          regimens: next,
+          dosage: primary.dosage || '',
+          frequency: primary.frequency || '',
+          duration: primary.duration || '',
+        })
+        if (!same) extended.push(name)
+      } else {
+        store.saveDrugInfo({
+          ...blankForm(),
+          name,
+          regimens: [regimen],
+          dosage: regimen.dosage,
+          frequency: regimen.frequency,
+          duration: regimen.duration,
+        })
+        added.push(name)
+      }
+    })
+    setQuickOpen(false)
+    refresh()
+    const bits = []
+    if (added.length) bits.push(`добавлено: ${added.join(', ')}`)
+    if (extended.length) bits.push(`схема к: ${extended.join(', ')}`)
+    if (bits.length) showToast(bits.join('. '), { type: 'success' })
+  }
+
   function remove(name) {
     const removed = store.getDrugInfo(name)
     store.deleteDrugInfo(name)
@@ -394,9 +623,17 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   return (
     <div className={editorOnly ? 'mkb-editor-host' : 'settings-tab'}>
       {!editorOnly && (
-      <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true) }}>
-        + Добавить препарат
-      </button>
+      <div className="drug-form-actions">
+        <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true); setQuickOpen(false) }}>
+          + Добавить препарат
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setQuickOpen((v) => !v)}>
+          строкой
+        </button>
+      </div>
+      )}
+      {!editorOnly && quickOpen && (
+        <QuickDrugAdd onSave={saveQuick} onClose={() => setQuickOpen(false)} known={(name) => !!store.getDrugInfo(name)} />
       )}
 
       {formOpen && (
@@ -664,6 +901,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
                   {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
                   {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
                   {d.duration && <div className="drug-db-line">Длительность курса: {d.duration}</div>}
+                  {d.regimens?.[0]?.label ? <div className="drug-db-line">Примечание: {d.regimens[0].label}</div> : null}
                 </>
               )}
               {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
