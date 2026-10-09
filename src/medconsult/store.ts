@@ -596,19 +596,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   updateInstance(key, instanceId, fields, date) {
     const def = getStudyLive(key);
-    const raw = def ? applyConditionalDefaults(def, fields) : fields;
-    const computed = def ? applyComputed(def, raw) : fields;
     const session = get().session;
-    const studies = session.studies.map((s) =>
-      s.key !== key
-        ? s
-        : {
-            ...s,
-            instances: s.instances.map((i) =>
-              i.id === instanceId ? { ...i, fields: computed, date: date ?? i.date } : i,
-            ),
-          },
-    );
+    const studies = session.studies.map((s) => {
+      if (s.key !== key) return s;
+      const side = def?.lateral && s.side === "l" ? "l" : "r";
+      return {
+        ...s,
+        instances: s.instances.map((i) => {
+          if (i.id !== instanceId) return i;
+          const raw = def ? applyConditionalDefaults(def, fields) : fields;
+          const computed = def ? applyComputed(def, raw) : fields;
+          if (!def?.lateral) return { ...i, fields: computed, date: date ?? i.date };
+          const bySide = {
+            r: i.bySide?.r || { fields: { ...i.fields }, omit: [...(i.omit || [])] },
+            l: i.bySide?.l || { fields: {}, omit: [] as string[] },
+          };
+          bySide[side] = { ...(bySide[side] || { fields: {}, omit: [] }), fields: computed };
+          return {
+            ...i,
+            date: date ?? i.date,
+            fields: bySide.r?.fields || {},
+            omit: bySide.r?.omit,
+            bySide,
+          };
+        }),
+      };
+    });
     const next = { ...session, studies };
     const patients = persistGlobals(next, get().patients);
     persistSession(next);
@@ -616,21 +629,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   toggleStudyOmit(key, instanceId, fieldKey) {
+    const def = getStudyLive(key);
     const session = get().session;
-    const studies = session.studies.map((s) =>
-      s.key !== key
-        ? s
-        : {
-            ...s,
-            instances: s.instances.map((i) => {
-              if (i.id !== instanceId) return i;
-              const omit = new Set(i.omit || []);
-              if (omit.has(fieldKey)) omit.delete(fieldKey);
-              else omit.add(fieldKey);
-              return { ...i, omit: [...omit] };
-            }),
-          },
-    );
+    const studies = session.studies.map((s) => {
+      if (s.key !== key) return s;
+      const side = def?.lateral && s.side === "l" ? "l" : "r";
+      return {
+        ...s,
+        instances: s.instances.map((i) => {
+          if (i.id !== instanceId) return i;
+          if (!def?.lateral) {
+            const omit = new Set(i.omit || []);
+            if (omit.has(fieldKey)) omit.delete(fieldKey);
+            else omit.add(fieldKey);
+            return { ...i, omit: [...omit] };
+          }
+          const bySide = {
+            r: i.bySide?.r || { fields: { ...i.fields }, omit: [...(i.omit || [])] },
+            l: i.bySide?.l || { fields: {}, omit: [] as string[] },
+          };
+          const omit = new Set(bySide[side]?.omit || []);
+          if (omit.has(fieldKey)) omit.delete(fieldKey);
+          else omit.add(fieldKey);
+          bySide[side] = { ...(bySide[side] || { fields: {}, omit: [] }), omit: [...omit] };
+          return { ...i, fields: bySide.r?.fields || i.fields, omit: bySide.r?.omit, bySide };
+        }),
+      };
+    });
     const next = { ...session, studies };
     persistSession(next);
     set({ session: next });

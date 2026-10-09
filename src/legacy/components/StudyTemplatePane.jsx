@@ -1,5 +1,5 @@
 import AutoResizeTextarea from './AutoResizeTextarea'
-import { autoFieldLine } from '../lib/studyLine'
+import { SIDE_FORMS } from '../../medconsult/data/studies'
 import {
   AUTO_TAGS, KIND_OPTIONS, REF_OPS, EditableOpt, fieldBrief, fieldKeyOf, splitOptions,
   sidesOf, tagTip, tagsInTemplate, slugifyFieldKey, presetByKey,
@@ -80,6 +80,23 @@ export function StudyTemplatePane(props) {
                     <code>{tag.token}</code>
                     <span>{tag.hint}</span>
                   </button>
+                  )
+                })}
+                {form.lateral && SIDE_FORMS.map((tag) => {
+                  const used = (form.template || '').includes(tag.token)
+                  return (
+                    <button
+                      type="button"
+                      key={tag.token}
+                      className={`study-template-chip is-auto${used ? ' is-used' : ''}`}
+                      draggable
+                      onDragStart={(e) => onChipDragStart(e, tag.token)}
+                      onClick={() => insertToken(tag.token)}
+                      title={used ? `${tag.group} ${tag.r} / ${tag.l} · уже в тексте` : `${tag.group} справа «${tag.r}», слева «${tag.l}»`}
+                    >
+                      <code>{tag.token}</code>
+                      <span>{tag.group} {tag.l}</span>
+                    </button>
                   )
                 })}
                 {vitae && [

@@ -497,7 +497,8 @@
 }
 .legacy-surface .study-date-format .btn-small.is-on,
 .legacy-surface .study-template-side .btn-small.is-on,
-.legacy-surface .study-side-bar .btn-small.is-on {
+.legacy-surface .study-side-bar .btn-small.is-on,
+.legacy-surface .drug-form-row .btn-small.is-on {
   background: var(--teal);
   color: #fff;
   border-color: var(--teal);

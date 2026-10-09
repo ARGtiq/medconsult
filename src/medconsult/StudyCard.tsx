@@ -13,6 +13,7 @@ import {
   patientRefWho,
   referenceInsertValue,
   relativeShare,
+  sideView,
   STUDY_GROUP_LABEL,
   STUDY_GROUP_ORDER,
   liveScales,
@@ -264,14 +265,17 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const who = patientRefWho(patient);
   const needsSex = !!def?.fields.some((f) => f.refBy?.includes("sex"));
   const needsAge = !!def?.fields.some((f) => f.refBy?.includes("age"));
+  const lateral = !!def?.lateral;
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
+  const side = entry.side === "l" ? "l" : "r";
   const selected = session.openSection === studyKey;
   const open = !settings.blocksAsSpoiler || selected;
   const customTitle = studyKey === "custom_lab" ? (entry.instances[0]?.fields.title || "").trim() : "";
   const previous = entry.previous;
-  const prevFields = previous ? applyComputed(def, applyConditionalDefaults(def, previous.fields)) : null;
+  const prevRaw = previous ? (lateral ? sideView(previous, side).fields : previous.fields) : null;
+  const prevFields = prevRaw ? applyComputed(def, applyConditionalDefaults(def, prevRaw)) : null;
   const patchStudy = (patch: Partial<StudyEntry>) => {
     setSession({
       studies: session.studies.map((s) => (s.key === studyKey ? { ...s, ...patch } : s)),
@@ -331,6 +335,29 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       ) : null}
       {open && !entry.textMode && (
         <div className="mt-2 space-y-2">
+          {lateral && (
+            <div className="flex gap-1" role="tablist" aria-label="Сторона">
+              {(
+                [
+                  ["r", "справа"],
+                  ["l", "слева"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={side === id}
+                  className={`rounded-md px-3 py-1 text-xs font-medium ${
+                    side === id ? "bg-teal text-paper" : "border border-line bg-paper text-ink-soft"
+                  }`}
+                  onClick={() => patchStudy({ side: id })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {(needsSex || needsAge) && (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
               <span>референс</span>
@@ -364,7 +391,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
             </>
           ) : (
           <>
-          {entry.instances.map((inst, idx) => (
+          {entry.instances.map((inst, idx) => {
+            const shown = lateral ? sideView(inst, side) : { fields: inst.fields, omit: inst.omit || [] };
+            return (
             <div key={inst.id} className="rounded-lg border border-dashed border-line p-2">
               <div className="mb-1.5 flex items-center justify-between text-xs text-ink-soft">
                 <label className="flex items-center gap-2">
@@ -372,7 +401,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   <input
                     type="date"
                     value={inst.date}
-                    onChange={(e) => updateInstance(studyKey, inst.id, inst.fields, e.target.value)}
+                    onChange={(e) => updateInstance(studyKey, inst.id, shown.fields, e.target.value)}
                     className="rounded border border-line bg-paper px-1 py-0.5 text-xs"
                   />
                 </label>
@@ -385,7 +414,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
               {def.category === "questionnaire" ? (
                 <QuestionnaireForm
                   scale={scaleFromStudyKey(studyKey, liveScales()) || null}
-                  fields={inst.fields}
+                  fields={shown.fields}
                   previous={idx === 0 ? prevFields : null}
                   prevDate={previous?.date}
                   takenKeys={session.studies.map((s) => s.key)}
@@ -394,7 +423,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 />
               ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, inst.fields))).map((f) => {
+                {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, shown.fields))).map((f) => {
                   if (f.kind === "heading") {
                     return (
                       <div key={f.key || f.label} className="col-span-2 mt-1.5 border-b border-teal/40 pb-0.5 sm:col-span-3">
@@ -402,16 +431,16 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       </div>
                     );
                   }
-                  const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields));
+                  const fields = applyComputed(def, applyConditionalDefaults(def, shown.fields));
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = fieldAbnormal(value, f.normal, f, fields, who);
-                  const omitted = (inst.omit || []).includes(f.key);
+                  const omitted = shown.omit.includes(f.key);
                   const pickable = !f.computed;
                   const wide = f.long || f.kind === "select" || f.kind === "multi" || f.kind === "groups" || !!f.showIf;
                   const share =
                     f.refOf && f.refOfMode !== "value" && !f.computed
-                      ? relativeShare(inst.fields[f.key] || value, fields[f.refOf] || "")
+                      ? relativeShare(shown.fields[f.key] || value, fields[f.refOf] || "")
                       : null;
                   const hint = formatRefHint(f, who);
                   const insert = f.computed ? "" : referenceInsertValue(f);
@@ -457,7 +486,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       <FieldControl
                         f={f}
                         value={fields[f.key] || ""}
-                        onChange={(v) => updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: v }, inst.date)}
+                        onChange={(v) => updateInstance(studyKey, inst.id, { ...shown.fields, [f.key]: v }, inst.date)}
                       />
                       {hint ? (
                         <button
@@ -470,7 +499,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                           onClick={(e) => {
                             e.preventDefault();
                             if (!insert) return;
-                            updateInstance(studyKey, inst.id, { ...inst.fields, [f.key]: insert }, inst.date);
+                            updateInstance(studyKey, inst.id, { ...shown.fields, [f.key]: insert }, inst.date);
                           }}
                         >
                           {hint}
@@ -545,7 +574,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{def.referenceNotes}</p>
               )}
             </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             className="text-xs font-medium text-teal"

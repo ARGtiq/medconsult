@@ -1,4 +1,4 @@
-import type { StudyDef, StudyField, StudyInstance } from "../types";
+import type { StudyDef, StudyField, StudyInstance, StudySide } from "../types";
 import { domainLine, QUESTION_SCALES, scaleFromStudyKey, studyKeyForScale, verdictFor, type ScaleDef } from "./questionnaires";
 import { getQuestionScales } from "./templates";
 
@@ -885,11 +885,21 @@ export function buildAddedInstance(
       date: source && fromPrev && source.date ? source.date : opts.today,
       fields: source ? { ...source.fields } : {},
       omit: source?.omit?.length ? [...source.omit] : undefined,
+      bySide: source?.bySide
+        ? {
+            r: source.bySide.r
+              ? { fields: { ...source.bySide.r.fields }, omit: source.bySide.r.omit ? [...source.bySide.r.omit] : undefined }
+              : undefined,
+            l: source.bySide.l
+              ? { fields: { ...source.bySide.l.fields }, omit: source.bySide.l.omit ? [...source.bySide.l.omit] : undefined }
+              : undefined,
+          }
+        : undefined,
     },
   };
 }
 export function collectDeviations(
-  studies: { key: string; instances: { date?: string; fields: Record<string, string> }[] }[],
+  studies: { key: string; instances: StudyInstance[] }[],
   lookup: (key: string) => StudyDef | null | undefined,
   who?: RefWho | null,
 ): Deviation[] {
@@ -919,24 +929,33 @@ export function collectDeviations(
         }
         continue;
       }
+      const packs = def.lateral
+        ? (["r", "l"] as const).map((side) => ({
+            fields: sideView(inst, side).fields,
+            study: `${def.label}, ${side === "r" ? "справа" : "слева"}`,
+          }))
+        : [{ fields: inst.fields || {}, study: def.label }];
       const byKey = new Map(def.fields.map((f) => [f.key, f]));
-      const fields = applyComputed(def, applyConditionalDefaults(def, inst.fields || {}));
-      for (const f of def.fields) {
-        if (f.kind === "heading") continue;
-        const val = (fields[f.key] || "").trim();
-        if (!val || !fieldShown(f, fields)) continue;
-        const abnormal = fieldAbnormal(val, f.normal, f, fields, who);
-        const child = !!f.showIf?.field;
-        if (!abnormal && !child) continue;
-        out.push({
-          study: def.label,
-          studyKey: entry.key,
-          label: f.label,
-          value: f.unit ? `${val} ${f.unit}` : val,
-          normal: abnormal ? formatRefHint(f, who) : "",
-          date,
-          depth: fieldDepth(f, byKey),
-        });
+      for (const pack of packs) {
+        if (def.lateral && !sideHasValues(pack.fields)) continue;
+        const fields = applyComputed(def, applyConditionalDefaults(def, pack.fields));
+        for (const f of def.fields) {
+          if (f.kind === "heading") continue;
+          const val = (fields[f.key] || "").trim();
+          if (!val || !fieldShown(f, fields)) continue;
+          const abnormal = fieldAbnormal(val, f.normal, f, fields, who);
+          const child = !!f.showIf?.field;
+          if (!abnormal && !child) continue;
+          out.push({
+            study: pack.study,
+            studyKey: entry.key,
+            label: f.label,
+            value: f.unit ? `${val} ${f.unit}` : val,
+            normal: abnormal ? formatRefHint(f, who) : "",
+            date,
+            depth: fieldDepth(f, byKey),
+          });
+        }
       }
     }
   }
@@ -1070,7 +1089,68 @@ function withStudyExtras(text: string, extras?: { name?: string; value?: string 
   return `${base}, ${tail}`;
 }
 
+/** Склоняемый тег стороны. В шаблоне пишется форма «справа», в протоколе слева подставляется пара. */
+export const SIDE_FORMS: { token: string; r: string; l: string; group: string }[] = [
+  { token: "{правая}", r: "правая", l: "левая", group: "жен." },
+  { token: "{правой}", r: "правой", l: "левой", group: "жен." },
+  { token: "{правую}", r: "правую", l: "левую", group: "жен." },
+  { token: "{правый}", r: "правый", l: "левый", group: "муж." },
+  { token: "{правого}", r: "правого", l: "левого", group: "муж." },
+  { token: "{правому}", r: "правому", l: "левому", group: "муж." },
+  { token: "{правым}", r: "правым", l: "левым", group: "муж." },
+  { token: "{правом}", r: "правом", l: "левом", group: "муж." },
+  { token: "{правое}", r: "правое", l: "левое", group: "ср." },
+  { token: "{справа}", r: "справа", l: "слева", group: "где" },
+];
+
+export function sideView(
+  inst: { fields?: Record<string, string>; omit?: string[]; bySide?: StudyInstance["bySide"] },
+  side: StudySide,
+): { fields: Record<string, string>; omit: string[] } {
+  const pack = inst.bySide?.[side];
+  if (pack) return { fields: { ...(pack.fields || {}) }, omit: [...(pack.omit || [])] };
+  if (side === "r") return { fields: { ...(inst.fields || {}) }, omit: [...(inst.omit || [])] };
+  return { fields: {}, omit: [] };
+}
+
+function applySideWords(text: string, side: StudySide): string {
+  let next = text;
+  for (const form of SIDE_FORMS) next = next.replaceAll(form.token, side === "r" ? form.r : form.l);
+  return next;
+}
+
+function sideHasValues(fields?: Record<string, string>) {
+  return Object.values(fields || {}).some((v) => String(v || "").trim());
+}
+
 export function fillStudyTemplate(
+  def: StudyDef,
+  instance: {
+    date: string;
+    fields: Record<string, string>;
+    omit?: string[];
+    extras?: { name?: string; value?: string }[];
+    bySide?: StudyInstance["bySide"];
+  },
+  previous?: StudyInstance,
+  who?: RefWho | null,
+) {
+  if (!def.lateral) return fillStudyBody(def, instance, previous, who);
+  const parts = (["r", "l"] as const)
+    .map((side) => {
+      const cur = sideView(instance, side);
+      if (!sideHasValues(cur.fields)) return "";
+      const prev = previous
+        ? { ...previous, fields: sideView(previous, side).fields, omit: sideView(previous, side).omit }
+        : undefined;
+      const text = fillStudyBody(def, { ...instance, fields: cur.fields, omit: cur.omit }, prev, who);
+      return applySideWords(text, side).trim();
+    })
+    .filter(Boolean);
+  return parts.join("\n");
+}
+
+function fillStudyBody(
   def: StudyDef,
   instance: { date: string; fields: Record<string, string>; omit?: string[]; extras?: { name?: string; value?: string }[] },
   previous?: StudyInstance,

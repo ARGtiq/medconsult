@@ -71,12 +71,21 @@ export type StudyDef = {
   dateFormat?: "iso" | "short";
   /** Lab/sparse studies use `template` in the protocol only after the user edits it. */
   templateEdited?: boolean;
+  /** Одно и то же исследование для правой и левой стороны. */
+  lateral?: boolean;
 };
 
 export type StudyExtra = {
   id: string;
   name: string;
   value: string;
+};
+
+export type StudySide = "r" | "l";
+
+export type StudySidePack = {
+  fields: Record<string, string>;
+  omit?: string[];
 };
 
 export type StudyInstance = {
@@ -86,6 +95,8 @@ export type StudyInstance = {
   omit?: string[];
   /** Свои пункты в конце анализа: название и значение. */
   extras?: StudyExtra[];
+  /** Значения по сторонам, если исследование помечено «по сторонам». */
+  bySide?: Partial<Record<StudySide, StudySidePack>>;
 };
 
 export type StudyEntry = {
@@ -95,6 +106,8 @@ export type StudyEntry = {
   /** When set, the protocol uses this text instead of the filled template. */
   textMode?: boolean;
   text?: string;
+  /** Какая сторона открыта во вкладке протокола. */
+  side?: StudySide;
 };
 
 export type ExtraBlock = {

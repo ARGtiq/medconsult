@@ -67,6 +67,7 @@ export function blankForm() {
     referenceNotes: '',
     dateFormat: 'iso',
     templateEdited: false,
+    lateral: false,
   }
 }
 

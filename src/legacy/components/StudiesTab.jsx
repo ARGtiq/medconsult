@@ -135,6 +135,7 @@ export default function StudiesTab({ scope = 'studies' }) {
       dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
       templateEdited: merged.templateEdited === true,
       isDefault: !!merged.isDefault,
+      lateral: !!merged.lateral,
     })
     setOpenField(null)
     setFormOpen(true)
@@ -733,6 +734,16 @@ export default function StudiesTab({ scope = 'studies' }) {
                   <option value="instrumental">Инструментальное</option>
                   <option value="lab">Лабораторное</option>
                 </select>
+                )}
+                {!vitae && (
+                  <button
+                    type="button"
+                    className={`btn-secondary btn-small${form.lateral ? ' is-on' : ''}`}
+                    title="Одни и те же пункты для правой и левой стороны. В протоколе появятся вкладки"
+                    onClick={() => setForm((prev) => ({ ...prev, lateral: !prev.lateral }))}
+                  >
+                    по сторонам
+                  </button>
                 )}
               </div>
               {validationError && <div className="ai-error">{validationError}</div>}
