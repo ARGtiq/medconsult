@@ -671,15 +671,19 @@ export function formatDrugMention(d: {
   return { head: head || name, paren, text: text || name };
 }
 
+function squashDrugName(value: string): string {
+  return value.toLowerCase().replace(/[«»"'“”„]/g, "").replace(/\s+/g, " ").trim();
+}
+
 /** Разобрать уже вставленную строку обратно в поля формы. */
 export function parseDrugLine(line: string): { name: string; brand: string; dosage: string; frequency: string; duration: string } | null {
   const raw = line.trim();
   if (!raw) return null;
-  const low = raw.toLowerCase();
+  const folded = squashDrugName(raw);
   const rec = liveDrugRecords()
     .filter((d) => {
-      const n = d.name.trim().toLowerCase();
-      return !!n && (low.includes(n) || low.includes(`«${n}»`));
+      const n = squashDrugName(d.name);
+      return !!n && folded.includes(n);
     })
     .sort((a, b) => b.name.length - a.name.length)[0];
   if (!rec) return null;
@@ -698,8 +702,10 @@ export function parseDrugLine(line: string): { name: string; brand: string; dosa
   let tail = raw;
   if (paren && paren.index != null) tail = raw.slice(paren.index + paren[0].length);
   else {
-    const at = low.indexOf(rec.name.toLowerCase());
-    tail = at >= 0 ? raw.slice(at + rec.name.length) : "";
+    const bare = rec.name.replace(/[«»"'“”„]/g, "").trim();
+    const re = new RegExp(`["«“„]?\\s*${bare.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*["»”"]?`, "i");
+    const hit = re.exec(raw);
+    tail = hit ? raw.slice(hit.index + hit[0].length) : "";
   }
   const bits = tail
     .split(/\s+-\s+/)
@@ -718,13 +724,13 @@ export function analogsOf(lineOrName: string): { name: string; line: string }[] 
   const raw = lineOrName.trim();
   if (!raw) return [];
   const records = liveDrugRecords();
-  const low = raw.toLowerCase();
+  const low = squashDrugName(raw);
   const rec =
-    records.find((d) => d.name.toLowerCase() === low) ||
+    records.find((d) => squashDrugName(d.name) === low) ||
     records
       .slice()
       .sort((a, b) => b.name.length - a.name.length)
-      .find((d) => d.name && low.includes(d.name.toLowerCase()));
+      .find((d) => d.name && low.includes(squashDrugName(d.name)));
   const key = (rec?.name || raw).toLowerCase();
   const seen = new Set<string>();
   const out: { name: string; line: string }[] = [];
@@ -849,17 +855,17 @@ function extraHit(text: string, q: string) {
 
 /** Текст «прочее» карточки, если название препарата есть в строке назначения. */
 export function extraOfLine(line: string): string {
-  const low = line.trim().toLowerCase();
+  const low = squashDrugName(line);
   if (!low) return "";
   const rec = liveDrugRecords()
-    .filter((d) => d.name && (d.extra || "").trim() && low.includes(d.name.toLowerCase()))
+    .filter((d) => d.name && (d.extra || "").trim() && low.includes(squashDrugName(d.name)))
     .sort((a, b) => b.name.length - a.name.length)[0];
   return (rec?.extra || "").trim();
 }
 
 export function searchDrugs(query: string, diagnosisCode?: string): DrugHit[] {
   const records = liveDrugRecords();
-  const q = query.trim().toLowerCase();
+  const q = squashDrugName(query);
   const hits: DrugHit[] = [];
   const seen = new Set<string>();
   const push = (d: DrugRecord, via: DrugHit["via"], hint: string) => {
