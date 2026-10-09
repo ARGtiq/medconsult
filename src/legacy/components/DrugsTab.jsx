@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { store } from '../lib/store'
 import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
@@ -271,9 +271,16 @@ function takeQuotedName(left) {
   return null
 }
 
+function normalizeQuickLine(raw) {
+  return String(raw || '')
+    .replace(/[\u00a0\u202f\u2007\u2009]/g, ' ')
+    .replace(/[−–—‐‑‒]/g, '-')
+    .replace(/[«»“”„]/g, '"')
+}
+
 /** "название" дозировка - кратность, дни (примечание). Кавычки «» и "" равнозначны. */
 export function parseQuickDrug(raw) {
-  let body = String(raw || '').trim()
+  let body = normalizeQuickLine(raw).trim()
   if (!body) return null
   let note = ''
   const noteMatch = body.match(/^(.*)\(([^)]*)\)\s*$/)
@@ -281,7 +288,11 @@ export function parseQuickDrug(raw) {
     note = noteMatch[2].trim()
     body = noteMatch[1].trim()
   }
-  const split = body.split(/\s+[—–-]\s+/)
+  let split = body.split(/\s+-\s+/)
+  if (split.length < 2) {
+    const glued = body.match(/^(.*\d\S*)\s*-\s*(.+)$/)
+    if (glued) split = [glued[1], glued[2]]
+  }
   if (split.length < 2) return null
   const left = split[0].trim()
   const right = split.slice(1).join(' - ').trim()
@@ -326,25 +337,41 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   const [raw, setRaw] = useState('')
   const [rows, setRows] = useState(null)
   const [hint, setHint] = useState('')
+  const [holdRaw, setHoldRaw] = useState(false)
+
+  function lineReady(line) {
+    const parsed = parseQuickDrug(line)
+    return !!(parsed && parsed.dosage && parsed.frequency && (parsed.duration || parsed.note))
+  }
 
   function apply(text) {
     const lines = String(text || '')
       .split(/\n+/)
       .map((s) => s.trim())
       .filter(Boolean)
-    if (!lines.length) return
+    if (!lines.length) return false
     const next = lines.map((line) => {
       const parsed = parseQuickDrug(line)
       return parsed ? { ...parsed, ok: true } : { raw: line, ok: false }
     })
     if (!next.some((r) => r.ok)) {
       setRaw(text)
-      setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание). «название» тоже подходит')
-      return
+      setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
+      return false
     }
     setHint('')
+    setHoldRaw(false)
     setRows(next)
+    return true
   }
+
+  useEffect(() => {
+    if (rows || holdRaw) return
+    const lines = raw.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+    if (!lines.length || !lines.every(lineReady)) return
+    const timer = setTimeout(() => apply(raw), 400)
+    return () => clearTimeout(timer)
+  }, [raw, rows, holdRaw])
 
   function patchRow(i, patch) {
     setRows((list) => list.map((row, idx) => (idx === i ? { ...row, ...patch, ok: true } : row)))
@@ -352,14 +379,17 @@ function QuickDrugAdd({ onSave, onClose, known }) {
 
   function save() {
     const ready = (rows || []).filter((r) => r.ok && String(r.name || '').trim())
-    if (!ready.length) return
-    onSave(ready)
+    if (ready.length) {
+      onSave(ready)
+      return
+    }
+    if (!apply(raw)) return
   }
 
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Одна строка: "название" дозировка - кратность, дни (примечание). «название» — то же самое. После вставки части подсвечиваются.
+        Одна строка: "название" дозировка - кратность, дни (примечание). «название» — то же самое. Готовая строка подсвечивается сама, её можно поправить.
       </p>
       {rows ? (
         <div className="drug-quick-rows">
@@ -412,6 +442,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
           onChange={(e) => {
             setRaw(e.target.value)
             setHint('')
+            setHoldRaw(false)
           }}
           onPaste={(e) => {
             const text = e.clipboardData.getData('text')
@@ -429,7 +460,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
       )}
       {hint ? <p className="drug-quick-hint is-bad">{hint}</p> : null}
       <div className="drug-form-actions">
-        <button type="button" className="btn-primary" disabled={!rows?.some((r) => r.ok && r.name.trim())} onClick={save}>
+        <button type="button" className="btn-primary" disabled={!raw.trim() && !rows?.some((r) => r.ok && String(r.name || '').trim())} onClick={save}>
           добавить
         </button>
         {rows ? (
@@ -437,6 +468,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
             type="button"
             className="btn-secondary"
             onClick={() => {
+              setHoldRaw(true)
               setRaw((rows || []).map((r) => (r.ok ? composeQuickDrug(r) : r.raw)).join('\n'))
               setRows(null)
             }}
