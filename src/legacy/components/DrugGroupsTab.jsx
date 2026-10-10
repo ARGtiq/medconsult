@@ -11,8 +11,41 @@ import DrugsTab from './DrugsTab'
 
 const GROUP_FILL_FIELDS = ['description', 'crossAllergyNote', 'sideEffects', 'contraindications', 'mkb10Codes']
 
-function blankGroupForm() {
-  return { key: null, label: '', drugsText: '', description: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '', basedOn: '' }
+function blankGroupForm(parentKey = '') {
+  return { key: null, label: '', drugsText: '', description: '', crossAllergyNote: '', sideEffects: '', contraindications: '', mkb10Codes: '', basedOn: '', parentKey }
+}
+
+function byLabel(a, b) {
+  return String(a[1]?.label || '').localeCompare(String(b[1]?.label || ''), 'ru')
+}
+
+function childEntries(groups, parentKey) {
+  const want = parentKey || ''
+  return Object.entries(groups || {})
+    .filter(([, g]) => (g?.parentKey || '') === want)
+    .sort(byLabel)
+}
+
+function descendantKeys(groups, key) {
+  const out = new Set()
+  const stack = [key]
+  while (stack.length) {
+    const cur = stack.pop()
+    Object.entries(groups || {}).forEach(([id, g]) => {
+      if ((g?.parentKey || '') === cur && !out.has(id)) {
+        out.add(id)
+        stack.push(id)
+      }
+    })
+  }
+  return out
+}
+
+function rootEntries(groups) {
+  const ids = new Set(Object.keys(groups || {}))
+  return Object.entries(groups || {})
+    .filter(([, g]) => !g?.parentKey || !ids.has(g.parentKey))
+    .sort(byLabel)
 }
 
 export default function DrugGroupsTab() {
@@ -93,13 +126,14 @@ export default function DrugGroupsTab() {
       contraindications: group.contraindications || '',
       mkb10Codes: group.mkb10Codes || '',
       basedOn: group.basedOn || '',
+      parentKey: group.parentKey || '',
     })
     setFormOpen(true)
   }
 
-  function startNew() {
+  function startNew(parentKey = '') {
     setEditingStaticKey(null)
-    setForm(blankGroupForm())
+    setForm(blankGroupForm(parentKey))
     setDescribeError('')
     setFormOpen(true)
   }
@@ -161,7 +195,9 @@ export default function DrugGroupsTab() {
       store.saveGroupMeta(editingStaticKey, meta)
     } else {
       const drugs = form.drugsText.split(',').map((s) => s.trim()).filter(Boolean)
-      store.saveCustomGroup(form.key, { label: form.label, drugs, basedOn: form.basedOn || '', ...meta })
+      const blocked = form.key ? descendantKeys(customGroups, form.key) : new Set()
+      const parentKey = form.parentKey && form.parentKey !== form.key && !blocked.has(form.parentKey) ? form.parentKey : ''
+      store.saveCustomGroup(form.key, { label: form.label, drugs, basedOn: form.basedOn || '', parentKey, ...meta })
     }
 
     refresh()
@@ -172,6 +208,9 @@ export default function DrugGroupsTab() {
 
   function removeCustom(key) {
     const removed = customGroups[key]
+    const kids = Object.entries(customGroups).filter(([, g]) => (g?.parentKey || '') === key)
+    const fallback = removed?.parentKey || ''
+    kids.forEach(([id, g]) => store.saveCustomGroup(id, { ...g, parentKey: fallback }))
     store.deleteCustomGroup(key)
     refresh()
     if (form.key === key) setForm(blankGroupForm())
@@ -180,20 +219,68 @@ export default function DrugGroupsTab() {
       actionLabel: 'Отменить',
       onAction: () => {
         store.saveCustomGroup(key, removed)
+        kids.forEach(([id, g]) => store.saveCustomGroup(id, g))
         refresh()
       },
     })
   }
 
   const customEntries = Object.entries(customGroups)
+  const roots = rootEntries(customGroups)
+  const parentSkip = new Set(form.key ? [form.key, ...descendantKeys(customGroups, form.key)] : [])
+  const parentOptions = []
+  function pushParentOptions(parentKey, depth) {
+    childEntries(customGroups, parentKey).forEach(([key, g]) => {
+      if (parentSkip.has(key)) return
+      parentOptions.push({ key, label: `${'– '.repeat(depth)}${g.label}` })
+      pushParentOptions(key, depth + 1)
+    })
+  }
+  roots.forEach(([key, g]) => {
+    if (parentSkip.has(key)) return
+    parentOptions.push({ key, label: g.label })
+    pushParentOptions(key, 1)
+  })
+
+  function GroupBranch({ groupKey, group }) {
+    const kids = childEntries(customGroups, groupKey)
+    return (
+      <div className="drug-group-node">
+        <div className="drug-db-card">
+          <div className="drug-db-card-top">
+            <strong className="drug-db-card-name" onClick={() => editCustomGroup(groupKey, group)} title="Нажми, чтобы редактировать">
+              {group.label}
+            </strong>
+            {group.basedOn && <span className="drug-db-group">на основе: {groupLabel(group.basedOn.replace('__custom__', ''))}</span>}
+            <button type="button" className="btn-secondary btn-small" onClick={() => startNew(groupKey)}>+ внутри</button>
+            <button type="button" className="remove-btn" onClick={() => removeCustom(groupKey)}>×</button>
+          </div>
+          <FillProgressBar item={group} fields={GROUP_FILL_FIELDS} />
+          {(group.drugs || []).length > 0 && <div className="drug-db-line">Препараты: {(group.drugs || []).join(', ')}</div>}
+          {group.description && <div className="drug-db-line">{group.description}</div>}
+          {group.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {group.crossAllergyNote}</div>}
+          {group.sideEffects && <div className="drug-db-line">Побочные: {group.sideEffects}</div>}
+          {group.contraindications && <div className="drug-db-line">Противопоказания: {group.contraindications}</div>}
+          {group.mkb10Codes && <div className="drug-db-line">МКБ-10: {group.mkb10Codes}</div>}
+        </div>
+        {kids.length > 0 && (
+          <div className="drug-group-children">
+            {kids.map(([key, g]) => (
+              <GroupBranch key={key} groupKey={key} group={g} />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="settings-tab">
       <p className="settings-note">
-        Группы нужны для аналогов и проверки перекрёстной аллергии. Встроенных групп нет — добавляйте свои.
+        Группы нужны для аналогов и проверки перекрёстной аллергии. Группу можно вложить в другую: антибиотики, внутри фторхинолоны и пенициллины.
       </p>
 
-      <button type="button" className="btn-primary" onClick={startNew}>
+      <button type="button" className="btn-primary" onClick={() => startNew()}>
         + Добавить группу
       </button>
 
@@ -218,6 +305,14 @@ export default function DrugGroupsTab() {
             disabled={!!editingStaticKey}
           />
         </div>
+        {!editingStaticKey && (
+          <select value={form.parentKey || ''} onChange={(e) => setForm({ ...form, parentKey: e.target.value })}>
+            <option value="">Верхний уровень</option>
+            {parentOptions.map((g) => (
+              <option key={g.key} value={g.key}>{g.label}</option>
+            ))}
+          </select>
+        )}
         {!form.key && !editingStaticKey && Object.keys(customGroups).length > 0 && (
           <select value={form.basedOn} onChange={(e) => applyBasedOn(e.target.value)}>
             <option value="">Начать с чистого листа</option>
@@ -286,7 +381,7 @@ export default function DrugGroupsTab() {
           <button type="submit" className="btn-primary">
             {editingStaticKey ? 'Сохранить заметки к группе' : form.key ? 'Сохранить группу' : 'Создать группу'}
           </button>
-          <button type="button" className="btn-secondary" onClick={startNew}>Новая группа</button>
+          <button type="button" className="btn-secondary" onClick={() => startNew()}>Новая группа</button>
         </div>
       </form>
           </div>
@@ -295,23 +390,8 @@ export default function DrugGroupsTab() {
 
       <div className="drug-db-list">
         <h4>Группы лекарств ({customEntries.length})</h4>
-        {customEntries.map(([key, g]) => (
-          <div key={key} className="drug-db-card">
-            <div className="drug-db-card-top">
-              <strong className="drug-db-card-name" onClick={() => editCustomGroup(key, g)} title="Нажми, чтобы редактировать">
-                {g.label}
-              </strong>
-              {g.basedOn && <span className="drug-db-group">на основе: {groupLabel(g.basedOn.replace('__custom__', ''))}</span>}
-              <button type="button" className="remove-btn" onClick={() => removeCustom(key)}>×</button>
-            </div>
-            <FillProgressBar item={g} fields={GROUP_FILL_FIELDS} />
-            <div className="drug-db-line">Препараты: {(g.drugs || []).join(', ')}</div>
-            {g.description && <div className="drug-db-line">{g.description}</div>}
-            {g.crossAllergyNote && <div className="drug-db-line">Перекрёстная аллергия: {g.crossAllergyNote}</div>}
-            {g.sideEffects && <div className="drug-db-line">Побочные: {g.sideEffects}</div>}
-            {g.contraindications && <div className="drug-db-line">Противопоказания: {g.contraindications}</div>}
-            {g.mkb10Codes && <div className="drug-db-line">МКБ-10: {g.mkb10Codes}</div>}
-          </div>
+        {roots.map(([key, g]) => (
+          <GroupBranch key={key} groupKey={key} group={g} />
         ))}
         {customEntries.length === 0 && <p className="empty-hint">Пока нет групп. Добавьте свою.</p>}
       </div>

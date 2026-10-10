@@ -127,7 +127,15 @@
   font: inherit;
   font-size: 13px;
 }
-.legacy-surface .drug-db-card.is-compact { padding: 6px 10px; }
+.legacy-surface .drug-group-node { display: flex; flex-direction: column; gap: 6px; }
+.legacy-surface .drug-group-children {
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .legacy-surface .drug-db-card.is-compact .drug-db-card-name { font-size: 14px; font-weight: 650; }
 .legacy-surface .drug-db-mini {
   margin-top: 1px;
