@@ -104,6 +104,7 @@
 .legacy-surface .drug-quick-bit.freq { background: color-mix(in srgb, #c4a15a 28%, var(--paper)); }
 .legacy-surface .drug-quick-bit.days { background: color-mix(in srgb, #6a8f72 28%, var(--paper)); }
 .legacy-surface .drug-quick-bit.note { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); color: var(--ink-soft); }
+.legacy-surface .drug-quick-bit.analogs { background: color-mix(in srgb, #6a5acd 16%, var(--paper)); }
 .legacy-surface .drug-quick-exists { font-size: 11px; color: var(--ink-soft); }
 
 .legacy-surface .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }

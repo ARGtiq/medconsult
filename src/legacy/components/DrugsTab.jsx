@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { store } from '../lib/store'
 import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
@@ -333,11 +333,27 @@ function composeQuickDrug(p) {
   return [name, dose].filter(Boolean).join(' ') + (freq ? ` - ${freq}` : '') + (days ? `, ${days}` : '') + (note ? ` (${note})` : '')
 }
 
+function joinNames(prev, next) {
+  const seen = new Set()
+  const out = []
+  for (const part of `${prev || ''}, ${next || ''}`.split(/[,;]/)) {
+    const name = part.trim()
+    const key = name.toLowerCase()
+    if (!name || seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out.join(', ')
+}
+
 function QuickDrugAdd({ onSave, onClose, known }) {
   const [raw, setRaw] = useState('')
   const [rows, setRows] = useState(null)
+  const [draft, setDraft] = useState('')
   const [hint, setHint] = useState('')
   const [holdRaw, setHoldRaw] = useState(false)
+  const draftRef = useRef(null)
+  const rawRef = useRef(null)
 
   function lineReady(line) {
     const parsed = parseQuickDrug(line)
@@ -352,7 +368,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
     if (!lines.length) return false
     const next = lines.map((line) => {
       const parsed = parseQuickDrug(line)
-      return parsed ? { ...parsed, ok: true } : { raw: line, ok: false }
+      return parsed ? { ...parsed, ok: true, analogs: '' } : { raw: line, ok: false }
     })
     if (!next.some((r) => r.ok)) {
       setRaw(text)
@@ -362,6 +378,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
     setHint('')
     setHoldRaw(false)
     setRows(next)
+    setDraft('')
     return true
   }
 
@@ -373,23 +390,73 @@ function QuickDrugAdd({ onSave, onClose, known }) {
     return () => clearTimeout(timer)
   }, [raw, rows, holdRaw])
 
+  useEffect(() => {
+    if (!rows?.length) return
+    draftRef.current?.focus()
+  }, [rows?.length])
+
+  useEffect(() => {
+    if (!rows) return
+    const line = draft.trim()
+    if (!line || !lineReady(line) || line.includes('\n')) return
+    const timer = setTimeout(() => {
+      const parsed = parseQuickDrug(line)
+      if (!parsed) return
+      setRows((list) => [...(list || []), { ...parsed, ok: true, analogs: '' }])
+      setDraft('')
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [draft, rows])
+
+  function takeDraftPaste(text) {
+    const lines = String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean)
+    const parsed = []
+    const left = []
+    lines.forEach((line) => {
+      const hit = parseQuickDrug(line)
+      if (hit) parsed.push({ ...hit, ok: true, analogs: '' })
+      else left.push(line)
+    })
+    if (parsed.length) setRows((list) => [...(list || []), ...parsed])
+    setDraft(left.join('\n'))
+    setHint(parsed.length ? '' : 'Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
+  }
+
   function patchRow(i, patch) {
     setRows((list) => list.map((row, idx) => (idx === i ? { ...row, ...patch, ok: true } : row)))
   }
 
+  function readyRows() {
+    const list = [...(rows || [])]
+    const pending = draft.trim()
+    if (pending) {
+      pending.split(/\n+/).map((s) => s.trim()).filter(Boolean).forEach((line) => {
+        const parsed = parseQuickDrug(line)
+        if (parsed) list.push({ ...parsed, ok: true, analogs: '' })
+      })
+    }
+    return list.filter((r) => r.ok && String(r.name || '').trim())
+  }
+
   function save() {
-    const ready = (rows || []).filter((r) => r.ok && String(r.name || '').trim())
-    if (ready.length) {
-      onSave(ready)
+    const ready = readyRows()
+    if (!ready.length) {
+      setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
       return
     }
-    if (!apply(raw)) return
+    onSave(ready)
+    setRows(null)
+    setRaw('')
+    setDraft('')
+    setHint('')
+    setHoldRaw(false)
+    requestAnimationFrame(() => rawRef.current?.focus())
   }
 
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Одна строка: "название" дозировка - кратность, дни (примечание). «название» — то же самое. Готовая строка подсвечивается сама, её можно поправить.
+        Строка: "название" дозировка - кратность, дни (примечание). Примечание попадает в подпись схемы. После каждой строки появляется следующая. Аналоги пишутся рядом.
       </p>
       {rows ? (
         <div className="drug-quick-rows">
@@ -417,6 +484,15 @@ function QuickDrugAdd({ onSave, onClose, known }) {
                   <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchRow(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
                 </span>
                 <span className="drug-quick-punct">)</span>
+                <span className="drug-quick-bit analogs">
+                  <input
+                    value={row.analogs || ''}
+                    aria-label="аналоги"
+                    placeholder="аналоги"
+                    onChange={(e) => patchRow(i, { analogs: e.target.value })}
+                    size={Math.max(String(row.analogs || '').length, 8)}
+                  />
+                </span>
                 {known(row.name) ? <span className="drug-quick-exists">уже есть — добавится схема</span> : null}
               </div>
             ) : (
@@ -431,9 +507,33 @@ function QuickDrugAdd({ onSave, onClose, known }) {
               />
             ),
           )}
+          <textarea
+            ref={draftRef}
+            className="drug-quick-input"
+            rows={1}
+            placeholder="следующий препарат той же строкой"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setHint('')
+            }}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData('text')
+              if (!text.trim()) return
+              e.preventDefault()
+              takeDraftPaste(text)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (draft.trim()) takeDraftPaste(draft)
+              }
+            }}
+          />
         </div>
       ) : (
         <textarea
+          ref={rawRef}
           autoFocus
           className="drug-quick-input"
           rows={2}
@@ -604,6 +704,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     rows.forEach((row) => {
       const name = bareDrugName(row.name)
       if (!name) return
+      const analogs = joinNames('', row.analogs)
       const regimen = {
         label: (row.note || '').trim(),
         dosage: (row.dosage || '').trim(),
@@ -626,6 +727,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         store.saveDrugInfo({
           ...existing,
           name: existing.name,
+          brandNames: joinNames(existing.brandNames, analogs),
           regimens: next,
           dosage: primary.dosage || '',
           frequency: primary.frequency || '',
@@ -636,6 +738,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         store.saveDrugInfo({
           ...blankForm(),
           name,
+          brandNames: analogs,
           regimens: [regimen],
           dosage: regimen.dosage,
           frequency: regimen.frequency,
@@ -644,7 +747,6 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         added.push(name)
       }
     })
-    setQuickOpen(false)
     refresh()
     const bits = []
     if (added.length) bits.push(`добавлено: ${added.join(', ')}`)
