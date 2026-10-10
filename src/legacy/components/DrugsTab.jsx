@@ -4,15 +4,12 @@ import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
 import useEscapeToClose from '../lib/useEscapeToClose'
-import FillProgressBar from './FillProgressBar'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { parseDrugGroups } from '../data/drugSafety'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import DrugGroupsInput from './DrugGroupsInput'
 import { showToast } from '../lib/toast'
 import { DEFAULT_DRUG_FORM, DRUG_FORMS } from '../../medconsult/live'
-
-const DRUG_FILL_FIELDS = ['dosage', 'frequency', 'duration', 'brandNames', 'group', 'mkb10Codes', 'monitoring', 'sideEffects', 'interactions', 'contraindications', 'evidenceLevel']
 
 const EVIDENCE_OPTIONS = [
   { value: '', label: '— не указано —' },
@@ -346,6 +343,19 @@ function joinNames(prev, next) {
   return out.join(', ')
 }
 
+function rawIsDup(text, known) {
+  return String(text || '')
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .some((line) => {
+      const parsed = parseQuickDrug(line)
+      if (parsed?.name && known(parsed.name)) return true
+      const quoted = takeQuotedName(normalizeQuickLine(line))
+      return !!(quoted?.name && known(quoted.name))
+    })
+}
+
 function QuickDrugAdd({ onSave, onClose, known }) {
   const [raw, setRaw] = useState('')
   const [rows, setRows] = useState(null)
@@ -456,13 +466,13 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Строка: "название" дозировка - кратность, дни (примечание). Примечание попадает в подпись схемы. После каждой строки появляется следующая. Аналоги пишутся рядом.
+        Строка: "название" дозировка - кратность, дни (примечание). Примечание попадает и в протокол. Дубликат сразу красный. Аналоги — рядом.
       </p>
       {rows ? (
         <div className="drug-quick-rows">
           {rows.map((row, i) =>
             row.ok ? (
-              <div key={i} className="drug-quick-line">
+              <div key={i} className={`drug-quick-line${known(row.name) ? " is-dup" : ""}`}>
                 <span className="drug-quick-punct">{row.open || '"'}</span>
                 <span className="drug-quick-bit name">
                   <input value={row.name} aria-label="название" onChange={(e) => patchRow(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
@@ -493,7 +503,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
                     size={Math.max(String(row.analogs || '').length, 8)}
                   />
                 </span>
-                {known(row.name) ? <span className="drug-quick-exists">уже есть — добавится схема</span> : null}
+                {known(row.name) ? <span className="drug-quick-exists">уже в базе</span> : null}
               </div>
             ) : (
               <input
@@ -509,7 +519,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
           )}
           <textarea
             ref={draftRef}
-            className="drug-quick-input"
+            className={`drug-quick-input${rawIsDup(draft, known) ? ' is-dup' : ''}`}
             rows={1}
             placeholder="следующий препарат той же строкой"
             value={draft}
@@ -535,7 +545,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
         <textarea
           ref={rawRef}
           autoFocus
-          className="drug-quick-input"
+          className={`drug-quick-input${rawIsDup(raw, known) ? ' is-dup' : ''}`}
           rows={2}
           placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды)'}
           value={raw}
@@ -612,6 +622,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [shortening, setShortening] = useState(null)
   const [filterGroup, setFilterGroup] = useState('')
   const [filterMkb, setFilterMkb] = useState('')
+  const [drugQuery, setDrugQuery] = useState('')
   const [quickOpen, setQuickOpen] = useState(false)
 
   async function runShorten(field) {
@@ -1008,17 +1019,35 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
       {!editorOnly && (
       <div className="drug-db-list">
         <h4>База препаратов ({Object.keys(drugs).length})</h4>
+        <input
+          className="drug-db-search"
+          value={drugQuery}
+          placeholder="Поиск по названию, дозе, аналогам"
+          onChange={(e) => setDrugQuery(e.target.value)}
+        />
         {(() => {
           const allDrugs = Object.values(drugs)
           const allGroupLabels = [...new Set(allDrugs.flatMap((d) => parseDrugGroups(d.group).map((g) => g.label)))].sort()
           const allMkbCodes = [
             ...new Set(allDrugs.flatMap((d) => (d.mkb10Codes || '').split(',').map((c) => c.trim()).filter(Boolean))),
           ].sort()
+          const q = drugQuery.trim().toLowerCase()
           const filtered = allDrugs.filter((d) => {
             const groupsOfDrug = parseDrugGroups(d.group).map((g) => g.label)
             const matchesGroup = !filterGroup || groupsOfDrug.includes(filterGroup)
             const matchesMkb = !filterMkb || (d.mkb10Codes || '').split(',').map((c) => c.trim()).includes(filterMkb)
-            return matchesGroup && matchesMkb
+            const blob = [
+              d.name,
+              d.brandNames,
+              d.dosage,
+              d.frequency,
+              d.group,
+              ...(d.regimens || []).flatMap((r) => [r.dosage, r.frequency, r.label]),
+            ]
+              .join(' ')
+              .toLowerCase()
+            const matchesQuery = !q || blob.includes(q)
+            return matchesGroup && matchesMkb && matchesQuery
           })
 
           return (
@@ -1051,65 +1080,21 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
               {filtered
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((d) => (
-            <div key={d.name} className="drug-db-card">
+            <div key={d.name} className="drug-db-card is-compact">
               <div className="drug-db-card-top">
                 <strong className="drug-db-card-name" onClick={() => editExisting(d)} title="Нажми, чтобы редактировать">
                   {d.name}
                 </strong>
-                {parseDrugGroups(d.group).map((g, i) => (
-                  <span key={i} className={g.official ? 'drug-group-pill official' : 'drug-group-pill'}>
-                    {g.official && <span className="drug-group-pill-tag">офиц.</span>}
-                    {g.label}
-                  </span>
-                ))}
-                {d.evidenceLevel && <span className="drug-db-evidence">{EVIDENCE_OPTIONS.find((o) => o.value === d.evidenceLevel)?.label}</span>}
                 <button type="button" className="btn-secondary btn-small" onClick={() => duplicate(d)}>копия</button>
                 <button type="button" className="remove-btn" onClick={() => remove(d.name)}>×</button>
               </div>
-              <FillProgressBar item={d} fields={DRUG_FILL_FIELDS} />
-              {(d.regimens?.length > 1) ? (
-                d.regimens.map((r, i) => (
-                  <div key={i} className="drug-db-line">
-                    {r.label ? `${r.label}: ` : `Схема ${i + 1}: `}
-                    {[r.dosage, r.frequency, r.duration].filter(Boolean).join(', ')}
-                  </div>
-                ))
-              ) : (
-                <>
-                  {d.dosage && <div className="drug-db-line">Доза: {d.dosage}</div>}
-                  {d.frequency && <div className="drug-db-line">Кратность: {d.frequency}</div>}
-                  {d.duration && <div className="drug-db-line">Длительность курса: {d.duration}</div>}
-                  {d.regimens?.[0]?.label ? <div className="drug-db-line">Примечание: {d.regimens[0].label}</div> : null}
-                </>
-              )}
-              {d.brandNames && <div className="drug-db-line">Торговые названия: {d.brandNames}</div>}
-              {d.form && <div className="drug-db-line">Форма: {d.form}</div>}
-              {d.composition && <div className="drug-db-line">Состав: {d.composition}</div>}
-              {d.extra && <div className="drug-db-extra">{d.extra}</div>}
-              {d.mkb10Codes && <div className="drug-db-line">МКБ-10: {d.mkb10Codes}</div>}
-              {d.monitoring && <div className="drug-db-line drug-db-line-highlight">Мониторинг: {d.monitoring}</div>}
-              {(d.studyTriggers || []).map((t, i) => {
-                const all = catalogStudies()
-                const names = (t.studyKeys || []).map((k) => all.find((s) => s.key === k)?.label || k)
-                const fields = (t.fieldKeys || []).map((k) => {
-                  for (const s of all.filter((x) => (t.studyKeys || []).includes(x.key))) {
-                    const f = (s.fields || []).find((x) => x.key === k)
-                    if (f) return f.label
-                  }
-                  return k
-                })
-                return (
-                  <div key={i} className="drug-db-line">
-                    По исследованию: {names.join(', ')}
-                    {fields.length ? ` · ${fields.join(', ')}` : ''}
-                    {t.timesPerDay ? ` · ${t.timesPerDay} р/сут` : ''}
-                    {t.days ? ` · ${t.days} дн` : ''}
-                  </div>
-                )
-              })}
-              {d.interactions && <div className="drug-db-line">Взаимодействия: {d.interactions}</div>}
-              {d.contraindications && <div className="drug-db-line">Противопоказания: {d.contraindications}</div>}
-              {d.sideEffects && <div className="drug-db-line">Побочные: {d.sideEffects}</div>}
+              <div className="drug-db-mini">
+                {[
+                  (d.regimens?.[0]?.dosage || d.dosage || '').trim(),
+                  (d.regimens?.[0]?.frequency || d.frequency || '').trim(),
+                  (d.brandNames || '').trim(),
+                ].filter(Boolean).join(' · ') || 'схема не указана'}
+              </div>
             </div>
               ))}
               {filtered.length === 0 && <p className="empty-hint">Ничего не найдено по этому фильтру.</p>}

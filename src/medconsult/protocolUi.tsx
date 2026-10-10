@@ -50,6 +50,29 @@ function courseText(raw: string) {
   return t;
 }
 
+function normBit(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/(^|[^\p{L}])(дней|дня|день|дн)\.?/gu, "$1дн")
+    .replace(/\s+/g, " ");
+}
+
+/** Подпись схемы — это примечание из строки. Берём её, если схема совпала. */
+function noteFor(name: string, dosage: string, frequency: string, duration: string) {
+  const vars = variantsOf(name);
+  if (!vars.length) return "";
+  if (vars.length === 1) return vars[0].label || "";
+  const d = normBit(dosage);
+  const f = normBit(frequency);
+  const c = normBit(duration);
+  const exact = vars.filter((x) => normBit(x.dosage) === d && normBit(x.frequency) === f && normBit(x.duration) === c);
+  if (exact.length === 1) return exact[0].label || "";
+  const byDose = vars.filter((x) => normBit(x.dosage) === d && normBit(x.frequency) === f);
+  if (byDose.length === 1) return byDose[0].label || "";
+  return "";
+}
+
 function DrugSearch({
   diagnosisCode,
   diagnosisTitle,
@@ -110,6 +133,7 @@ function DrugSearch({
         dosage: one ? primary?.dosage : "",
         frequency: one ? primary?.frequency : "",
         duration: one ? primary?.duration : "",
+        note: one ? primary?.label : "",
       }).text;
       if (one && selected.includes(full)) continue;
       out.push({
@@ -181,7 +205,7 @@ function DrugSearch({
     setFocusName((n) => n + 1);
   }
 
-  function lineFor(drugName: string, extra?: { form?: string; brand?: string; dosage?: string; frequency?: string; duration?: string }) {
+  function lineFor(drugName: string, extra?: { form?: string; brand?: string; dosage?: string; frequency?: string; duration?: string; note?: string }) {
     const drug = drugName.trim();
     if (!drug) return "";
     const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === drug.toLowerCase());
@@ -194,6 +218,7 @@ function DrugSearch({
       dosage: extra?.dosage,
       frequency: extra?.frequency,
       duration: extra?.duration,
+      note: extra?.note,
     }).text;
   }
 
@@ -203,6 +228,7 @@ function DrugSearch({
       dosage: v?.dosage,
       frequency: v?.frequency,
       duration: v?.duration,
+      note: v?.label,
     });
     if (!line) return;
     onAdd(line);
@@ -223,11 +249,13 @@ function DrugSearch({
 
   function commit() {
     const drug = (name || q).trim();
+    const course = courseText(days);
     const line = lineFor(drug, {
       brand,
       dosage: dosage.trim(),
       frequency: frequency.trim(),
-      duration: courseText(days),
+      duration: course,
+      note: noteFor(drug, dosage, frequency, course),
     });
     if (!line) return;
     onAdd(line);
@@ -482,6 +510,7 @@ function DrugLineEditor({
       dosage: dosage.trim(),
       frequency: frequency.trim(),
       duration: courseText(days),
+      note: noteFor(name, dosage, frequency, courseText(days)),
     }).text;
     if (next) onSave(next);
   }

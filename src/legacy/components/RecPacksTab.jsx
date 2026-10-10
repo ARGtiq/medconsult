@@ -422,21 +422,21 @@ export default function RecPacksTab() {
               </p>
               {viewPhases().map((phase, pi) => (
                 <div key={pi} className="pack-unit">
+                  {viewPhases().length > 1 && (
                   <div className="pack-unit-head">
                     <span className="pack-unit-kicker">Фаза/пункт {pi + 1}</span>
-                    {viewPhases().length > 1 && (
-                      <button
-                        type="button"
-                        className="remove-btn"
-                        onClick={() => {
-                          const next = viewPhases().filter((_, i) => i !== pi)
-                          setForm(withPhases(next.length ? next : [blankUnit()]))
-                        }}
-                      >
-                        ×
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="remove-btn"
+                      onClick={() => {
+                        const next = viewPhases().filter((_, i) => i !== pi)
+                        setForm(withPhases(next.length ? next : [blankUnit()]))
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
+                  )}
                   <PackLine
                     item={phase.items[0] || EMPTY_ITEM}
                     onChange={(next) => patchItem(pi, 0, next)}
@@ -527,13 +527,12 @@ function PackLine({ item, onChange, onRemove }) {
   const [open, setOpen] = useState(false)
   const [subDraft, setSubDraft] = useState('')
   const [subOpen, setSubOpen] = useState(false)
-  const [itemOpen, setItemOpen] = useState(!(item.name || item.text))
-  const [editSub, setEditSub] = useState(null)
+  const [dependOpen, setDependOpen] = useState(false)
+  const [subsOpen, setSubsOpen] = useState(false)
   const query = item.name || item.text || ''
   const hits = useMemo(() => (open ? drugHits(query) : []), [open, query])
   const subHits = useMemo(() => (subOpen ? drugHits(subDraft) : []), [subOpen, subDraft])
   const label = (item.name || item.text || '').trim()
-  const itemMeta = [item.dosage, item.frequency, item.duration].filter(Boolean).join(' · ')
 
   function applyDrug(base, hit) {
     return asItem({
@@ -576,42 +575,34 @@ function PackLine({ item, onChange, onRemove }) {
     onChange({ ...item, subs })
   }
 
+  const subCount = (item.subs || []).length
   return (
     <div className="pack-line">
-      {label && (
-        <div className="pack-sub">
-          <button type="button" className={`pack-sub-main${itemOpen ? ' is-on' : ''}`} onClick={() => setItemOpen((v) => !v)}>
-            <span className="pack-sub-name">{label}</span>
-            {itemMeta && <span className="pack-drug-meta">{itemMeta}</span>}
-          </button>
-          <InfoDot query={label} />
-          <button type="button" className="remove-btn" onClick={onRemove}>×</button>
-        </div>
-      )}
-      {(!label || itemOpen) && (
-        <div className="drug-form-row">
-          <input
-            value={item.name || item.text || ''}
-            onChange={(e) => {
-              const v = e.target.value
-              onChange(asItem({ ...item, name: v, fromDb: item.fromDb && v.trim().toLowerCase() === (item.name || '').toLowerCase(), subs: item.subs || [] }))
-              setOpen(true)
-            }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="пункт, или начни название лекарства"
-          />
-          {!label && <button type="button" className="remove-btn" onClick={onRemove}>×</button>}
-        </div>
-      )}
-      {itemOpen && label && (
-        <div className="pack-regimen">
-          <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
-          <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
-          <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
-        </div>
-      )}
-      <QuietDepends triggers={item.studyTriggers || []} onChange={(studyTriggers) => onChange({ ...item, studyTriggers })} />
+      <div className="pack-flat">
+        <input
+          className="pack-flat-name"
+          value={item.name || item.text || ''}
+          onChange={(e) => {
+            const v = e.target.value
+            onChange(asItem({ ...item, name: v, fromDb: item.fromDb && v.trim().toLowerCase() === (item.name || '').toLowerCase(), subs: item.subs || [] }))
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="пункт"
+        />
+        <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
+        <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
+        <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
+        {label ? <InfoDot query={label} /> : null}
+        <button type="button" className="remove-btn" onClick={onRemove}>×</button>
+        <button type="button" className="pack-depend-btn" onClick={() => setDependOpen((v) => !v)}>
+          зависимость
+        </button>
+        <button type="button" className="pack-depend-btn" onClick={() => setSubsOpen((v) => !v)}>
+          {subCount ? `подпункты · ${subCount}` : 'подпункты'}
+        </button>
+      </div>
       {open && hits.length > 0 && (
         <div className="pack-drug-hits">
           {hits.map((h) => (
@@ -622,7 +613,6 @@ function PackLine({ item, onChange, onRemove }) {
               onClick={() => {
                 onChange(applyDrug(item, h))
                 setOpen(false)
-                setItemOpen(false)
               }}
             >
               <strong>{h.name}</strong>
@@ -631,82 +621,66 @@ function PackLine({ item, onChange, onRemove }) {
           ))}
         </div>
       )}
-      {(item.subs || []).length > 0 && (
+      {dependOpen && <StudyDepends quiet triggers={item.studyTriggers || []} onChange={(studyTriggers) => onChange({ ...item, studyTriggers })} />}
+      {subsOpen && (
         <div className="pack-subs">
-          {item.subs.map((sub, si) => {
+          {(item.subs || []).map((sub, si) => {
             const subLabel = sub.name || sub.text || ''
-            const meta = [sub.dosage, sub.frequency, sub.duration].filter(Boolean).join(' · ')
-            const editing = editSub === si
             return (
-              <div key={si} className="pack-sub">
-                <button type="button" className="pack-sub-main" onClick={() => setEditSub(editing ? null : si)}>
-                  <span className="pack-sub-name">{subLabel}</span>
-                  {meta && <span className="pack-drug-meta">{meta}</span>}
-                </button>
-                {subLabel && <InfoDot query={sub.name || sub.text} />}
+              <div key={si} className="pack-flat">
+                <input
+                  className="pack-flat-name"
+                  value={subLabel}
+                  onChange={(e) => patchSub(si, { name: e.target.value })}
+                  placeholder="подпункт"
+                />
+                <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
+                <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
+                <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
                 <button
                   type="button"
-                  className="pack-sub-x"
-                  title="Убрать подпункт"
+                  className="pack-depend-btn"
                   onClick={() => onChange({ ...item, subs: item.subs.filter((_, j) => j !== si) })}
                 >
-                  ×
+                  убрать
                 </button>
-                {editing && (
-                  <>
-                    <input
-                      className="pack-sub-edit"
-                      value={subLabel}
-                      onChange={(e) => patchSub(si, { name: e.target.value })}
-                      placeholder="подпункт"
-                    />
-                    <div className="pack-regimen">
-                      <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
-                      <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
-                      <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
-                    </div>
-                  </>
-                )}
-                <QuietDepends triggers={sub.studyTriggers || []} onChange={(studyTriggers) => patchSub(si, { studyTriggers })} />
               </div>
             )
           })}
-        </div>
-      )}
-      <div className="drug-form-row" style={{ marginTop: 4 }}>
-        <input
-          value={subDraft}
-          onChange={(e) => {
-            setSubDraft(e.target.value)
-            setSubOpen(true)
-          }}
-          onFocus={() => setSubOpen(true)}
-          onBlur={() => setTimeout(() => setSubOpen(false), 150)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              addPlain(subDraft)
-            }
-          }}
-          placeholder="подпункт + Enter, или лекарство из базы"
-        />
-        <button type="button" className="btn-secondary btn-small" onClick={() => addPlain(subDraft)}>
-          + подпункт
-        </button>
-      </div>
-      {subOpen && subHits.length > 0 && (
-        <div className="pack-drug-hits">
-          {subHits.map((h) => (
-            <button
-              type="button"
-              key={h.line}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => addDrugSub(h)}
-            >
-              <strong>{h.name}</strong>
-              <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
-            </button>
-          ))}
+          <div className="pack-flat">
+            <input
+              className="pack-flat-name"
+              value={subDraft}
+              onChange={(e) => {
+                setSubDraft(e.target.value)
+                setSubOpen(true)
+              }}
+              onFocus={() => setSubOpen(true)}
+              onBlur={() => setTimeout(() => setSubOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addPlain(subDraft)
+                }
+              }}
+              placeholder="подпункт"
+            />
+          </div>
+          {subOpen && subHits.length > 0 && (
+            <div className="pack-drug-hits">
+              {subHits.map((h) => (
+                <button
+                  type="button"
+                  key={h.line}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addDrugSub(h)}
+                >
+                  <strong>{h.name}</strong>
+                  <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

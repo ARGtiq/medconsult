@@ -644,6 +644,7 @@ export function formatDrugMention(d: {
   dosage?: string;
   frequency?: string;
   duration?: string;
+  note?: string;
 }): DrugMention {
   const name = d.name.trim();
   const form = (d.form || "").trim();
@@ -656,6 +657,7 @@ export function formatDrugMention(d: {
     .map((s) => s.trim())
     .filter(Boolean);
   const tail = [d.dosage, d.frequency, d.duration].map((s) => (s || "").trim()).filter(Boolean).join(" - ");
+  const note = (d.note || "").trim();
   let head = "";
   let paren = "";
   if (parts.length > 1) {
@@ -667,7 +669,7 @@ export function formatDrugMention(d: {
     else if (brands.length === 1) paren = brands[0];
     else if (parts.length === 1) paren = parts[0];
   }
-  const text = [head, paren ? `(${paren})` : "", tail].filter(Boolean).join(" ");
+  const text = [head, paren ? `(${paren})` : "", tail, note ? `(${note})` : ""].filter(Boolean).join(" ");
   return { head: head || name, paren, text: text || name };
 }
 
@@ -677,8 +679,10 @@ function squashDrugName(value: string): string {
 
 /** Разобрать уже вставленную строку обратно в поля формы. */
 export function parseDrugLine(line: string): { name: string; brand: string; dosage: string; frequency: string; duration: string } | null {
-  const raw = line.trim();
-  if (!raw) return null;
+  const rawLine = line.trim();
+  if (!rawLine) return null;
+  const trail = rawLine.match(/^(.*\s-\s.*)\(([^)]*)\)\s*$/);
+  const raw = trail ? trail[1].trim() : rawLine;
   const folded = squashDrugName(raw);
   const rec = liveDrugRecords()
     .filter((d) => {
@@ -750,6 +754,7 @@ export function analogsOf(lineOrName: string): { name: string; line: string }[] 
         dosage: v?.dosage,
         frequency: v?.frequency,
         duration: v?.duration,
+        note: v?.label,
       }).text,
     });
   };
@@ -1065,6 +1070,7 @@ export function learnedDrugs(complaints: string[], code: string): PracticeChip[]
       dosage: v?.dosage,
       frequency: v?.frequency,
       duration: v?.duration,
+      note: v?.label,
     }).text;
     const label = [rec.name, v?.dosage, v?.frequency]
       .map((s) => (s || "").trim())

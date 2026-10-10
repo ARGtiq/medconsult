@@ -105,7 +105,37 @@
 .legacy-surface .drug-quick-bit.days { background: color-mix(in srgb, #6a8f72 28%, var(--paper)); }
 .legacy-surface .drug-quick-bit.note { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); color: var(--ink-soft); }
 .legacy-surface .drug-quick-bit.analogs { background: color-mix(in srgb, #6a5acd 16%, var(--paper)); }
-.legacy-surface .drug-quick-exists { font-size: 11px; color: var(--ink-soft); }
+.legacy-surface .drug-quick-line.is-dup {
+  outline: 1px solid #b42318;
+  background: color-mix(in srgb, #b42318 10%, var(--paper));
+  border-radius: 8px;
+  padding: 2px 4px;
+}
+.legacy-surface .drug-quick-line.is-dup .drug-quick-bit.name { background: #f4c7c3; color: #9a1c1c; }
+.legacy-surface .drug-quick-line.is-dup .drug-quick-exists { color: #9a1c1c; font-weight: 650; }
+.legacy-surface .drug-quick-input.is-dup {
+  outline: 1px solid #b42318;
+  background: color-mix(in srgb, #b42318 10%, var(--paper));
+}
+.legacy-surface .drug-db-search {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.legacy-surface .drug-db-card.is-compact { padding: 6px 10px; }
+.legacy-surface .drug-db-card.is-compact .drug-db-card-name { font-size: 14px; font-weight: 650; }
+.legacy-surface .drug-db-mini {
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
 
 .legacy-surface .drug-db-line { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
 .legacy-surface .drug-db-line-highlight { color: var(--teal); font-weight: 500; }
