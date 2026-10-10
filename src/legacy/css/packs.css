@@ -39,7 +39,36 @@
   color: var(--ink);
   font-size: 13px;
 }
-.legacy-surface .pack-flat-name { flex: 1.6 1 160px; }
+.legacy-surface .pack-flat textarea.pack-flat-name {
+  flex: 1 1 240px;
+  width: auto;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  field-sizing: content;
+  resize: none;
+  overflow: hidden;
+}
+.legacy-surface .pack-unit-num {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  margin-top: 6px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted, #8b909a);
+  cursor: grab;
+  user-select: none;
+}
+.legacy-surface .pack-unit-num:active { cursor: grabbing; }
+.legacy-surface .pack-unit.is-over { outline: 1px dashed var(--teal); border-radius: 8px; }
 .legacy-surface .pack-unit {
   margin: 0 0 4px;
   padding: 0;
@@ -128,14 +157,17 @@
 }
 .legacy-surface .pack-spoiler-body .pack-phase:first-of-type { margin-top: 4px; border-top: none; padding-top: 0; }
 .legacy-surface .pack-unit {
-  margin: 0 0 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 6px;
   padding: 0;
   border: none;
   background: transparent;
 }
 .legacy-surface .pack-unit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .legacy-surface .pack-unit-kicker { margin-bottom: 6px; font-size: 11px; color: var(--muted, #8b909a); }
-.legacy-surface .pack-unit .pack-line { margin: 0; padding: 0; border: none; background: transparent; }
+.legacy-surface .pack-unit .pack-line { flex: 1; min-width: 0; margin: 0; padding: 0; border: none; background: transparent; }
 .legacy-surface .pack-subtype-note { margin: 8px 0; }
 .legacy-surface .pack-redflag { margin-left: 6px; color: #9a3412; font-size: 11px; }
 .legacy-surface .pack-source, .pack-source { display: block; margin-top: 4px; font-size: 11px; color: var(--muted, #6b7280); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }

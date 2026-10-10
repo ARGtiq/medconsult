@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import { DRUGS } from '../../medconsult/data/catalog'
@@ -229,6 +229,18 @@ export default function RecPacksTab() {
     setForm(withPhases(phases))
   }
 
+  function movePhase(from, to) {
+    if (from == null || from === to) return
+    const phases = viewPhases().slice()
+    if (from < 0 || to < 0 || from >= phases.length || to >= phases.length) return
+    const [row] = phases.splice(from, 1)
+    phases.splice(to, 0, row)
+    setForm(withPhases(phases))
+  }
+
+  const dragFrom = useRef(null)
+  const [dragOver, setDragOver] = useState(null)
+
   function save() {
     const name = form.name.trim()
     if (!name) return
@@ -421,22 +433,37 @@ export default function RecPacksTab() {
                 Фаза и пункт — одно и то же: одна строка рекомендаций, она попадает в протокол отдельно. Подпункт — деталь или вариант внутри этой строки, его можно вставить и сам по себе.
               </p>
               {viewPhases().map((phase, pi) => (
-                <div key={pi} className="pack-unit">
-                  {viewPhases().length > 1 && (
-                  <div className="pack-unit-head">
-                    <span className="pack-unit-kicker">Фаза/пункт {pi + 1}</span>
-                    <button
-                      type="button"
-                      className="remove-btn"
-                      onClick={() => {
-                        const next = viewPhases().filter((_, i) => i !== pi)
-                        setForm(withPhases(next.length ? next : [blankUnit()]))
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  )}
+                <div
+                  key={pi}
+                  className={`pack-unit${dragOver === pi ? ' is-over' : ''}`}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    if (dragOver !== pi) setDragOver(pi)
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const from = dragFrom.current
+                    dragFrom.current = null
+                    setDragOver(null)
+                    movePhase(from, pi)
+                  }}
+                >
+                  <span
+                    className="pack-unit-num"
+                    draggable
+                    title="Перетащи, чтобы изменить порядок"
+                    onDragStart={(e) => {
+                      dragFrom.current = pi
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', String(pi))
+                    }}
+                    onDragEnd={() => {
+                      dragFrom.current = null
+                      setDragOver(null)
+                    }}
+                  >
+                    {pi + 1}
+                  </span>
                   <PackLine
                     item={phase.items[0] || EMPTY_ITEM}
                     onChange={(next) => patchItem(pi, 0, next)}
@@ -456,7 +483,7 @@ export default function RecPacksTab() {
                 className="btn-secondary btn-small"
                 onClick={() => setForm(withPhases([...viewPhases(), blankUnit()]))}
               >
-                + фаза/пункт
+                + пункт
               </button>
               <button type="button" className="pack-depend-btn" onClick={() => setForm({ ...form, nonDrugOn: !form.nonDrugOn })}>
                 {form.nonDrugOn ? 'немедикаментозная терапия' : '+ немедикаментозная терапия'}
@@ -579,8 +606,10 @@ function PackLine({ item, onChange, onRemove }) {
   return (
     <div className="pack-line">
       <div className="pack-flat">
-        <input
+        <AutoResizeTextarea
           className="pack-flat-name"
+          compact
+          minRows={1}
           value={item.name || item.text || ''}
           onChange={(e) => {
             const v = e.target.value
@@ -589,7 +618,7 @@ function PackLine({ item, onChange, onRemove }) {
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="пункт"
+          placeholder="пункт, рекомендация или анализ"
         />
         <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
         <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
@@ -597,10 +626,10 @@ function PackLine({ item, onChange, onRemove }) {
         {label ? <InfoDot query={label} /> : null}
         <button type="button" className="remove-btn" onClick={onRemove}>×</button>
         <button type="button" className="pack-depend-btn" onClick={() => setDependOpen((v) => !v)}>
-          зависимость
+          +зависимость
         </button>
         <button type="button" className="pack-depend-btn" onClick={() => setSubsOpen((v) => !v)}>
-          {subCount ? `подпункты · ${subCount}` : 'подпункты'}
+          {subCount ? `+подпункты · ${subCount}` : '+подпункты'}
         </button>
       </div>
       {open && hits.length > 0 && (
