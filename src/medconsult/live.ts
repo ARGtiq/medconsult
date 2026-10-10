@@ -586,10 +586,11 @@ export function studyDrugHints(entries: StudyEntry[], who?: RefWho | null): Stud
       const itemHits = triggerWhy(item.studyTriggers, entries, who);
       const why = [...packHits, ...itemHits];
       if (why.length) {
-        const subs = (item.subs || []).map(lineOf).filter(Boolean);
         const head = lineOf(item);
-        const line = subs.length ? [`* ${head}`, ...subs.map((s) => `  * ${s}`)].join("\n") : head;
-        if (line) out.push({ id: `${pack.id}|${line}`, name: pack.name || head, line, why: why.join("; ") });
+        const lines = [head, ...(item.subs || []).map(lineOf)].map((s) => String(s || "").trim()).filter(Boolean);
+        lines.forEach((line, i) => {
+          out.push({ id: `${pack.id}|${i}|${line}`, name: pack.name || head, line, why: why.join("; ") });
+        });
       }
       for (const sub of item.subs || []) {
         const subHits = triggerWhy(sub.studyTriggers, entries, who);

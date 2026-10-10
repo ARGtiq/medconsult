@@ -41,9 +41,10 @@ function packItem(raw) {
   return { text: subLine(raw), subs }
 }
 
-function itemBlock(item) {
-  if (!item.subs.length) return item.text
-  return [`* ${item.text}`, ...item.subs.map((s) => `  * ${subLine(s)}`)].join('\n')
+function itemLines(item) {
+  const head = String(item.text || '').trim()
+  const subs = (item.subs || []).map((s) => subLine(s).trim()).filter(Boolean)
+  return [head, ...subs].filter(Boolean)
 }
 
 function noteOf(pack, subtypeIdx) {
@@ -82,7 +83,7 @@ function PackBody({ pack, onApply }) {
     .filter((phase) => phase.name || phase.items.length)
   const extras = packExtras(pack)
   const note = noteOf(pack, subtypeIdx)
-  const allLines = [...phases.flatMap((phase) => phase.items.map(itemBlock)), ...extras]
+  const allLines = [...phases.flatMap((phase) => phase.items.flatMap(itemLines)), ...extras]
   return (
     <div className="pack-spoiler-body">
       {(pack.category || '').trim() && <div className="guideline-panel-text-muted">{pack.category}</div>}
@@ -106,7 +107,7 @@ function PackBody({ pack, onApply }) {
           {phase.name && !same && <div className="pack-phase-label">{phase.name}</div>}
           {phase.items.map((item) => (
             <div key={item.text} style={{ marginTop: 6 }}>
-              <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => onApply([itemBlock(item)])}>
+              <button type="button" className="suggestion-pill suggestion-pill-guideline" onClick={() => onApply(itemLines(item))}>
                 + {item.text}
               </button>
               {item.subs.length > 0 && (
