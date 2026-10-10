@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { store } from '../lib/store'
 import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
@@ -358,234 +358,106 @@ function rawIsDup(text, known) {
 
 function QuickDrugAdd({ onSave, onClose, known }) {
   const [raw, setRaw] = useState('')
-  const [rows, setRows] = useState(null)
-  const [draft, setDraft] = useState('')
+  const [analogs, setAnalogs] = useState([])
   const [hint, setHint] = useState('')
-  const [holdRaw, setHoldRaw] = useState(false)
-  const draftRef = useRef(null)
   const rawRef = useRef(null)
+  const lines = String(raw || '').split('\n')
 
-  function lineReady(line) {
-    const parsed = parseQuickDrug(line)
-    return !!(parsed && parsed.dosage && parsed.frequency && (parsed.duration || parsed.note))
-  }
-
-  function apply(text) {
-    const lines = String(text || '')
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (!lines.length) return false
-    const next = lines.map((line) => {
-      const parsed = parseQuickDrug(line)
-      return parsed ? { ...parsed, ok: true, analogs: '' } : { raw: line, ok: false }
-    })
-    if (!next.some((r) => r.ok)) {
-      setRaw(text)
-      setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
-      return false
-    }
-    setHint('')
-    setHoldRaw(false)
-    setRows(next)
-    setDraft('')
-    return true
-  }
-
-  useEffect(() => {
-    if (rows || holdRaw) return
-    const lines = raw.split(/\n+/).map((s) => s.trim()).filter(Boolean)
-    if (!lines.length || !lines.every(lineReady)) return
-    const timer = setTimeout(() => apply(raw), 400)
-    return () => clearTimeout(timer)
-  }, [raw, rows, holdRaw])
-
-  useEffect(() => {
-    if (!rows?.length) return
-    draftRef.current?.focus()
-  }, [rows?.length])
-
-  useEffect(() => {
-    if (!rows) return
-    const line = draft.trim()
-    if (!line || !lineReady(line) || line.includes('\n')) return
-    const timer = setTimeout(() => {
-      const parsed = parseQuickDrug(line)
-      if (!parsed) return
-      setRows((list) => [...(list || []), { ...parsed, ok: true, analogs: '' }])
-      setDraft('')
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [draft, rows])
-
-  function takeDraftPaste(text) {
-    const lines = String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean)
-    const parsed = []
-    const left = []
-    lines.forEach((line) => {
-      const hit = parseQuickDrug(line)
-      if (hit) parsed.push({ ...hit, ok: true, analogs: '' })
-      else left.push(line)
-    })
-    if (parsed.length) setRows((list) => [...(list || []), ...parsed])
-    setDraft(left.join('\n'))
-    setHint(parsed.length ? '' : 'Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
-  }
-
-  function patchRow(i, patch) {
-    setRows((list) => list.map((row, idx) => (idx === i ? { ...row, ...patch, ok: true } : row)))
-  }
-
-  function readyRows() {
-    const list = [...(rows || [])]
-    const pending = draft.trim()
-    if (pending) {
-      pending.split(/\n+/).map((s) => s.trim()).filter(Boolean).forEach((line) => {
-        const parsed = parseQuickDrug(line)
-        if (parsed) list.push({ ...parsed, ok: true, analogs: '' })
-      })
-    }
-    return list.filter((r) => r.ok && String(r.name || '').trim())
+  function patchLine(index, patch) {
+    const next = lines.slice()
+    const current = parseQuickDrug(next[index]) || { name: '', dosage: '', frequency: '', duration: '', note: '', open: '"', close: '"' }
+    next[index] = composeQuickDrug({ ...current, ...patch })
+    setRaw(next.join('\n'))
   }
 
   function save() {
-    const ready = readyRows()
+    const ready = []
+    const left = []
+    lines.forEach((line, i) => {
+      const text = line.trim()
+      if (!text) return
+      const parsed = parseQuickDrug(text)
+      if (parsed?.name) ready.push({ ...parsed, ok: true, analogs: analogs[i] || '' })
+      else left.push(line)
+    })
     if (!ready.length) {
       setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
       return
     }
     onSave(ready)
-    setRows(null)
-    setRaw('')
-    setDraft('')
-    setHint('')
-    setHoldRaw(false)
-    requestAnimationFrame(() => rawRef.current?.focus())
+    setAnalogs([])
+    setRaw(left.join('\n'))
+    setHint(left.length ? 'Это не разобрал — текст остался в поле' : '')
+    if (!left.length) requestAnimationFrame(() => rawRef.current?.focus())
   }
+
+  const parsed = lines.map((line, i) => ({ i, line, parsed: parseQuickDrug(line.trim()) })).filter((row) => row.parsed?.name)
 
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Строка: "название" дозировка - кратность, дни (примечание). Примечание попадает и в протокол. Дубликат сразу красный. Аналоги — рядом.
+        Строка: "название" дозировка - кратность, дни (примечание). Текст остаётся в поле, его можно править и дополнять. Ниже — что разобралось.
       </p>
-      {rows ? (
+      <textarea
+        ref={rawRef}
+        autoFocus
+        className={`drug-quick-input${rawIsDup(raw, known) ? ' is-dup' : ''}`}
+        rows={Math.min(8, Math.max(2, lines.length))}
+        placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды)'}
+        value={raw}
+        onChange={(e) => {
+          setRaw(e.target.value)
+          setHint('')
+        }}
+      />
+      {parsed.length > 0 && (
         <div className="drug-quick-rows">
-          {rows.map((row, i) =>
-            row.ok ? (
-              <div key={i} className={`drug-quick-line${known(row.name) ? " is-dup" : ""}`}>
-                <span className="drug-quick-punct">{row.open || '"'}</span>
-                <span className="drug-quick-bit name">
-                  <input value={row.name} aria-label="название" onChange={(e) => patchRow(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
-                </span>
-                <span className="drug-quick-punct">{row.close || '"'}</span>
-                <span className="drug-quick-bit dose">
-                  <input value={row.dosage} aria-label="дозировка" placeholder="доза" onChange={(e) => patchRow(i, { dosage: e.target.value })} size={Math.max(String(row.dosage || '').length, 4)} />
-                </span>
-                <span className="drug-quick-punct">-</span>
-                <span className="drug-quick-bit freq">
-                  <input value={row.frequency} aria-label="кратность" placeholder="кратность" onChange={(e) => patchRow(i, { frequency: e.target.value })} size={Math.max(String(row.frequency || '').length, 6)} />
-                </span>
-                <span className="drug-quick-punct">,</span>
-                <span className="drug-quick-bit days">
-                  <input value={row.duration} aria-label="дни" placeholder="дни" onChange={(e) => patchRow(i, { duration: e.target.value })} size={Math.max(String(row.duration || '').length, 4)} />
-                </span>
-                <span className="drug-quick-punct">(</span>
-                <span className="drug-quick-bit note">
-                  <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchRow(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
-                </span>
-                <span className="drug-quick-punct">)</span>
-                <span className="drug-quick-bit analogs">
-                  <input
-                    value={row.analogs || ''}
-                    aria-label="аналоги"
-                    placeholder="аналоги"
-                    onChange={(e) => patchRow(i, { analogs: e.target.value })}
-                    size={Math.max(String(row.analogs || '').length, 8)}
-                  />
-                </span>
-                {known(row.name) ? <span className="drug-quick-exists">уже в базе</span> : null}
-              </div>
-            ) : (
-              <input
-                key={i}
-                className="drug-quick-raw"
-                value={row.raw}
-                onChange={(e) => {
-                  const parsed = parseQuickDrug(e.target.value)
-                  setRows((list) => list.map((r, idx) => (idx === i ? (parsed ? { ...parsed, ok: true } : { raw: e.target.value, ok: false }) : r)))
-                }}
-              />
-            ),
-          )}
-          <textarea
-            ref={draftRef}
-            className={`drug-quick-input${rawIsDup(draft, known) ? ' is-dup' : ''}`}
-            rows={1}
-            placeholder="следующий препарат той же строкой"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              setHint('')
-            }}
-            onPaste={(e) => {
-              const text = e.clipboardData.getData('text')
-              if (!text.trim()) return
-              e.preventDefault()
-              takeDraftPaste(text)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                if (draft.trim()) takeDraftPaste(draft)
-              }
-            }}
-          />
+          {parsed.map(({ i, parsed: row }) => (
+            <div key={i} className={`drug-quick-line${known(row.name) ? ' is-dup' : ''}`}>
+              <span className="drug-quick-punct">{row.open || '"'}</span>
+              <span className="drug-quick-bit name">
+                <input value={row.name} aria-label="название" onChange={(e) => patchLine(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
+              </span>
+              <span className="drug-quick-punct">{row.close || '"'}</span>
+              <span className="drug-quick-bit dose">
+                <input value={row.dosage} aria-label="дозировка" placeholder="доза" onChange={(e) => patchLine(i, { dosage: e.target.value })} size={Math.max(String(row.dosage || '').length, 4)} />
+              </span>
+              <span className="drug-quick-punct">-</span>
+              <span className="drug-quick-bit freq">
+                <input value={row.frequency} aria-label="кратность" placeholder="кратность" onChange={(e) => patchLine(i, { frequency: e.target.value })} size={Math.max(String(row.frequency || '').length, 6)} />
+              </span>
+              <span className="drug-quick-punct">,</span>
+              <span className="drug-quick-bit days">
+                <input value={row.duration} aria-label="дни" placeholder="дни" onChange={(e) => patchLine(i, { duration: e.target.value })} size={Math.max(String(row.duration || '').length, 4)} />
+              </span>
+              <span className="drug-quick-punct">(</span>
+              <span className="drug-quick-bit note">
+                <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchLine(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
+              </span>
+              <span className="drug-quick-punct">)</span>
+              <span className="drug-quick-bit analogs">
+                <input
+                  value={analogs[i] || ''}
+                  aria-label="аналоги"
+                  placeholder="аналоги"
+                  onChange={(e) => setAnalogs((list) => {
+                    const next = list.slice()
+                    next[i] = e.target.value
+                    return next
+                  })}
+                  size={Math.max(String(analogs[i] || '').length, 8)}
+                />
+              </span>
+              {known(row.name) ? <span className="drug-quick-exists">уже в базе</span> : null}
+            </div>
+          ))}
         </div>
-      ) : (
-        <textarea
-          ref={rawRef}
-          autoFocus
-          className={`drug-quick-input${rawIsDup(raw, known) ? ' is-dup' : ''}`}
-          rows={2}
-          placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды)'}
-          value={raw}
-          onChange={(e) => {
-            setRaw(e.target.value)
-            setHint('')
-            setHoldRaw(false)
-          }}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData('text')
-            if (!text.trim()) return
-            e.preventDefault()
-            apply(text)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              apply(raw)
-            }
-          }}
-        />
       )}
       {hint ? <p className="drug-quick-hint is-bad">{hint}</p> : null}
       <div className="drug-form-actions">
-        <button type="button" className="btn-primary" disabled={!raw.trim() && !rows?.some((r) => r.ok && String(r.name || '').trim())} onClick={save}>
+        <button type="button" className="btn-primary" disabled={!raw.trim()} onClick={save}>
           добавить
         </button>
-        {rows ? (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => {
-              setHoldRaw(true)
-              setRaw((rows || []).map((r) => (r.ok ? composeQuickDrug(r) : r.raw)).join('\n'))
-              setRows(null)
-            }}
-          >
-            править строкой
-          </button>
-        ) : null}
         <button type="button" className="btn-secondary" onClick={onClose}>
           закрыть
         </button>
@@ -593,6 +465,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
     </div>
   )
 }
+
 
 export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
