@@ -12,13 +12,20 @@ export function SettingsPage() {
       <div className="mx-auto max-w-4xl space-y-3 p-4 pb-24 md:p-8">
         <h1 className="font-display text-2xl">Как ведёт себя станок</h1>
         <div className="grid gap-3 md:grid-cols-2">
-          <Card title="Оформление">
+          <Card title="Интерфейс">
             <p className="mt-1 text-xs text-ink-soft">Акцентный цвет, тёмная тема и анимации. Действует на весь станок.</p>
             <div className="legacy-surface mt-2">
               <ThemeSettings />
             </div>
-          </Card>
-          <Card title="Кнопка AI на протоколе">
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.openOnProtocol}
+                onChange={(e) => setSettings({ openOnProtocol: e.target.checked })}
+              />
+              При запуске открывать Протокол
+            </label>
+            <p className="mt-3 text-xs font-medium text-ink-soft">Кнопка AI на протоколе</p>
             {(
               [
                 ["always", "Постоянно в каждом блоке"],
@@ -31,16 +38,6 @@ export function SettingsPage() {
                 {label}
               </label>
             ))}
-          </Card>
-          <Card title="Старт">
-            <label className="mt-2 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.openOnProtocol}
-                onChange={(e) => setSettings({ openOnProtocol: e.target.checked })}
-              />
-              При запуске открывать Протокол
-            </label>
           </Card>
           <Card title="Блоки протокола">
             <label className="mt-2 flex items-center gap-2 text-sm">
@@ -101,46 +98,6 @@ export function SettingsPage() {
               Поле кода и формулировки переезжает наверх правой колонки. В сборке его нет.
             </p>
           </Card>
-          <Card title="Сеанс станка">
-            <p className="mt-2 text-xs text-ink-soft">
-              Полный архив: протокол, пациенты, шаблоны, справочники, МКБ, черновики и ключи. Выборочно — в блоке «Данные
-              приложения» ниже: отметьте разделы перед экспортом или импортом.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm"
-                onClick={() => {
-                  const blob = new Blob([useAppStore.getState().exportData()], { type: "application/json" });
-                  const a = document.createElement("a");
-                  a.href = URL.createObjectURL(blob);
-                  a.download = `medconsult-${new Date().toISOString().slice(0, 10)}.json`;
-                  a.click();
-                }}
-              >
-                Скачать всё
-              </button>
-              <label className="rounded-lg border border-line bg-paper px-3 py-1.5 text-sm">
-                Загрузить
-                <input
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    file.text().then((raw) => {
-                      const ok = useAppStore.getState().importData(raw);
-                      if (ok) window.location.reload();
-                    });
-                  }}
-                />
-              </label>
-            </div>
-          </Card>
-        </div>
-        <div className="legacy-surface rounded-xl border border-line bg-surface p-3">
-          <LegacySettings />
         </div>
         <div className="rounded-xl border border-line bg-surface p-4">
           <h3 className="text-sm font-medium">Горячие клавиши · Windows</h3>
@@ -161,6 +118,9 @@ export function SettingsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="legacy-surface rounded-xl border border-line bg-surface p-3">
+          <LegacySettings />
         </div>
       </div>
     </AppShell>

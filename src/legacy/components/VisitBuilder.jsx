@@ -8,7 +8,6 @@ import Mkb10Picker from './Mkb10Picker'
 import GuidelinePanel from './GuidelinePanel'
 import GuidelineHub, { GuidelineHubPanel } from './GuidelineHub'
 import { getGuidelineHubMode } from '../lib/uiPrefs'
-import { isWizardButtonHidden } from '../lib/uiPrefs'
 import WizardModal from './WizardModal'
 import RecPackSearch from './RecPackSearch'
 import VoiceInputButton from './VoiceInputButton'
@@ -387,19 +386,6 @@ export default function VisitBuilder({ template, initialVisit, onLoadVisit }) {
           </label>
         </div>
       </details>
-
-      {!isWizardButtonHidden() && (
-        <button
-          type="button"
-          className="wizard-trigger-btn"
-          onClick={() => {
-            setWizardStep(0)
-            setWizardOpen(true)
-          }}
-        >
-          🧭 Пошаговое заполнение
-        </button>
-      )}
 
       <div className={hubOpen && getGuidelineHubMode() === 'panel' ? 'visit-layout visit-layout-with-hub' : 'visit-layout'}>
         {hubOpen && getGuidelineHubMode() === 'panel' && (

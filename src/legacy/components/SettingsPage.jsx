@@ -6,7 +6,7 @@ import SupabaseSettings from './SupabaseSettings'
 import AiKeyBackup from './AiKeyBackup'
 import ClinicalLockSettings from './ClinicalLockSettings'
 import { store } from '../lib/store'
-import { getGuidelineHubMode, setGuidelineHubMode, isWizardButtonHidden, setWizardButtonHidden } from '../lib/uiPrefs'
+import { getGuidelineHubMode, setGuidelineHubMode } from '../lib/uiPrefs'
 
 // Настройки = как ведёт себя приложение (оформление, AI, синхронизация).
 // Медицинское содержание (шаблоны, клинреки, лекарства, группы) — в Справочнике.
@@ -14,7 +14,6 @@ export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [purgeResult, setPurgeResult] = useState('')
   const [hubMode, setHubMode] = useState(getGuidelineHubMode())
-  const [wizardHidden, setWizardHidden] = useState(isWizardButtonHidden())
 
   function handlePurge() {
     const { visitsRemoved, patientsRemoved } = store.purgeOldTombstones(90)
@@ -33,68 +32,6 @@ export default function SettingsPage() {
         <p className="settings-note-inline">OpenRouter или Gemini напрямую через Google API. У каждого свой ключ и своя модель, список обновляется сам.</p>
         <AiSettings inline />
         <AiKeyBackup />
-      </div>
-      <div className="general-settings-block">
-        <h4>Данные приложения</h4>
-        <p className="settings-note-inline">Полный архив или только отмеченные разделы. Старые файлы тоже подходят. После импорта страница перезагрузится.</p>
-        <DataExport />
-        <div className="tombstone-purge-block">
-          <p className="settings-note-inline">
-            Удалённые пациенты/визиты хранятся как метки ("tombstone"), а не стираются сразу — это нужно,
-            чтобы удаление долетело до других твоих устройств через синхронизацию. Раз в время старые метки
-            можно стереть окончательно и освободить место.
-          </p>
-          <button type="button" className="btn-secondary btn-small" onClick={handlePurge}>
-            Стереть метки удаления старше 90 дней
-          </button>
-          {purgeResult && <div className="ai-diagnostic ok">{purgeResult}</div>}
-        </div>
-      </div>
-      <div className="general-settings-block">
-        <h4>Защита данных пациентов</h4>
-        <ClinicalLockSettings />
-      </div>
-      <div className="general-settings-block">
-        <h4>Клинические рекомендации на приёме</h4>
-        <p className="settings-note-inline">Как открывается панель "📋 Есть рекомендация по диагнозу" по клику.</p>
-        <div className="hub-mode-toggle">
-          <label>
-            <input
-              type="radio"
-              checked={hubMode === 'panel'}
-              onChange={() => {
-                setGuidelineHubMode('panel')
-                setHubMode('panel')
-              }}
-            />
-            Блоком на странице приёма (по умолчанию)
-          </label>
-          <label>
-            <input
-              type="radio"
-              checked={hubMode === 'modal'}
-              onChange={() => {
-                setGuidelineHubMode('modal')
-                setHubMode('modal')
-              }}
-            />
-            Модальным окном
-          </label>
-        </div>
-      </div>
-      <div className="general-settings-block">
-        <h4>Пошаговое заполнение протокола</h4>
-        <label className="hub-mode-toggle-inline">
-          <input
-            type="checkbox"
-            checked={!wizardHidden}
-            onChange={(e) => {
-              setWizardButtonHidden(!e.target.checked)
-              setWizardHidden(!e.target.checked)
-            }}
-          />
-          Показывать кнопку "🧭 Пошаговое заполнение" на приёме
-        </label>
       </div>
       <div className="general-settings-block">
         <h4>Supabase (синхронизация между устройствами)</h4>
@@ -191,11 +128,57 @@ create policy "own secrets update" on medconsult_secrets for update
         </details>
       </div>
       <div className="general-settings-block">
+        <h4>Защита данных пациентов</h4>
+        <ClinicalLockSettings />
+      </div>
+      <div className="general-settings-block">
+        <h4>Клинические рекомендации на приёме</h4>
+        <p className="settings-note-inline">Как открывается панель "📋 Есть рекомендация по диагнозу" по клику.</p>
+        <div className="hub-mode-toggle">
+          <label>
+            <input
+              type="radio"
+              checked={hubMode === 'panel'}
+              onChange={() => {
+                setGuidelineHubMode('panel')
+                setHubMode('panel')
+              }}
+            />
+            Блоком на странице приёма (по умолчанию)
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={hubMode === 'modal'}
+              onChange={() => {
+                setGuidelineHubMode('modal')
+                setHubMode('modal')
+              }}
+            />
+            Модальным окном
+          </label>
+        </div>
+      </div>
+      <div className="general-settings-block">
         <h4>История версий</h4>
         <button type="button" className="btn-secondary" onClick={() => setChangelogOpen(true)}>
           Что нового
         </button>
         {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
+      </div>
+      <div className="general-settings-block">
+        <h4>Бэкап</h4>
+        <p className="settings-note-inline">Полный архив станка: протокол, пациенты, шаблоны, справочники, МКБ, черновики и ключи. Можно выгрузить всё сразу или только отмеченные разделы. Старые файлы тоже подходят. После импорта страница перезагрузится.</p>
+        <DataExport />
+        <div className="tombstone-purge-block">
+          <p className="settings-note-inline">
+            Удалённые пациенты и визиты хранятся как метки, а не стираются сразу — так удаление долетает до других устройств. Старые метки можно стереть окончательно.
+          </p>
+          <button type="button" className="btn-secondary btn-small" onClick={handlePurge}>
+            Стереть метки удаления старше 90 дней
+          </button>
+          {purgeResult && <div className="ai-diagnostic ok">{purgeResult}</div>}
+        </div>
       </div>
     </div>
   )
