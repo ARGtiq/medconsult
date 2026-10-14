@@ -6,10 +6,12 @@ import {
 } from './studyEditorLib'
 
 export function StudyFieldList(props) {
-  const { form, dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions, applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle, insertFormulaToken, moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption, renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef, toggleShowValue, updateField } = props
+  const { form, dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions, applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle, insertFormulaToken, moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption, renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef, toggleShowValue, updateField, only } = props
   return (
               <div className="study-editor-fields">
               <div className="scenarios-block">
+                {only == null && (
+                <>
                 <div className="scenarios-block-label">Пункты (название → тег-транскрипция)</div>
                 <p className="settings-note-inline study-field-hint">
                   Тег — латинская транскрипция названия. «Исключающие» — пары вроде ровные/неровные и четкие/нечеткие.
@@ -18,8 +20,11 @@ export function StudyFieldList(props) {
                   За ⋮⋮ пункт перетаскивается и в развёрнутом виде, и в спойлере. Подпункты едут вместе с пунктом.
                   В тексте шаблона строка «название - {'{тег}'}» появляется сама. Её можно править.
                 </p>
+                </>
+                )}
                 {form.fields.map((f, idx) => {
-                  if (foldIdle && openField !== idx) {
+                  if (only != null && idx !== only) return null
+                  if (only == null && foldIdle && openField !== idx) {
                     return (
                       <div
                         key={idx}
@@ -150,6 +155,20 @@ export function StudyFieldList(props) {
                         )}
                         <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
                       </div>
+                      {f.kind !== 'heading' && (
+                        <div className="study-field-editor-row">
+                          <input
+                            placeholder="текст перед значением"
+                            value={f.before || ''}
+                            onChange={(e) => updateField(idx, { before: e.target.value })}
+                          />
+                          <input
+                            placeholder="текст после значения"
+                            value={f.after || ''}
+                            onChange={(e) => updateField(idx, { after: e.target.value })}
+                          />
+                        </div>
+                      )}
 
                       {f.kind !== 'heading' && (
                       <>
@@ -576,8 +595,8 @@ export function StudyFieldList(props) {
                     </div>
                   )
                 })}
-                <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>
-                <button type="button" className="btn-secondary btn-small" onClick={addHeading}>+ заголовок</button>
+                {only == null && <button type="button" className="btn-secondary btn-small" onClick={addField}>+ Пункт</button>}
+                {only == null && <button type="button" className="btn-secondary btn-small" onClick={addHeading}>+ заголовок</button>}
               </div>
               </div>
   )

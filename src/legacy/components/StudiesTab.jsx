@@ -21,6 +21,8 @@ import {
   splitOptions,
   fieldKeyOf,
   guessKey,
+  markCaret,
+  placeMarkCaret,
   PRESET_STUDIES,
   presetByKey,
   listedStudies,
@@ -516,14 +518,16 @@ export default function StudiesTab({ scope = 'studies' }) {
   function markupTemplate(before, after = before) {
     const el = templateRef.current
     const text = form.template || ''
-    const start = el?.selectionStart ?? text.length
-    const end = el?.selectionEnd ?? text.length
+    const picked = el && typeof el.selectionStart === 'number' ? { start: el.selectionStart, end: el.selectionEnd } : markCaret(el)
+    const start = picked?.start ?? text.length
+    const end = picked?.end ?? text.length
     const res = applyMarkup(text, start, end, before, after)
     setForm((prev) => ({ ...prev, template: res.next, templateEdited: true }))
     requestAnimationFrame(() => {
       if (!el) return
       el.focus()
-      el.setSelectionRange(res.from, res.to)
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(res.from, res.to)
+      else placeMarkCaret(el, res.to)
     })
   }
 
@@ -572,15 +576,17 @@ export default function StudiesTab({ scope = 'studies' }) {
   function insertToken(token) {
     const text = form.template || ''
     const el = templateRef.current
-    const start = el?.selectionStart ?? text.length
-    const end = el?.selectionEnd ?? text.length
+    const picked = el && typeof el.selectionStart === 'number' ? { start: el.selectionStart, end: el.selectionEnd } : markCaret(el)
+    const start = picked?.start ?? text.length
+    const end = picked?.end ?? text.length
     const next = text.slice(0, start) + token + text.slice(end)
     setForm((prev) => ({ ...prev, template: next, templateEdited: true }))
     requestAnimationFrame(() => {
       if (!el) return
       el.focus()
       const pos = start + token.length
-      el.setSelectionRange(pos, pos)
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(pos, pos)
+      else placeMarkCaret(el, pos)
     })
   }
 
@@ -768,7 +774,19 @@ export default function StudiesTab({ scope = 'studies' }) {
                 }}
               />
 
-              <StudyTagModal form={form} setForm={setForm} setTagEdit={setTagEdit} slugifyFieldKey={slugifyFieldKey} tagEdit={tagEdit} />
+              <StudyTagModal
+                form={form}
+                setForm={setForm}
+                setTagEdit={setTagEdit}
+                tagEdit={tagEdit}
+                fieldProps={{
+                  dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions,
+                  applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle: false, insertFormulaToken,
+                  moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption,
+                  renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef,
+                  toggleShowValue, updateField,
+                }}
+              />
 
               </div>
               <div className="drug-form-actions study-save-bar">

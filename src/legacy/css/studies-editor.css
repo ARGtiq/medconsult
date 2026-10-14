@@ -315,17 +315,22 @@
   white-space: pre-wrap;
   background: var(--paper, var(--panel));
 }
+.legacy-surface .study-inline-sys {
+  color: var(--teal);
+  font-weight: 650;
+}
 .legacy-surface .study-inline-tag {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  margin: 0 2px;
-  padding: 0 4px;
-  border: 1px solid var(--teal);
-  border-radius: 6px;
-  background: transparent;
+  display: inline;
+  margin: 0 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   color: var(--teal);
   font: inherit;
+  line-height: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 .legacy-surface .study-inline-phrase {
@@ -396,8 +401,9 @@
   padding: 16px;
 }
 .legacy-surface .study-tag-modal-card {
-  width: min(760px, 100%);
-  max-height: min(86vh, 900px);
+  width: min(1100px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -405,7 +411,12 @@
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
+  overflow: hidden;
+}
+.legacy-surface .study-tag-modal-body {
   overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 .legacy-surface .study-field-check {
   display: inline-flex;

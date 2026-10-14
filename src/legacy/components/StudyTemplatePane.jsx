@@ -1,13 +1,131 @@
+import { useLayoutEffect, useRef } from 'react'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { autoFieldLine } from '../lib/studyLine'
 import { SIDE_FORMS } from '../../medconsult/data/studies'
 import {
   AUTO_TAGS, KIND_OPTIONS, REF_OPS, EditableOpt, fieldBrief, fieldKeyOf, splitOptions,
-  sidesOf, tagTip, tagsInTemplate, slugifyFieldKey, presetByKey,
+  sidesOf, tagTip, tagsInTemplate, slugifyFieldKey, presetByKey, blankField, splitTemplate,
+  serializeMark, markCaret, placeMarkCaret,
 } from './studyEditorLib'
+
+const SYSTEM_TAGS = new Set(['date', 'name', 'summary', 'lines', 'abnormal', 'allergy', 'meds'])
+
+function paintMark(el, template, fields) {
+  const parts = splitTemplate(String(template || ''))
+  const byKey = new Map((fields || []).map((f) => [fieldKeyOf(f), f]))
+  el.replaceChildren()
+  for (const p of parts) {
+    if (p.type !== 'tag') {
+      el.append(document.createTextNode(p.text || ''))
+      continue
+    }
+    if (SYSTEM_TAGS.has(p.key)) {
+      const sys = document.createElement('span')
+      sys.className = 'study-inline-sys'
+      sys.contentEditable = 'false'
+      sys.dataset.raw = p.raw
+      sys.textContent = p.raw
+      el.append(sys)
+      continue
+    }
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'study-inline-tag'
+    btn.contentEditable = 'false'
+    btn.dataset.tag = p.key
+    btn.dataset.raw = p.raw
+    btn.textContent = byKey.get(p.key)?.label || p.raw
+    el.append(btn)
+  }
+}
+
+function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef }) {
+  const skip = useRef(null)
+  const paintedFields = useRef(null)
+  const localRef = useRef(null)
+  const ref = markRef || localRef
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || (skip.current === template && paintedFields.current === fields)) return
+    const caret = document.activeElement === el ? markCaret(el) : null
+    paintMark(el, template, fields)
+    skip.current = template
+    paintedFields.current = fields
+    if (caret) placeMarkCaret(el, caret.start)
+  }, [template, fields, ref])
+  return (
+    <div
+      ref={ref}
+      className="study-template-text study-template-mark"
+      contentEditable
+      suppressContentEditableWarning
+      spellCheck={false}
+      onMouseDown={(e) => {
+        const btn = e.target.closest?.('.study-inline-tag')
+        if (!btn) return
+        e.preventDefault()
+        onTag(btn.dataset.tag)
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        document.execCommand('insertText', false, '\n')
+      }}
+      onPaste={(e) => {
+        e.preventDefault()
+        document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
+      }}
+      onInput={(e) => {
+        const el = e.currentTarget
+        const next = serializeMark(el)
+        skip.current = next
+        onChange(next)
+        if (el.querySelector('div, p, br, span')) {
+          const pos = markCaret(el)?.start ?? next.length
+          paintMark(el, next, fields)
+          placeMarkCaret(el, pos)
+        }
+      }}
+      onMouseUp={(e) => {
+        if (e.target.closest?.('.study-inline-tag')) return
+        const picked = markCaret(e.currentTarget)
+        if (!picked || picked.end <= picked.start) {
+          onSelect(null)
+          return
+        }
+        const raw = serializeMark(e.currentTarget)
+        const a = Math.min(picked.start, picked.end)
+        const b = Math.max(picked.start, picked.end)
+        const text = raw.slice(a, b).replace(/\s+/g, ' ').trim()
+        if (!text || text.includes('{') || text.includes('}')) {
+          onSelect(null)
+          return
+        }
+        onSelect({ text, start: a, end: b, x: e.clientX, y: Math.min(window.innerHeight - 36, e.clientY + 8) })
+      }}
+    />
+  )
+}
 
 export function StudyTemplatePane(props) {
   const { form, fieldTags, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, onTagSplitDown, pickNamed, selAsk, setForm, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae } = props
+  function openTag(key) {
+    if (!key || SYSTEM_TAGS.has(key)) return
+    const idx = (form.fields || []).findIndex((f) => fieldKeyOf(f) === key)
+    if (idx >= 0) {
+      setTagEdit({ isNew: false, index: idx })
+      return
+    }
+    const index = (form.fields || []).length
+    setForm((prev) => ({
+      ...prev,
+      fields: [...prev.fields, { ...blankField(), key, label: key }],
+    }))
+    setTagEdit({ isNew: true, index, selected: '', key })
+  }
+  function commitTemplate(value) {
+    setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
+  }
   return (
               <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}`}>
               {templateMax && (
@@ -186,25 +304,7 @@ export function StudyTemplatePane(props) {
                       type="button"
                       key={f.key}
                       className="study-tag-chip is-used"
-                      onClick={() => {
-                        const sides = sidesOf(f)
-                        setTagEdit({
-                          isNew: false,
-                          prevKey: f.key,
-                          key: f.key,
-                          label: f.label || f.key,
-                          phrase: f.phrase || '',
-                          before: sides.before,
-                          after: sides.after,
-                          kind: f.kind || 'text',
-                          options: [...(f.options || [])],
-                          optionGroups: (f.optionGroups || []).map((g) => [...g]),
-                          unit: f.unit || '',
-                          normal: f.normal || '',
-                          defaultValue: f.defaultValue || '',
-                          showHeading: f.showHeading !== false,
-                        })
-                      }}
+                      onClick={() => openTag(f.key)}
                     >
                       {f.label || f.key}
                       <span className="study-tag-tip">{tagTip(f)}</span>
@@ -215,40 +315,24 @@ export function StudyTemplatePane(props) {
                   )}
                 </div>
               )}
+              {markMode ? (
+                <TemplateMark
+                  markRef={templateRef}
+                  template={form.template || ''}
+                  fields={form.fields}
+                  onChange={commitTemplate}
+                  onTag={openTag}
+                  onSelect={setSelAsk}
+                />
+              ) : (
               <textarea
                 ref={templateRef}
                 className="study-template-text"
                 placeholder="Chlamydia trachomatis - {chlamydia_trachomatis}"
                 value={form.template}
-                onMouseUp={(e) => {
-                  if (!markMode) return
-                  const el = e.currentTarget
-                  const a = el.selectionStart ?? 0
-                  const b = el.selectionEnd ?? 0
-                  if (b <= a) {
-                    setSelAsk(null)
-                    return
-                  }
-                  const raw = el.value.slice(a, b)
-                  const text = raw.replace(/\s+/g, ' ').trim()
-                  if (!text || text.includes('{') || text.includes('}')) {
-                    setSelAsk(null)
-                    return
-                  }
-                  const rect = el.getBoundingClientRect()
-                  setSelAsk({
-                    text,
-                    start: a,
-                    end: b,
-                    x: Math.max(8, rect.left + 12),
-                    y: Math.min(window.innerHeight - 36, rect.top + 8),
-                  })
-                }}
-                onChange={(e) => {
-                  const value = e.target.value
-                  setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
-                }}
+                onChange={(e) => commitTemplate(e.target.value)}
               />
+              )}
               {markMode && selAsk && (
                 <button
                   type="button"
@@ -259,24 +343,19 @@ export function StudyTemplatePane(props) {
                     const selected = selAsk.text
                     const base = slugifyFieldKey(selected).slice(0, 24) || `t_${Date.now().toString(36)}`
                     const key = form.fields.some((f) => f.key === base) ? `${base}_${Date.now().toString(36)}` : base
-                    setTagEdit({
-                      isNew: true,
-                      start: selAsk.start,
-                      end: selAsk.end,
-                      selected,
-                      key,
-                      label: selected.slice(0, 48),
-                      before: selected,
-                      after: '',
-                      phrase: '',
-                      kind: 'text',
-                      options: [],
-                      optionGroups: [],
-                      unit: '',
-                      normal: '',
-                      defaultValue: '',
-                      showHeading: false,
+                    const index = form.fields.length
+                    setForm((prev) => {
+                      const field = {
+                        ...blankField(),
+                        key,
+                        label: selected.slice(0, 48),
+                        before: selected,
+                        showHeading: false,
+                      }
+                      const template = `${(prev.template || '').slice(0, selAsk.start)}{${key}}${(prev.template || '').slice(selAsk.end)}`
+                      return { ...prev, fields: [...prev.fields, field], template, templateEdited: true }
                     })
+                    setTagEdit({ isNew: true, index, selected, key })
                     setSelAsk(null)
                   }}
                 >

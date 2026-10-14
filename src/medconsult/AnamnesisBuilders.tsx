@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { store as legacy } from "@/legacy/lib/store";
+import { LiveTextarea } from "./StudyCard";
 import {
   composeAnamnesis,
   composeVitae,
@@ -813,9 +813,9 @@ export function AnamnesisDisease({
   if (!chipMode) {
     return (
       <div>
-        <textarea
+        <LiveTextarea
           value={text}
-          onChange={(e) => onText(e.target.value)}
+          onChange={onText}
           rows={3}
           className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
         />
@@ -1182,9 +1182,9 @@ export function AnamnesisVitae({
     return (
       <div>
         {picker}
-        <textarea
+        <LiveTextarea
           value={text}
-          onChange={(e) => onText(e.target.value)}
+          onChange={onText}
           rows={11}
           className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
         />

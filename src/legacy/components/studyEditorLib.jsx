@@ -54,6 +54,8 @@ export function blankField() {
     refOfMode: 'percent',
     refBy: [],
     refBands: [],
+    before: '',
+    after: '',
   }
 }
 
@@ -221,6 +223,9 @@ export function toEditorField(f) {
           normal: b.normal || '',
         }))
       : [],
+    before: sidesOf(f).before,
+    after: sidesOf(f).after,
+    showHeading: f.showHeading === false ? false : undefined,
   }
 }
 
@@ -482,6 +487,84 @@ export function splitTemplate(template) {
   }
   if (last < template.length || !parts.length) parts.push({ type: 'text', text: template.slice(last), start: last })
   return parts
+}
+
+function markPiece(n, into) {
+  if (!n) return
+  if (n.nodeType === 3) {
+    into.push({ kind: 'text', node: n, len: (n.textContent || '').length })
+    return
+  }
+  if (n.nodeType !== 1) return
+  if (n.dataset && n.dataset.raw) {
+    into.push({ kind: 'tag', node: n, len: n.dataset.raw.length })
+    return
+  }
+  if (n.tagName === 'BR') {
+    into.push({ kind: 'br', node: n, len: 1 })
+    return
+  }
+  const block = n.tagName === 'DIV' || n.tagName === 'P'
+  if (block && into.length && into[into.length - 1].kind !== 'break') into.push({ kind: 'break', node: n, len: 1 })
+  n.childNodes.forEach((c) => markPiece(c, into))
+}
+
+function markPieces(root) {
+  const into = []
+  if (root) root.childNodes.forEach((c) => markPiece(c, into))
+  return into
+}
+
+export function serializeMark(root) {
+  return markPieces(root).map((p) => (p.kind === 'tag' ? p.node.dataset.raw : p.kind === 'text' ? p.node.textContent || '' : '\n')).join('')
+}
+
+export function markCaret(root) {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!root || !root.contains(range.startContainer)) return null
+  const pieces = markPieces(root)
+  function at(node, offset) {
+    let pos = 0
+    for (const p of pieces) {
+      if (p.kind === 'text' && p.node === node) return pos + Math.min(offset, p.len)
+      if (p.node === node) return pos + (offset > 0 ? p.len : 0)
+      if (p.kind === 'text' && p.node.parentNode === node) {
+        const kids = [...node.childNodes]
+        const i = kids.indexOf(p.node)
+        if (offset <= i) return pos
+      }
+      pos += p.len
+    }
+    return pos
+  }
+  return { start: at(range.startContainer, range.startOffset), end: at(range.endContainer, range.endOffset) }
+}
+
+export function placeMarkCaret(root, pos) {
+  if (!root) return
+  const pieces = markPieces(root)
+  let left = Math.max(0, pos)
+  let target = null
+  let offset = 0
+  for (const p of pieces) {
+    if (p.kind === 'text' && left <= p.len) {
+      target = p.node
+      offset = left
+      break
+    }
+    if (left <= 0) break
+    left -= p.len
+  }
+  const range = document.createRange()
+  if (target) range.setStart(target, offset)
+  else range.selectNodeContents(root)
+  range.collapse(true)
+  const sel = window.getSelection()
+  if (!sel) return
+  sel.removeAllRanges()
+  sel.addRange(range)
 }
 
 export function sidesOf(f) {

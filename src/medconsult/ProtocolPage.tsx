@@ -31,7 +31,7 @@ import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { collectDeviations, patientRefWho } from "./data/studies";
-import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea } from "./StudyCard";
+import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea, LiveTextarea } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 import type { LocalItem, LocalPack, LocalPick, SessionState } from "./types";
@@ -691,9 +691,9 @@ export function ProtocolPage() {
       {session.diagnosisTitle ? (
         <div className="mb-0.5 text-xs font-semibold tracking-wide text-teal uppercase">Формулировка</div>
       ) : null}
-      <textarea
+      <LiveTextarea
         value={session.diagnosisTitle}
-        onChange={(e) => setSession({ diagnosisTitle: e.target.value })}
+        onChange={(v) => setSession({ diagnosisTitle: v })}
         className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm"
         rows={2}
         placeholder="Формулировка диагноза"
@@ -895,10 +895,9 @@ export function ProtocolPage() {
             ) : (
               <>
                 <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">в тексте</div>
-                <textarea
+                <LiveTextarea
                   value={session.complaintsText ?? session.complaints.join(", ")}
-                  onChange={(e) => {
-                    const complaintsText = e.target.value;
+                  onChange={(complaintsText) => {
                     setSession({
                       complaintsText,
                       complaintsChipMode: false,
@@ -1238,9 +1237,9 @@ export function ProtocolPage() {
           onRemove={() => store.removeExtraBlock(b.id)}
           voice={(t) => store.updateExtraBlock(b.id, { text: b.text ? `${b.text} ${t}` : t })}
         >
-          <textarea
+          <LiveTextarea
             value={b.text}
-            onChange={(e) => store.updateExtraBlock(b.id, { text: e.target.value })}
+            onChange={(text) => store.updateExtraBlock(b.id, { text })}
             rows={5}
             className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
             placeholder={b.title}
@@ -1259,9 +1258,9 @@ export function ProtocolPage() {
           onRemove={() => toggleBlock("notes")}
           voice={(t) => setSession({ notes: session.notes ? `${session.notes} ${t}` : t })}
         >
-          <textarea
+          <LiveTextarea
             value={session.notes}
-            onChange={(e) => setSession({ notes: e.target.value })}
+            onChange={(notes) => setSession({ notes })}
             rows={6}
             className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
             placeholder="Справка, направление, заключение…"
@@ -1356,9 +1355,9 @@ export function ProtocolPage() {
         </button>
       </div>
       {headerOpen && (
-        <textarea
+        <LiveTextarea
           value={session.headerOverride || header}
-          onChange={(e) => setSession({ headerOverride: e.target.value })}
+          onChange={(headerOverride) => setSession({ headerOverride })}
           rows={3}
           className="rounded-[10px] border border-line bg-surface px-2.5 py-2 text-sm"
         />
@@ -1405,11 +1404,11 @@ export function ProtocolPage() {
               </button>
             </header>
             {editPreview ? (
-              <textarea
-                value={b.text}
-                rows={Math.min(14, Math.max(2, b.text.split("\n").length))}
+              <LiveTextarea
+                value={session.previewOverrides?.[b.id] ?? b.text}
+                rows={Math.min(14, Math.max(2, (session.previewOverrides?.[b.id] ?? b.text).split("\n").length))}
                 className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
-                onChange={(e) => setSession({ previewOverrides: { ...(session.previewOverrides || {}), [b.id]: e.target.value } })}
+                onChange={(value) => setSession({ previewOverrides: { ...(session.previewOverrides || {}), [b.id]: value } })}
               />
             ) : (
               <ProtocolText text={b.text} />

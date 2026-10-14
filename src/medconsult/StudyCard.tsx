@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import {
   applyComputed,
@@ -33,6 +33,48 @@ function splitMulti(value: string) {
     .filter(Boolean);
 }
 
+function useLiveText(value: string, onChange: (v: string) => void) {
+  const [text, setText] = useState(value ?? "");
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(value ?? "");
+  }, [value]);
+  return {
+    text,
+    onFocus: () => {
+      focused.current = true;
+    },
+    onBlur: () => {
+      focused.current = false;
+      if (text !== (value ?? "")) startTransition(() => onChange(text));
+    },
+    onChange: (v: string) => {
+      setText(v);
+      startTransition(() => onChange(v));
+    },
+  };
+}
+
+export function LiveTextarea({
+  value,
+  onChange,
+  ...rest
+}: {
+  value: string;
+  onChange: (v: string) => void;
+} & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange">) {
+  const live = useLiveText(value, onChange);
+  return (
+    <textarea
+      {...rest}
+      value={live.text}
+      onFocus={live.onFocus}
+      onBlur={live.onBlur}
+      onChange={(e) => live.onChange(e.target.value)}
+    />
+  );
+}
+
 export function FitTextarea({
   value,
   onChange,
@@ -47,20 +89,23 @@ export function FitTextarea({
   className?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const live = useLiveText(value, onChange);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  }, [live.text]);
   return (
     <textarea
       ref={ref}
       rows={1}
-      value={value}
+      value={live.text}
       placeholder={placeholder}
       inputMode={inputMode === "none" ? undefined : inputMode}
-      onChange={(e) => onChange(e.target.value)}
+      onFocus={live.onFocus}
+      onBlur={live.onBlur}
+      onChange={(e) => live.onChange(e.target.value)}
       className={`block w-full resize-none overflow-hidden break-words ${className || ""}`}
     />
   );
