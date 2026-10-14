@@ -1,4 +1,5 @@
 import AutoResizeTextarea from './AutoResizeTextarea'
+import { autoFieldLine } from '../lib/studyLine'
 import { SIDE_FORMS } from '../../medconsult/data/studies'
 import {
   AUTO_TAGS, KIND_OPTIONS, REF_OPS, EditableOpt, fieldBrief, fieldKeyOf, splitOptions,
