@@ -1,4 +1,4 @@
-import { Copy, Plus, Printer, Eraser } from "lucide-react";
+import { Copy, Plus, Printer, Eraser, Pencil } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import GuidelinePanel from "@/legacy/components/GuidelinePanel";
 import { RecommendationsBlock, Sec, StudyDrugHints } from "./protocolUi";
@@ -236,6 +236,7 @@ export function ProtocolPage() {
   const templates = useTemplates();
   const [mobileTab, setMobileTab] = useState<"build" | "preview">("build");
   const [headerOpen, setHeaderOpen] = useState(false);
+  const [editPreview, setEditPreview] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [ixText, setIxText] = useState<string | null>(null);
   const [ixBusy, setIxBusy] = useState(false);
@@ -1297,6 +1298,17 @@ export function ProtocolPage() {
         <h3 className="min-w-0 flex-1 text-[10px] font-semibold tracking-wide text-ink-soft uppercase">В Медлок / Word</h3>
         <button
           type="button"
+          title={editPreview ? "Правка текста включена" : "Править текст блоков"}
+          aria-pressed={editPreview}
+          className={`inline-flex size-8 shrink-0 items-center justify-center rounded-lg border ${
+            editPreview ? "border-teal bg-teal-soft text-teal" : "border-line bg-surface text-ink-soft"
+          }`}
+          onClick={() => setEditPreview((v) => !v)}
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          type="button"
           className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-semibold whitespace-nowrap"
           onClick={() => polish("all")}
           disabled={aiBusy}
@@ -1370,6 +1382,19 @@ export function ProtocolPage() {
               <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-wide text-mute uppercase">
                 {b.n} · {b.title}
               </span>
+              {session.previewOverrides?.[b.id] != null && (
+                <button
+                  type="button"
+                  className="shrink-0 text-[11px] text-teal"
+                  onClick={() => {
+                    const overrides = { ...(session.previewOverrides || {}) };
+                    delete overrides[b.id];
+                    setSession({ previewOverrides: overrides });
+                  }}
+                >
+                  как слева
+                </button>
+              )}
               <button
                 type="button"
                 title="Копировать блок"
@@ -1379,7 +1404,16 @@ export function ProtocolPage() {
                 <Copy className="size-3.5" />
               </button>
             </header>
-            <ProtocolText text={b.text} />
+            {editPreview ? (
+              <textarea
+                value={b.text}
+                rows={Math.min(14, Math.max(2, b.text.split("\n").length))}
+                className="w-full resize-y rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
+                onChange={(e) => setSession({ previewOverrides: { ...(session.previewOverrides || {}), [b.id]: e.target.value } })}
+              />
+            ) : (
+              <ProtocolText text={b.text} />
+            )}
           </article>
         ))}
         {blocks.length === 0 && (

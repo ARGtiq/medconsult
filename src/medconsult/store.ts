@@ -77,6 +77,7 @@ export function blankSession(partial?: Partial<SessionState>): SessionState {
     generalRecs: "",
     notes: "",
     headerOverride: "",
+    previewOverrides: {},
     docStd: [],
     extraBlocks: [],
     allergies: [],
@@ -417,7 +418,28 @@ type AppStore = {
 };
 
 function persistSession(session: SessionState) {
-  writeJson(SESSION_KEY, session);
+  pendingSession = session;
+  if (typeof window === "undefined") {
+    writeJson(SESSION_KEY, session);
+    pendingSession = null;
+    return;
+  }
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(flushSession, 200);
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | 0 = 0;
+let pendingSession: SessionState | null = null;
+
+function flushSession() {
+  if (!pendingSession) return;
+  const next = pendingSession;
+  pendingSession = null;
+  writeJson(SESSION_KEY, next);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushSession);
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({

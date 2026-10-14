@@ -47,7 +47,7 @@ export function StudyTemplateList(props) {
             if (listTab === 'instrumental') return s.category !== 'lab'
             return true
           })
-          .sort((a, b) => a.label.localeCompare(b.label))
+          .sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'ru'))
           .map((s) => {
             const fields = s.fields || []
             const bits = []
@@ -67,7 +67,7 @@ export function StudyTemplateList(props) {
                   <button type="button" className="btn-secondary btn-small" onClick={() => duplicate(s)}>копия</button>
                   <button type="button" className="remove-btn" onClick={() => remove(s)} title={builtinKeys.has(s.key) ? 'Скрыть предустановленное' : 'Удалить'}>×</button>
                 </div>
-                <div className="drug-db-line">{s.template}</div>
+                <div className="drug-db-line">{typeof s.template === 'string' ? s.template : ''}</div>
                 {fields.length > 0 && (
                   <div className="drug-db-line">
                     Полей: {dataFields}

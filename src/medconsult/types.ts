@@ -195,6 +195,8 @@ export type SessionState = {
   generalRecs?: string;
   notes: string;
   headerOverride: string;
+  /** Свой текст блока в колонке «В Медлок». Нет ключа — текст собран слева. */
+  previewOverrides?: Record<string, string>;
   docStd: string[];
   extraBlocks: ExtraBlock[];
   templateId?: string;

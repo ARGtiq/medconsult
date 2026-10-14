@@ -61,7 +61,8 @@ export function composeBlocks(
   const out: PreviewBlock[] = [];
   const push = (id: string, title: string, text: string) => {
     if (hidden(session, id)) return;
-    const trimmed = text.trim();
+    const custom = session.previewOverrides?.[id];
+    const trimmed = (custom != null ? custom : text).trim();
     if (!trimmed) return;
     out.push({ id, n: 0, title, text: trimmed });
   };

@@ -181,6 +181,7 @@ export function editorKind(f) {
 }
 
 export function toEditorField(f) {
+  if (!f || typeof f !== 'object') return blankField()
   return {
     key: f.key || '',
     label: f.label || '',

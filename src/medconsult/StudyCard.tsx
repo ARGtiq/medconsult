@@ -259,31 +259,42 @@ function QuestionnaireControls({
 }
 
 export function StudyCard({ studyKey }: { studyKey: string }) {
+  const entry = useAppStore((s) => s.session.studies.find((x) => x.key === studyKey));
+  const openSection = useAppStore((s) => s.session.openSection);
+  const patient = useAppStore((s) => s.patients.find((p) => p.id === s.session.patientId));
+  const blocksAsSpoiler = useAppStore((s) => s.settings.blocksAsSpoiler);
+  const updatePatient = useAppStore((s) => s.updatePatient);
+  const updateInstance = useAppStore((s) => s.updateInstance);
+  const addStudyInstance = useAppStore((s) => s.addStudyInstance);
+  const removeInstance = useAppStore((s) => s.removeInstance);
+  const removeStudy = useAppStore((s) => s.removeStudy);
+  const setSession = useAppStore((s) => s.setSession);
+  const toggleStudyOmit = useAppStore((s) => s.toggleStudyOmit);
+  const addStudy = useAppStore((s) => s.addStudy);
   const def = getStudyLive(studyKey);
-  const { session, settings, patients, updatePatient, updateInstance, addStudyInstance, removeInstance, removeStudy, setSession, toggleStudyOmit, addStudy } = useAppStore();
-  const patient = patients.find((p) => p.id === session.patientId);
   const who = patientRefWho(patient);
   const needsSex = !!def?.fields.some((f) => f.refBy?.includes("sex"));
   const needsAge = !!def?.fields.some((f) => f.refBy?.includes("age"));
   const lateral = !!def?.lateral;
   const [folded, setFolded] = useState<Record<string, boolean>>({});
-  const entry = session.studies.find((s) => s.key === studyKey);
   if (!def || !entry) return null;
   const side = entry.side === "l" ? "l" : "r";
-  const selected = session.openSection === studyKey;
-  const open = !settings.blocksAsSpoiler || selected;
+  const selected = openSection === studyKey;
+  const open = !blocksAsSpoiler || selected;
   const customTitle = studyKey === "custom_lab" ? (entry.instances[0]?.fields.title || "").trim() : "";
   const previous = entry.previous;
   const prevRaw = previous ? (lateral ? sideView(previous, side).fields : previous.fields) : null;
   const prevFields = prevRaw ? applyComputed(def, applyConditionalDefaults(def, prevRaw)) : null;
   const patchStudy = (patch: Partial<StudyEntry>) => {
+    const studies = useAppStore.getState().session.studies;
     setSession({
-      studies: session.studies.map((s) => (s.key === studyKey ? { ...s, ...patch } : s)),
+      studies: studies.map((s) => (s.key === studyKey ? { ...s, ...patch } : s)),
     });
   };
   const setExtras = (instId: string, extras: StudyExtra[]) => {
+    const studies = useAppStore.getState().session.studies;
     setSession({
-      studies: session.studies.map((s) =>
+      studies: studies.map((s) =>
         s.key !== studyKey ? s : { ...s, instances: s.instances.map((i) => (i.id === instId ? { ...i, extras } : i)) },
       ),
     });
@@ -393,6 +404,9 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
           <>
           {entry.instances.map((inst, idx) => {
             const shown = lateral ? sideView(inst, side) : { fields: inst.fields, omit: inst.omit || [] };
+            const baseFields = applyConditionalDefaults(def, shown.fields);
+            const fields = applyComputed(def, baseFields);
+            const visible = def.fields.filter((f) => fieldShown(f, baseFields));
             return (
             <div key={inst.id} className="rounded-lg border border-dashed border-line p-2">
               <div className="mb-1.5 flex items-center justify-between text-xs text-ink-soft">
@@ -417,13 +431,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   fields={shown.fields}
                   previous={idx === 0 ? prevFields : null}
                   prevDate={previous?.date}
-                  takenKeys={session.studies.map((s) => s.key)}
+                  takenKeys={useAppStore.getState().session.studies.map((s) => s.key)}
                   onAddScale={(scale) => addStudy(studyKeyForScale(scale.totalKey))}
                   onChange={(next) => updateInstance(studyKey, inst.id, next, inst.date)}
                 />
               ) : (
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {def.fields.filter((f) => fieldShown(f, applyConditionalDefaults(def, shown.fields))).map((f) => {
+                {visible.map((f) => {
                   if (f.kind === "heading") {
                     return (
                       <div key={f.key || f.label} className="col-span-2 mt-1.5 border-b border-teal/40 pb-0.5 sm:col-span-3">
@@ -431,7 +445,6 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                       </div>
                     );
                   }
-                  const fields = applyComputed(def, applyConditionalDefaults(def, shown.fields));
                   const value = fields[f.key] || "";
                   const was = idx === 0 && prevFields ? (prevFields[f.key] || "").trim() : "";
                   const bad = fieldAbnormal(value, f.normal, f, fields, who);

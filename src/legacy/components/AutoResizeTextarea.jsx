@@ -24,7 +24,7 @@ export default function AutoResizeTextarea({ value, onChange, className = '', mi
 
   useLayoutEffect(() => {
     resize()
-  })
+  }, [value, minRows])
 
   return (
     <textarea

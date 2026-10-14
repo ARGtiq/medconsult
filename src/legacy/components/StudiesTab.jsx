@@ -125,9 +125,9 @@ export default function StudiesTab({ scope = 'studies' }) {
     const merged = overlaySeedFields(study)
     setForm({
       key: merged.key,
-      label: merged.label,
+      label: String(merged.label || ''),
       category: merged.category || 'instrumental',
-      template: merged.template,
+      template: typeof merged.template === 'string' ? merged.template : '',
       fields: merged.fields?.length ? merged.fields.map(toEditorField) : [blankField()],
       referenceNotes: merged.referenceNotes || '',
       sparse: merged.sparse,
@@ -189,9 +189,14 @@ export default function StudiesTab({ scope = 'studies' }) {
       }
       const nextField = fields[idx]
       const nextKey = (nextField.key || '').trim()
-      template = adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, namedTag, current.kind === 'heading')
-      const tokenOnly = oldKey && nextKey ? retargetToken(prev.template || '', oldKey, nextKey) : (prev.template || '')
-      const templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
+      const touchLine = patch.label !== undefined || patch.key !== undefined || patch.kind !== undefined
+      if (touchLine) {
+        template = adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, namedTag, current.kind === 'heading')
+        const tokenOnly = oldKey && nextKey ? retargetToken(prev.template || '', oldKey, nextKey) : (prev.template || '')
+        var templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
+      } else {
+        var templateEdited = !!prev.templateEdited
+      }
       fields = fields.map((f, i) => {
         if (i !== idx) return f
         const merged = f
@@ -656,7 +661,7 @@ export default function StudiesTab({ scope = 'studies' }) {
     refresh()
   }
 
-  const fieldTags = form.fields.filter((f) => f.kind !== 'heading' && fieldKeyOf(f) && f.label.trim())
+  const fieldTags = (form.fields || []).filter((f) => f && f.kind !== 'heading' && fieldKeyOf(f) && String(f.label || '').trim())
 
   return (
     <div className="settings-tab">
