@@ -9,31 +9,50 @@ export function escapeHtml(s) {
 function renderLists(src) {
   const lines = String(src).split('\n')
   const out = []
+  let mode = ''
   let buf = []
   const flush = () => {
-    if (!buf.length) return
-    const items = []
-    buf.forEach((row) => {
-      if (!row.sub) items.push({ text: row.text, kids: [] })
-      else if (items.length) items[items.length - 1].kids.push(row.text)
-      else items.push({ text: row.text, kids: [] })
-    })
-    out.push(
-      `<ul>${items
-        .map((it) => `<li>${it.text}${it.kids.length ? `<ul>${it.kids.map((k) => `<li>${k}</li>`).join('')}</ul>` : ''}</li>`)
-        .join('')}</ul>`,
-    )
+    if (!buf.length) {
+      mode = ''
+      return
+    }
+    if (mode === 'ol') {
+      out.push(`<ol>${buf.map((it) => `<li>${it.text}</li>`).join('')}</ol>`)
+    } else if (mode === 'check') {
+      out.push(`<ul class="md-check">${buf.map((it) => `<li>${it.on ? '☑' : '☐'} ${it.text}</li>`).join('')}</ul>`)
+    } else {
+      const items = []
+      buf.forEach((row) => {
+        if (!row.sub) items.push({ text: row.text, kids: [] })
+        else if (items.length) items[items.length - 1].kids.push(row.text)
+        else items.push({ text: row.text, kids: [] })
+      })
+      out.push(
+        `<ul>${items
+          .map((it) => `<li>${it.text}${it.kids.length ? `<ul>${it.kids.map((k) => `<li>${k}</li>`).join('')}</ul>` : ''}</li>`)
+          .join('')}</ul>`,
+      )
+    }
     buf = []
+    mode = ''
   }
   lines.forEach((line) => {
-    const sub = line.match(/^\s{2,}[-*] (.+)$/)
-    const top = !sub && line.match(/^[-*] (.+)$/)
-    if (sub) buf.push({ sub: true, text: sub[1] })
-    else if (top) buf.push({ sub: false, text: top[1] })
-    else {
+    const check = line.match(/^[-*] \[([ xX])\] (.+)$/)
+    const num = !check && line.match(/^\d+\. (.+)$/)
+    const sub = !check && !num && line.match(/^\s{2,}[-*] (.+)$/)
+    const top = !check && !num && !sub && line.match(/^[-*] (.+)$/)
+    const next = check ? 'check' : num ? 'ol' : top || sub ? 'ul' : ''
+    if (!next) {
       flush()
       out.push(line)
+      return
     }
+    if (mode && mode !== next) flush()
+    mode = next
+    if (check) buf.push({ on: check[1].toLowerCase() === 'x', text: check[2] })
+    else if (num) buf.push({ text: num[1] })
+    else if (sub) buf.push({ sub: true, text: sub[1] })
+    else buf.push({ sub: false, text: top[1] })
   })
   flush()
   return out.join('\n')
@@ -51,8 +70,8 @@ export function mdToHtml(src) {
   s = s.replace(/(^|[^*])\*(?!\*)(.+?)\*(?!\*)/g, '$1<em>$2</em>')
   s = s.replace(/`(.+?)`/g, '<code>$1</code>')
   s = renderLists(s)
-  s = s.replace(/\n+(?=<ul>|<h[234]>)/g, '')
-  s = s.replace(/(<\/ul>|<\/h[234]>)\n+/g, '$1')
+  s = s.replace(/\n+(?=<ul>|<ol>|<h[234]>)/g, '')
+  s = s.replace(/(<\/ul>|<\/ol>|<\/h[234]>)\n+/g, '$1')
   s = s.replace(/\n{2,}/g, '</p><p>')
   s = s.replace(/\n/g, '<br/>')
   s = s.replace(/(^|<br\/>)(Источник: [^<]*)/g, '$1<span class="pack-source">$2</span>')
@@ -71,7 +90,7 @@ export function applyMarkup(value, start, end, before, after = before) {
   const src = value || ''
   const rawSel = src.slice(start, end)
   const selected = rawSel === 'текст' ? '' : rawSel
-  const block = String(before).match(/^\n+((?:#{1,3} |- ))$/)
+  const block = String(before).match(/^\n+((?:#{1,3} |[-*] |\d+\. |- \[ \] ))$/)
   if (block) {
     const marker = block[1]
     let from = start

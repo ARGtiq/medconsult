@@ -34,6 +34,7 @@
   border-radius: 6px;
   background: var(--paper, var(--panel));
   font-size: 12px;
+  position: relative;
 }
 .legacy-surface .study-field-block .btn-small {
   padding: 2px 6px;
@@ -297,13 +298,45 @@
 }
 .legacy-surface .study-template-pane.is-max {
   position: fixed;
-  inset: 12px;
-  z-index: 90;
+  inset: 0;
+  z-index: 80;
+  height: 100vh;
   max-height: none;
-  height: auto;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
   background: var(--panel);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
+}
+.legacy-surface .study-template-pane.is-float.is-max {
+  position: fixed;
+  top: 0;
+  max-height: none;
+  height: 100vh;
+  align-self: stretch;
+}
+.legacy-surface .study-template-pane.is-max .study-template-chips-scroll {
+  flex: 0 0 auto;
+  height: auto;
+  max-height: 132px;
+  min-height: 0;
+}
+.legacy-surface .study-template-pane.is-max .study-template-text-scroll {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  resize: none;
+}
+.legacy-surface .study-template-pane.is-max .study-template-text,
+.legacy-surface .study-template-pane.is-max .study-template-mark {
+  flex: 1 1 0;
+  height: auto !important;
+  min-height: 0;
+  max-height: none;
 }
 .legacy-surface .study-template-mark {
   min-height: 160px;
@@ -393,7 +426,7 @@
 .legacy-surface .study-tag-modal {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 240;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -433,11 +466,37 @@
   gap: 4px;
   width: 100%;
   margin: 0 0 4px;
-  padding: 4px 8px 4px 4px;
+  padding: 4px 22px 4px 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper, var(--panel));
   text-align: left;
+  position: relative;
+}
+.legacy-surface .study-field-x {
+  display: none;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--red, #b23a3a);
+  font-size: 14px;
+  line-height: 16px;
+  cursor: pointer;
+}
+.legacy-surface .study-field-block:hover .study-field-x,
+.legacy-surface .study-field-spoiler:hover .study-field-x,
+.legacy-surface .study-field-x:focus-visible {
+  display: block;
+}
+@media (hover: none) {
+  .legacy-surface .study-field-x { display: block; opacity: 0.7; }
 }
 .legacy-surface .study-field-spoiler.is-sub { margin-left: 12px; width: calc(100% - 12px); }
 .legacy-surface .study-field-spoiler.is-over {
@@ -591,4 +650,16 @@
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
+}
+.legacy-surface .study-template-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.legacy-surface .study-date-pattern {
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 280px;
+  padding: 3px 8px;
+  font-size: 12px;
 }

@@ -134,7 +134,7 @@ export default function StudiesTab({ scope = 'studies' }) {
       referenceNotes: merged.referenceNotes || '',
       sparse: merged.sparse,
       hint: merged.hint,
-      dateFormat: merged.dateFormat === 'short' ? 'short' : 'iso',
+      dateFormat: merged.dateFormat || 'ДД.ММ.ГГГГ',
       templateEdited: merged.templateEdited === true,
       isDefault: !!merged.isDefault,
       lateral: !!merged.lateral,
@@ -376,16 +376,23 @@ export default function StudiesTab({ scope = 'studies' }) {
   function addOptions(idx, raw) {
     const extra = splitOptions(raw)
     if (!extra.length) return
-    const f = form.fields[idx]
-    const have = new Set((f.options || []).map((s) => s.toLowerCase()))
-    const next = [...(f.options || [])]
-    extra.forEach((o) => {
-      if (!have.has(o.toLowerCase())) {
-        next.push(o)
-        have.add(o.toLowerCase())
+    setForm((prev) => {
+      const f = prev.fields[idx]
+      if (!f) return prev
+      const have = new Set((f.options || []).map((s) => String(s).toLowerCase()))
+      const options = [...(f.options || [])]
+      extra.forEach((o) => {
+        if (!have.has(o.toLowerCase())) {
+          options.push(o)
+          have.add(o.toLowerCase())
+        }
+      })
+      const kind = f.kind === 'multi' ? 'multi' : 'select'
+      return {
+        ...prev,
+        fields: prev.fields.map((field, i) => (i === idx ? { ...field, kind, options, optionDraft: '' } : field)),
       }
     })
-    updateField(idx, { options: next, optionDraft: '' })
   }
 
   function removeOption(idx, oi) {
@@ -504,14 +511,24 @@ export default function StudiesTab({ scope = 'studies' }) {
   }
 
   function addChild(idx) {
-    const parent = form.fields[idx]
-    const key = fieldKeyOf(parent)
-    if (!key) return
     setForm((prev) => {
+      const parent = prev.fields[idx]
+      if (!parent) return prev
+      let fields = prev.fields
+      let key = (parent.key || '').trim()
+      if (!key) {
+        key = slugifyFieldKey(parent.label) || `f_${Date.now().toString(36)}`
+        fields = fields.map((f, i) => (i === idx ? { ...f, key } : f))
+      }
       const child = { ...blankField(), showIf: { field: key, values: [] } }
-      const fields = [...prev.fields]
-      fields.splice(idx + 1, 0, child)
-      return { ...prev, fields }
+      const next = fields.slice()
+      next.splice(idx + 1, 0, child)
+      return { ...prev, fields: next }
+    })
+    setOpenField(idx + 1)
+    requestAnimationFrame(() => {
+      const nodes = document.querySelectorAll('.study-tag-modal .study-field-block.is-sub, .study-tag-modal .study-field-spoiler.is-sub')
+      nodes[nodes.length - 1]?.scrollIntoView({ block: 'nearest' })
     })
   }
 

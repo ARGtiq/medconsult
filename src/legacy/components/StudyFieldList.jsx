@@ -5,6 +5,20 @@ import {
   sidesOf, tagTip, tagsInTemplate, slugifyFieldKey, presetByKey,
 } from './studyEditorLib'
 
+function fieldInFamily(fields, root, idx) {
+  if (idx === root) return true
+  const rootKey = fieldKeyOf(fields[root] || {})
+  if (!rootKey) return false
+  let parent = fields[idx]?.showIf?.field
+  const seen = new Set()
+  while (parent && !seen.has(parent)) {
+    if (parent === rootKey) return true
+    seen.add(parent)
+    parent = fields.find((x) => fieldKeyOf(x) === parent)?.showIf?.field
+  }
+  return false
+}
+
 export function StudyFieldList(props) {
   const { form, dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions, applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle, insertFormulaToken, moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption, renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef, toggleShowValue, updateField, only } = props
   return (
@@ -23,7 +37,7 @@ export function StudyFieldList(props) {
                 </>
                 )}
                 {form.fields.map((f, idx) => {
-                  if (only != null && idx !== only) return null
+                  if (only != null && !fieldInFamily(form.fields, only, idx)) return null
                   if (only == null && foldIdle && openField !== idx) {
                     return (
                       <div
@@ -62,6 +76,7 @@ export function StudyFieldList(props) {
                           <span className="study-field-spoiler-title">{(f.label || '').trim() || 'без названия'}</span>
                           <span className="study-field-spoiler-meta">{fieldBrief(f)}</span>
                         </button>
+                        <button type="button" className="study-field-x" title="Удалить пункт" onClick={() => removeField(idx)}>×</button>
                       </div>
                     )
                   }
@@ -88,6 +103,7 @@ export function StudyFieldList(props) {
                         dragFrom.current = null
                       }}
                     >
+                      <button type="button" className="study-field-x" title="Удалить пункт" onClick={() => removeField(idx)}>×</button>
                       <div className="study-field-editor-row">
                         <span
                           className="study-field-grip"
@@ -153,7 +169,6 @@ export function StudyFieldList(props) {
                         {f.kind !== 'heading' && (
                         <button type="button" className="btn-secondary btn-small" onClick={() => addChild(idx)} title="Пункт ниже, виден только при выбранном значении">подпункт</button>
                         )}
-                        <button type="button" className="remove-btn" onClick={() => removeField(idx)}>×</button>
                       </div>
                       {f.kind !== 'heading' && (
                         <div className="study-field-editor-row">

@@ -813,13 +813,30 @@ export type Deviation = {
   depth?: number;
 };
 
+const WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+/** `ДД` день, `ММ` месяц, `ГГ`/`ГГГГ` год, `ДН` день недели. Пусто и `full` — `25.09.2026`. */
 export function formatStudyDate(iso: string | undefined | null, format?: string | null): string {
   const raw = String(iso || "").trim();
   if (!raw) return "—";
-  if (format !== "short") return raw;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (!m) return raw;
-  return `${m[3]}.${m[2]}.${m[1].slice(-2)}`;
+  const pattern =
+    !format || format === "full" || format === "ДД.ММ.ГГГГ"
+      ? "ДД.ММ.ГГГГ"
+      : format === "iso"
+        ? "ГГГГ-ММ-ДД"
+        : format === "short"
+          ? "ДД.ММ.ГГ"
+          : format;
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const dn = WEEKDAYS[dt.getDay()] || "";
+  return pattern
+    .replaceAll("ДД", m[3])
+    .replaceAll("ММ", m[2])
+    .replaceAll("ГГГГ", m[1])
+    .replaceAll("ГГ", m[1].slice(-2))
+    .replaceAll("ДН", dn);
 }
 
 function composeStudyDate(

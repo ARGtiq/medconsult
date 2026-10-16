@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import AutoResizeTextarea from './AutoResizeTextarea'
+import { formatStudyDate } from '../../medconsult/data/studies'
 
 function formatDate(iso, format) {
   if (!iso) return ''
-  const [y, m, d] = String(iso).split('-')
-  if (!y || !m || !d) return String(iso)
-  if (format === 'iso') return `${y}-${m}-${d}`
-  if (format === 'short') return `${d}.${m}.${y.slice(-2)}`
-  return `${d}.${m}.${y}`
+  const out = formatStudyDate(iso, format)
+  return out === '—' ? '' : out
 }
 
 export function fillTemplate(template, date, fieldValues, dateFormat, fields) {

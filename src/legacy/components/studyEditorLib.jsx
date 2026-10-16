@@ -67,7 +67,7 @@ export function blankForm() {
     template: '',
     fields: [blankField()],
     referenceNotes: '',
-    dateFormat: 'iso',
+    dateFormat: 'ДД.ММ.ГГГГ',
     templateEdited: false,
     lateral: false,
   }
@@ -278,21 +278,20 @@ export function serializeField(f) {
   const unit = (f.unit || '').trim()
   if (unit) out.unit = unit
   const kind = f.kind || 'text'
-  if (kind === 'formula') {
+  const formula = (f.formula || '').trim()
+  const groups = (Array.isArray(f.optionGroups) ? f.optionGroups : [])
+    .map((g) => (Array.isArray(g) ? g : []).map((s) => String(s).trim()).filter(Boolean))
+    .filter((g) => g.length)
+  const opts = (Array.isArray(f.options) ? f.options : []).map((s) => String(s).trim()).filter(Boolean)
+  if (kind === 'formula' || formula) {
+    out.kind = 'formula'
     out.computed = true
-    const formula = (f.formula || '').trim()
     if (formula) out.formula = formula
-  } else if (kind === 'groups') {
+  } else if (kind === 'groups' || groups.length) {
     out.kind = 'groups'
-    const groups = (Array.isArray(f.optionGroups) ? f.optionGroups : [])
-      .map((g) => (Array.isArray(g) ? g : []).map((s) => String(s).trim()).filter(Boolean))
-      .filter((g) => g.length)
     if (groups.length) out.optionGroups = groups
-  } else if (kind === 'select' || kind === 'multi') {
-    out.kind = kind
-    const opts = (Array.isArray(f.options) ? f.options : [])
-      .map((s) => String(s).trim())
-      .filter(Boolean)
+  } else if (kind === 'select' || kind === 'multi' || opts.length) {
+    out.kind = kind === 'multi' ? 'multi' : 'select'
     if (opts.length) out.options = opts
   } else if (kind === 'number' || kind === 'text') {
     out.kind = kind
