@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
 import { InfoDot } from '../../medconsult/DrugInfo'
@@ -86,6 +86,9 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState(() => entryMode(entry))
   const [dependOpen, setDependOpen] = useState(false)
+  const [idx, setIdx] = useState(0)
+  const [doseTick, setDoseTick] = useState(0)
+  const doseRef = useRef(null)
   const shown = mode === 'drug' ? String(entry?.name || '') : String(entry?.text || entry?.name || '')
   const suggestions = useMemo(() => {
     const q = shown.trim().toLowerCase()
@@ -112,6 +115,17 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
     [mode, entry?.name],
   )
   const showChoice = open && shown.trim().length >= 2 && suggestions.length === 0 && mode !== 'drug'
+  const active = Math.min(idx, Math.max(suggestions.length - 1, 0))
+
+  useEffect(() => {
+    setIdx(0)
+  }, [shown])
+
+  useEffect(() => {
+    if (!doseTick) return
+    doseRef.current?.focus()
+    doseRef.current?.select()
+  }, [doseTick])
 
   function write(kind, patch) {
     const name = kind === 'drug' ? String(patch.name ?? '') : ''
@@ -134,19 +148,23 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
   }
 
   function pick(s) {
+    if (!s) return
     if (s.kind === 'rec') {
       setMode('rec')
       write('rec', { text: s.text })
     } else {
-      const only = variantsOf(s.name).length === 1 ? variantsOf(s.name)[0] : null
+      const same = String(entry?.name || '').trim().toLowerCase() === String(s.name || '').trim().toLowerCase()
+      const vars = variantsOf(s.name)
+      const only = vars.length === 1 ? vars[0] : null
       setMode('drug')
       write('drug', {
         name: s.name,
-        dosage: only?.dosage || '',
-        frequency: only?.frequency || '',
-        duration: only?.duration || '',
+        dosage: same ? (entry?.dosage || only?.dosage || '') : (only?.dosage || ''),
+        frequency: same ? (entry?.frequency || only?.frequency || '') : (only?.frequency || ''),
+        duration: same ? (entry?.duration || only?.duration || '') : (only?.duration || ''),
         fromDb: true,
       })
+      setDoseTick((n) => n + 1)
     }
     setOpen(false)
   }
@@ -173,6 +191,15 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
       fromDb: entry?.fromDb,
       ...patch,
     })
+  }
+
+  function onDoseKey(e) {
+    if (doses.length < 2) return
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const i = doses.findIndex((d) => d.value === (entry?.dosage || ''))
+    const next = e.key === 'ArrowDown' ? Math.min(i < 0 ? 0 : i + 1, doses.length - 1) : Math.max(i <= 0 ? 0 : i - 1, 0)
+    onDose(doses[next].value)
   }
 
   const label = shown.trim()
@@ -203,17 +230,51 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 160)}
           onKeyDown={(e) => {
-            if (e.key !== 'Enter' || e.shiftKey || !suggestions.length) return
-            e.preventDefault()
-            pick(suggestions[0])
+            if (e.key === 'ArrowDown' && suggestions.length) {
+              e.preventDefault()
+              setOpen(true)
+              setIdx((i) => Math.min(i + 1, suggestions.length - 1))
+              return
+            }
+            if (e.key === 'ArrowUp' && suggestions.length) {
+              e.preventDefault()
+              setOpen(true)
+              setIdx((i) => Math.max(i - 1, 0))
+              return
+            }
+            if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Tab' && !e.shiftKey)) {
+              if (!suggestions.length) return
+              e.preventDefault()
+              pick(suggestions[active] || suggestions[0])
+            }
           }}
           placeholder={placeholder}
         />
         {mode === 'drug' && (
           <>
-            <input value={entry?.dosage || ''} onChange={(e) => patchScheme({ dosage: e.target.value, fromDb: entry?.fromDb })} placeholder="доза" aria-label="Доза" />
-            <input value={entry?.frequency || ''} onChange={(e) => patchScheme({ frequency: e.target.value, fromDb: entry?.fromDb })} placeholder="кратность" aria-label="Кратность" />
-            <input value={entry?.duration || ''} onChange={(e) => patchScheme({ duration: e.target.value, fromDb: entry?.fromDb })} placeholder="курс" aria-label="Курс" />
+            <input
+              ref={doseRef}
+              value={entry?.dosage || ''}
+              onChange={(e) => patchScheme({ dosage: e.target.value, fromDb: entry?.fromDb })}
+              onKeyDown={onDoseKey}
+              placeholder="доза"
+              aria-label="Доза"
+              autoComplete="off"
+            />
+            <input
+              value={entry?.frequency || ''}
+              onChange={(e) => patchScheme({ frequency: e.target.value, fromDb: entry?.fromDb })}
+              placeholder="кратность"
+              aria-label="Кратность"
+              autoComplete="off"
+            />
+            <input
+              value={entry?.duration || ''}
+              onChange={(e) => patchScheme({ duration: e.target.value, fromDb: entry?.fromDb })}
+              placeholder="курс"
+              aria-label="Курс"
+              autoComplete="off"
+            />
           </>
         )}
         {label ? <InfoDot query={label} /> : null}
@@ -226,8 +287,15 @@ function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false
       </div>
       {open && suggestions.length > 0 && (
         <div className="pack-drug-hits">
-          {suggestions.map((s) => (
-            <button type="button" key={s.id} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(s)}>
+          {suggestions.map((s, i) => (
+            <button
+              type="button"
+              key={s.id}
+              className={i === active ? 'is-on' : ''}
+              onMouseEnter={() => setIdx(i)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(s)}
+            >
               <strong>{s.label}</strong>
               {s.hint ? <span className="pack-drug-meta">{s.hint}</span> : null}
               {s.detail ? <span className="pack-drug-meta">{s.detail}</span> : null}
@@ -617,9 +685,15 @@ export default function RecPacksTab() {
                         checked={i === (form.activeSubtype || 0)}
                         onChange={() => setForm({ ...form, activeSubtype: i })}
                       />
-                      <input
+                      <AutoResizeTextarea
+                        className="pack-subtype-name"
+                        compact
+                        minRows={1}
                         value={sub.name}
                         placeholder={`подтип ${i + 1}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault()
+                        }}
                         onChange={(e) => {
                           const name = e.target.value
                           setForm({
@@ -628,6 +702,25 @@ export default function RecPacksTab() {
                           })
                         }}
                       />
+                      {form.subtypes.length > 1 && (
+                        <button
+                          type="button"
+                          className="pack-subtype-x"
+                          title="Убрать подтип"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const subtypes = form.subtypes.filter((_, idx) => idx !== i)
+                            let active = form.activeSubtype || 0
+                            if (active > i) active -= 1
+                            if (active >= subtypes.length) active = subtypes.length - 1
+                            setForm({ ...form, subtypes, activeSubtype: Math.max(0, active) })
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
                     </label>
                   ))}
                 </div>
@@ -671,7 +764,7 @@ export default function RecPacksTab() {
               </p>
               {viewPhases().map((phase, pi) => (
                 <div
-                  key={pi}
+                  key={`${form.activeSubtype || 0}-${pi}`}
                   className={`pack-unit${dragOver === pi ? ' is-over' : ''}`}
                   onDragOver={(e) => {
                     e.preventDefault()

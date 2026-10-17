@@ -772,6 +772,104 @@ function squashDrugName(value: string): string {
   return value.toLowerCase().replace(/[«»"'“”„]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normScheme(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function takePrefix(text: string, prefix: string): string | null {
+  const p = prefix.trim();
+  if (!p) return null;
+  const re = new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?=\\s|$)`, "i");
+  const hit = text.match(re);
+  if (!hit) return null;
+  return text.slice(hit[0].length).trim();
+}
+
+function doseLike(value: string) {
+  return /^\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?\s*(?:мг|мкг|г|мл|МЕ|ме|%|ЕД|ед|капл?[яи.]?|таб\.?)(?:\/(?:сут|день|дн|мл|кг))?\s*$/i.test(
+    value.trim(),
+  );
+}
+
+function looseDuration(text: string): { rest: string; duration: string } {
+  const hit = text.match(
+    /^(.*?)(?:\s+)(\d+(?:\s*-\s*\d+)?\s*(?:дн(?:ей|я|\.)?|нед(?:ели|ель|елю|\.)?|мес(?:яц(?:а|ев)?|\.)?|сут(?:ок|ки)?))\s*$/i,
+  );
+  if (!hit) return { rest: text.trim(), duration: "" };
+  return { rest: hit[1].trim(), duration: hit[2].trim() };
+}
+
+function looseSplit(text: string): { dosage: string; frequency: string; duration: string } {
+  const { rest, duration } = looseDuration(text.trim());
+  const dose = rest.match(
+    /^(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?\s*(?:мг|мкг|г|мл|МЕ|ме|%|ЕД|ед|капл?[яи.]?|таб\.?)(?:\/(?:сут|день|дн|мл|кг))?)\s*(.*)$/i,
+  );
+  if (!dose) return { dosage: rest, frequency: "", duration };
+  return { dosage: dose[1].trim(), frequency: dose[2].trim(), duration };
+}
+
+/** «доза кратность курс» через пробел (пакет) или «доза - кратность - курс» (назначение). */
+function splitScheme(name: string, tail: string): { dosage: string; frequency: string; duration: string } {
+  const trimmed = tail.trim();
+  if (!trimmed) return { dosage: "", frequency: "", duration: "" };
+  const vars = variantsOf(name);
+  for (const v of vars) {
+    const parts = [v.dosage, v.frequency, v.duration].map((s) => (s || "").trim()).filter(Boolean);
+    if (!parts.length) continue;
+    const norm = normScheme(trimmed);
+    if (norm === normScheme(parts.join(" ")) || norm === normScheme(parts.join(" - "))) {
+      return { dosage: v.dosage || "", frequency: v.frequency || "", duration: v.duration || "" };
+    }
+  }
+  if (/\s-\s/.test(trimmed)) {
+    const bits = trimmed.split(/\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+    const first = bits[0] || "";
+    const known = vars.some((v) => normScheme(v.dosage) === normScheme(first));
+    if (bits.length >= 2 && (known || doseLike(first))) {
+      const rest = bits.slice(1).join(" - ");
+      const freqs = [
+        ...new Set(
+          vars
+            .filter((v) => !known || normScheme(v.dosage) === normScheme(first))
+            .map((v) => (v.frequency || "").trim())
+            .filter(Boolean),
+        ),
+      ].sort((a, b) => b.length - a.length);
+      for (const freq of freqs) {
+        const afterFreq = takePrefix(rest, freq);
+        if (afterFreq == null) continue;
+        return { dosage: first, frequency: freq, duration: afterFreq.replace(/^[-–—\s]+/, "").trim() };
+      }
+      return { dosage: first, frequency: bits[1] || "", duration: bits.slice(2).join(" - ") };
+    }
+  }
+  const doses = [...new Set(vars.map((v) => (v.dosage || "").trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
+  for (const dose of doses) {
+    const afterDose = takePrefix(trimmed, dose);
+    if (afterDose == null) continue;
+    if (/^(?:мг|мкг|г|мл|ме|%|ед|капл|таб)/i.test(afterDose)) continue;
+    if (!afterDose) return { dosage: dose, frequency: "", duration: "" };
+    const freqs = [
+      ...new Set(
+        vars
+          .filter((v) => normScheme(v.dosage) === normScheme(dose))
+          .map((v) => (v.frequency || "").trim())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => b.length - a.length);
+    for (const freq of freqs) {
+      const afterFreq = takePrefix(afterDose, freq);
+      if (afterFreq == null) continue;
+      const duration = afterFreq.replace(/^[-–—\s]+/, "").trim();
+      const variant = vars.find((v) => normScheme(v.dosage) === normScheme(dose) && normScheme(v.frequency) === normScheme(freq));
+      return { dosage: dose, frequency: freq, duration: duration || variant?.duration || "" };
+    }
+    const loose = looseDuration(afterDose);
+    return { dosage: dose, frequency: loose.rest, duration: loose.duration };
+  }
+  return looseSplit(trimmed);
+}
+
 /** Разобрать уже вставленную строку обратно в поля формы. */
 export function parseDrugLine(line: string): { name: string; brand: string; dosage: string; frequency: string; duration: string } | null {
   const rawLine = line.trim();
@@ -806,16 +904,13 @@ export function parseDrugLine(line: string): { name: string; brand: string; dosa
     const hit = re.exec(raw);
     tail = hit ? raw.slice(hit.index + hit[0].length) : "";
   }
-  const bits = tail
-    .split(/\s+-\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const scheme = splitScheme(rec.name, tail.trim());
   return {
     name: rec.name,
     brand,
-    dosage: bits[0] || "",
-    frequency: bits[1] || "",
-    duration: bits.slice(2).join(" - "),
+    dosage: scheme.dosage,
+    frequency: scheme.frequency,
+    duration: scheme.duration,
   };
 }
 

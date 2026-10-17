@@ -16,7 +16,8 @@
   font-size: 12.5px;
   cursor: pointer;
 }
-.legacy-surface .pack-drug-hits button:hover { background: var(--paper); }
+.legacy-surface .pack-drug-hits button:hover,
+.legacy-surface .pack-drug-hits button.is-on { background: var(--paper); }
 .legacy-surface .pack-line {
   margin: 0 0 6px;
   padding: 0;
@@ -187,8 +188,50 @@
 .legacy-surface .pack-redflag { margin-left: 6px; color: #9a3412; font-size: 11px; }
 .legacy-surface .pack-source, .pack-source { display: block; margin-top: 4px; font-size: 11px; color: var(--muted, #6b7280); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .legacy-surface .pack-subtypes { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
-.legacy-surface .pack-subtype { display: flex; align-items: center; gap: 6px; }
-.legacy-surface .pack-subtype.is-on input[type='text'], .legacy-surface .pack-subtype.is-on input:not([type]) { border-color: var(--teal); }
+.legacy-surface .pack-subtype { position: relative; display: flex; align-items: flex-start; gap: 6px; }
+.legacy-surface .pack-subtype input[type='radio'] { margin-top: 8px; }
+.legacy-surface .pack-subtype.is-on input[type='text'],
+.legacy-surface .pack-subtype.is-on input:not([type]),
+.legacy-surface .pack-subtype.is-on textarea.pack-subtype-name { border-color: var(--teal); }
+.legacy-surface .pack-subtype textarea.pack-subtype-name {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  max-height: none;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  field-sizing: content;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  resize: none;
+  overflow: hidden;
+}
+.legacy-surface .pack-subtype-x {
+  visibility: hidden;
+  margin-top: 4px;
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--red, #b23a3a);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.legacy-surface .pack-subtype:hover .pack-subtype-x,
+.legacy-surface .pack-subtype-x:focus-visible { visibility: visible; }
+@media (hover: none) {
+  .legacy-surface .pack-subtype-x { visibility: visible; }
+}
 .legacy-surface .pack-depend-btn {
   border: none;
   background: none;

@@ -1,5 +1,5 @@
 import { Info, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lookupDrug, type DrugCardInfo } from "./drugLookup";
 import { useAppStore } from "./store";
@@ -7,12 +7,53 @@ import DrugsTab from "@/legacy/components/DrugsTab";
 
 export function InfoDot({ query, className = "" }: { query: string; className?: string }) {
   const hoverOn = useAppStore((s) => s.settings.infoOnHover);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const [hover, setHover] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, below: false });
   const info = lookupDrug(query);
   if (!info) return null;
+
+  function show() {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      const below = r.top < 96;
+      setPos({
+        top: below ? r.bottom + 4 : r.top - 4,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - 232)),
+        below,
+      });
+    }
+    setHover(true);
+  }
+
+  const tip =
+    hoverOn && hover && typeof document !== "undefined"
+      ? createPortal(
+          <span
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              transform: pos.below ? undefined : "translateY(-100%)",
+              zIndex: 400,
+              pointerEvents: "none",
+              width: 224,
+            }}
+            className="rounded-md border border-line bg-surface p-2 text-left text-[11px] leading-snug text-ink shadow"
+          >
+            <span className="font-medium">{info.name || query}</span>
+            {info.dosage ? <span className="mt-0.5 block text-ink-soft">{info.dosage}</span> : null}
+            {info.extra ? <span className="mt-0.5 block text-[10px] leading-snug text-mute">{info.extra}</span> : null}
+            {info.note ? <span className="mt-0.5 block">{info.note}</span> : null}
+          </span>,
+          document.body,
+        )
+      : null;
+
   return (
-    <span className="relative inline-flex" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <span className="relative inline-flex" onMouseEnter={show} onMouseLeave={() => setHover(false)}>
       <button
+        ref={btnRef}
         type="button"
         title="карточка препарата"
         aria-label={`о препарате ${query}`}
@@ -25,14 +66,7 @@ export function InfoDot({ query, className = "" }: { query: string; className?: 
       >
         <Info className="size-2.5" strokeWidth={2.5} />
       </button>
-      {hoverOn && hover && (
-        <span className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-md border border-line bg-surface p-2 text-left text-[11px] leading-snug text-ink shadow">
-          <span className="font-medium">{info.name || query}</span>
-          {info.dosage ? <span className="mt-0.5 block text-ink-soft">{info.dosage}</span> : null}
-          {info.extra ? <span className="mt-0.5 block text-[10px] leading-snug text-mute">{info.extra}</span> : null}
-          {info.note ? <span className="mt-0.5 block">{info.note}</span> : null}
-        </span>
-      )}
+      {tip}
     </span>
   );
 }
