@@ -89,11 +89,14 @@ function blankTrigger() {
   return { studyKeys: [], fieldKeys: [], timesPerDay: '', days: '', note: '' }
 }
 
-export function StudyDepends({ triggers, onChange, quiet = false }) {
+export function StudyDepends({ triggers, onChange, quiet = false, light = false }) {
   const studies = catalogStudies()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [openKey, setOpenKey] = useState('')
+  const [schemeOn, setSchemeOn] = useState(() =>
+    (triggers || []).some((t) => t?.timesPerDay || t?.days || t?.note),
+  )
   const list = triggers.length ? triggers : [blankTrigger()]
 
   function commit(next) {
@@ -126,6 +129,11 @@ export function StudyDepends({ triggers, onChange, quiet = false }) {
     <div className="drug-trigger-block">
       {!quiet && <div className="scenarios-block-label">Зависимость от исследования</div>}
       {!quiet && <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>}
+      {light && (
+        <p className="settings-note-inline">
+          Достаточно самого исследования: если оно есть в протоколе, покажутся рекомендации пакета. Показатель — только чтобы сузить.
+        </p>
+      )}
       {list.map((t, i) => {
         const picked = studies.filter((s) => (t.studyKeys || []).includes(s.key))
         return (
@@ -200,6 +208,12 @@ export function StudyDepends({ triggers, onChange, quiet = false }) {
                 </div>
               )
             })}
+            {light ? (
+              <button type="button" className="pack-depend-btn" onClick={() => setSchemeOn((v) => !v)}>
+                {schemeOn ? 'кратность и примечание' : '+ кратность и примечание'}
+              </button>
+            ) : null}
+            {(!light || schemeOn) && (
             <div className="drug-trigger-fields">
               <input
                 placeholder="приёмов в день"
@@ -217,6 +231,7 @@ export function StudyDepends({ triggers, onChange, quiet = false }) {
                 onChange={(e) => patch(i, { note: e.target.value })}
               />
             </div>
+            )}
           </div>
         )
       })}

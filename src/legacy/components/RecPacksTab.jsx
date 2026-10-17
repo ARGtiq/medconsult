@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { store } from '../lib/store'
 import Mkb10CodesInput from './Mkb10CodesInput'
-import { DRUGS } from '../../medconsult/data/catalog'
 import { InfoDot } from '../../medconsult/DrugInfo'
 import AutoResizeTextarea from './AutoResizeTextarea'
 import { StudyDepends } from './DrugsTab'
 import { rxText } from '../lib/rx'
+import { dosesForDrug, liveGeneralRecs, searchDrugs, variantsOf } from '../../medconsult/live'
 
 const EMPTY_ITEM = { text: '', subs: [] }
 
@@ -63,33 +63,270 @@ function asItem(raw) {
   return { ...bits, text, subs, studyTriggers: raw.studyTriggers || [] }
 }
 
-function drugHits(query) {
-  const q = query.trim().toLowerCase()
-  if (q.length < 2) return []
-  const rows = Object.values(store.getDrugInfoAll?.() || {})
-  const dbNames = new Set(rows.map((d) => String(d?.name || '').trim().toLowerCase()).filter(Boolean))
-  const seen = new Set()
-  const out = []
-  const take = (d, fromDb) => {
-    const name = String(d.name || '').trim()
-    const key = name.toLowerCase()
-    if (!key || seen.has(key)) return
-    const brands = String(d.brandNames || d.note || '').toLowerCase()
-    const words = `${key} ${brands}`.split(/[^a-zа-яё0-9+]+/i)
-    if (!key.includes(q) && !brands.includes(q) && !words.some((w) => w.startsWith(q))) return
-    seen.add(key)
-    const hit = {
-      name,
-      dosage: String(d.dosage || d.dose || '').trim(),
-      frequency: String(d.frequency || '').trim(),
-      duration: String(d.duration || '').trim(),
-      fromDb: fromDb || dbNames.has(key),
+function QuietDepends({ triggers, onChange }) {
+  const [open, setOpen] = useState(false)
+  const has = (triggers || []).some((t) => (t.studyKeys || []).length)
+  return (
+    <div className="pack-depend">
+      <button type="button" className="pack-depend-btn" onClick={() => setOpen((v) => !v)}>
+        {has ? 'зависимость от исследований' : '+зависимость от исследований'}
+      </button>
+      {open && <StudyDepends light quiet triggers={triggers || []} onChange={onChange} />}
+    </div>
+  )
+}
+
+function entryMode(entry) {
+  if (entry?.fromDb || entry?.dosage || entry?.frequency || entry?.duration) return 'drug'
+  if (String(entry?.text || entry?.name || '').trim()) return 'rec'
+  return 'auto'
+}
+
+function SuggestEntry({ entry, onChange, onRemove, placeholder, withSubs = false }) {
+  const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState(() => entryMode(entry))
+  const [dependOpen, setDependOpen] = useState(false)
+  const shown = mode === 'drug' ? String(entry?.name || '') : String(entry?.text || entry?.name || '')
+  const suggestions = useMemo(() => {
+    const q = shown.trim().toLowerCase()
+    if (!open || q.length < 2) return []
+    const recs = []
+    for (const r of liveGeneralRecs()) {
+      if (recs.length >= 5) break
+      const blob = `${r.title}\n${r.text}\n${r.note}\n${r.category}`.toLowerCase()
+      if (!blob.includes(q)) continue
+      recs.push({ kind: 'rec', id: `gen:${r.id}`, label: r.title || r.text, text: r.text, hint: r.category || 'общая' })
     }
-    out.push({ ...hit, line: composeDrug(hit) })
+    const drugs = searchDrugs(shown).slice(0, 6).map((h) => ({
+      kind: 'drug',
+      id: `drug:${h.name}`,
+      name: h.name,
+      label: h.name,
+      hint: h.via,
+      detail: h.hint,
+    }))
+    return [...recs, ...drugs]
+  }, [open, shown])
+  const doses = useMemo(
+    () => (mode === 'drug' ? dosesForDrug(String(entry?.name || '').trim()) : []),
+    [mode, entry?.name],
+  )
+  const showChoice = open && shown.trim().length >= 2 && suggestions.length === 0 && mode !== 'drug'
+
+  function write(kind, patch) {
+    const name = kind === 'drug' ? String(patch.name ?? '') : ''
+    const dosage = String(patch.dosage || '').trim()
+    const frequency = String(patch.frequency || '').trim()
+    const duration = String(patch.duration || '').trim()
+    const fromDb = !!patch.fromDb
+    const text = kind === 'drug' ? (name.trim() ? rxText({ name, dosage, frequency, duration }) : '') : String(patch.text ?? '')
+    onChange({
+      ...entry,
+      name,
+      dosage: kind === 'drug' ? dosage : '',
+      frequency: kind === 'drug' ? frequency : '',
+      duration: kind === 'drug' ? duration : '',
+      fromDb: kind === 'drug' && fromDb,
+      text,
+      subs: entry?.subs || [],
+      studyTriggers: entry?.studyTriggers || [],
+    })
   }
-  rows.forEach((d) => take(d, true))
-  ;(DRUGS || []).forEach((d) => take({ name: d.name, dose: d.dose, brandNames: d.note || '' }, false))
-  return out.slice(0, 8)
+
+  function pick(s) {
+    if (s.kind === 'rec') {
+      setMode('rec')
+      write('rec', { text: s.text })
+    } else {
+      const only = variantsOf(s.name).length === 1 ? variantsOf(s.name)[0] : null
+      setMode('drug')
+      write('drug', {
+        name: s.name,
+        dosage: only?.dosage || '',
+        frequency: only?.frequency || '',
+        duration: only?.duration || '',
+        fromDb: true,
+      })
+    }
+    setOpen(false)
+  }
+
+  function onDose(v) {
+    const name = String(entry?.name || shown)
+    const matches = variantsOf(name.trim()).filter((x) => x.dosage === v)
+    const one = matches.length === 1 ? matches[0] : null
+    write('drug', {
+      name,
+      dosage: v,
+      frequency: one?.frequency || entry?.frequency || '',
+      duration: one?.duration || entry?.duration || '',
+      fromDb: true,
+    })
+  }
+
+  function patchScheme(patch) {
+    write('drug', {
+      name: entry?.name || shown,
+      dosage: entry?.dosage || '',
+      frequency: entry?.frequency || '',
+      duration: entry?.duration || '',
+      fromDb: entry?.fromDb,
+      ...patch,
+    })
+  }
+
+  const label = shown.trim()
+  return (
+    <div className={withSubs ? 'pack-line' : 'pack-entry'}>
+      <div className="pack-flat">
+        <AutoResizeTextarea
+          className="pack-flat-name"
+          compact
+          minRows={1}
+          value={shown}
+          onChange={(e) => {
+            const v = e.target.value
+            if (mode === 'drug') {
+              const same = v.trim().toLowerCase() === String(entry?.name || '').trim().toLowerCase()
+              write('drug', {
+                name: v,
+                dosage: entry?.dosage || '',
+                frequency: entry?.frequency || '',
+                duration: entry?.duration || '',
+                fromDb: same && entry?.fromDb,
+              })
+            } else {
+              write('rec', { text: v })
+            }
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 160)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || e.shiftKey || !suggestions.length) return
+            e.preventDefault()
+            pick(suggestions[0])
+          }}
+          placeholder={placeholder}
+        />
+        {mode === 'drug' && (
+          <>
+            <input value={entry?.dosage || ''} onChange={(e) => patchScheme({ dosage: e.target.value, fromDb: entry?.fromDb })} placeholder="доза" aria-label="Доза" />
+            <input value={entry?.frequency || ''} onChange={(e) => patchScheme({ frequency: e.target.value, fromDb: entry?.fromDb })} placeholder="кратность" aria-label="Кратность" />
+            <input value={entry?.duration || ''} onChange={(e) => patchScheme({ duration: e.target.value, fromDb: entry?.fromDb })} placeholder="курс" aria-label="Курс" />
+          </>
+        )}
+        {label ? <InfoDot query={label} /> : null}
+        <button type="button" className="remove-btn" onClick={onRemove}>×</button>
+        {withSubs && (
+          <button type="button" className="pack-depend-btn" onClick={() => setDependOpen((v) => !v)}>
+            {(entry?.studyTriggers || []).some((t) => (t.studyKeys || []).length) ? 'зависимость' : '+зависимость'}
+          </button>
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className="pack-drug-hits">
+          {suggestions.map((s) => (
+            <button type="button" key={s.id} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(s)}>
+              <strong>{s.label}</strong>
+              {s.hint ? <span className="pack-drug-meta">{s.hint}</span> : null}
+              {s.detail ? <span className="pack-drug-meta">{s.detail}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {showChoice && (
+        <div className="pack-choice">
+          <button
+            type="button"
+            className="suggestion-pill"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setMode('drug')
+              write('drug', { name: shown, dosage: '', frequency: '', duration: '', fromDb: false })
+              setOpen(false)
+            }}
+          >
+            лекарство
+          </button>
+          <button
+            type="button"
+            className="suggestion-pill"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setMode('rec')
+              write('rec', { text: shown })
+              setOpen(false)
+            }}
+          >
+            рекомендация
+          </button>
+        </div>
+      )}
+      {mode === 'drug' && doses.length > 1 && (
+        <div className="pack-doses">
+          {doses.map((d) => (
+            <button
+              type="button"
+              key={d.value}
+              className={`pack-sub-main${entry?.dosage === d.value ? ' is-on' : ''}`}
+              onClick={() => onDose(d.value)}
+            >
+              {d.value}
+            </button>
+          ))}
+        </div>
+      )}
+      {withSubs && dependOpen && (
+        <StudyDepends
+          light
+          quiet
+          triggers={entry?.studyTriggers || []}
+          onChange={(studyTriggers) => onChange({ ...entry, studyTriggers })}
+        />
+      )}
+      {withSubs && (entry?.subs || []).length > 0 && (
+        <div className="pack-subs">
+          {(entry.subs || []).map((sub, si) => (
+            <SuggestEntry
+              key={si}
+              entry={sub}
+              placeholder="подпункт"
+              onChange={(next) => {
+                const subs = (entry.subs || []).map((s, i) => (i === si ? next : s))
+                onChange({ ...entry, subs })
+              }}
+              onRemove={() => onChange({ ...entry, subs: (entry.subs || []).filter((_, i) => i !== si) })}
+            />
+          ))}
+        </div>
+      )}
+      {withSubs && (
+        <button
+          type="button"
+          className="pack-depend-btn"
+          onClick={() => onChange({
+            ...entry,
+            subs: [...(entry.subs || []), { text: '', name: '', dosage: '', frequency: '', duration: '', fromDb: false }],
+          })}
+        >
+          + подпункт
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PackLine({ item, onChange, onRemove }) {
+  return (
+    <SuggestEntry
+      entry={item || EMPTY_ITEM}
+      onChange={onChange}
+      onRemove={onRemove}
+      placeholder="пункт, рекомендация или лекарство"
+      withSubs
+    />
+  )
 }
 
 function linkPackDrugs(pack) {
@@ -531,185 +768,6 @@ export default function RecPacksTab() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function QuietDepends({ triggers, onChange }) {
-  const [open, setOpen] = useState(false)
-  const has = (triggers || []).some((t) => (t.studyKeys || []).length)
-  return (
-    <div className="pack-depend">
-      <button type="button" className="pack-depend-btn" onClick={() => setOpen((v) => !v)}>
-        {has ? 'зависимость от исследований' : '+зависимость от исследований'}
-      </button>
-      {open && <StudyDepends quiet triggers={triggers || []} onChange={onChange} />}
-    </div>
-  )
-}
-
-function PackLine({ item, onChange, onRemove }) {
-  const [open, setOpen] = useState(false)
-  const [subDraft, setSubDraft] = useState('')
-  const [subOpen, setSubOpen] = useState(false)
-  const [dependOpen, setDependOpen] = useState(false)
-  const [subsOpen, setSubsOpen] = useState(false)
-  const query = item.name || item.text || ''
-  const hits = useMemo(() => (open ? drugHits(query) : []), [open, query])
-  const subHits = useMemo(() => (subOpen ? drugHits(subDraft) : []), [subOpen, subDraft])
-  const label = (item.name || item.text || '').trim()
-
-  function applyDrug(base, hit) {
-    return asItem({
-      ...base,
-      name: hit.name,
-      dosage: hit.dosage,
-      frequency: hit.frequency,
-      duration: hit.duration,
-      fromDb: hit.fromDb,
-      subs: base.subs || [],
-    })
-  }
-
-  function patchDrug(patch) {
-    onChange(asItem({ ...item, ...patch, subs: item.subs || [] }))
-  }
-
-  function addPlain(raw) {
-    const text = raw.trim()
-    if (!text) return
-    if ((item.subs || []).some((s) => composeDrug(s).toLowerCase() === text.toLowerCase())) return
-    onChange({ ...item, subs: [...(item.subs || []), asSub({ name: text, text })] })
-    setSubDraft('')
-  }
-
-  function addDrugSub(hit) {
-    const sub = asSub(hit)
-    if (!sub) return
-    if ((item.subs || []).some((s) => composeDrug(s).toLowerCase() === sub.text.toLowerCase())) return
-    const subs = [...(item.subs || []), sub]
-    onChange({ ...item, subs })
-    setSubDraft('')
-    setSubOpen(false)
-  }
-
-  function patchSub(si, patch) {
-    const cur = item.subs[si]
-    const base = typeof cur === 'string' ? { text: cur, name: cur } : { ...cur, name: cur.name || cur.text || '' }
-    const subs = item.subs.map((s, i) => (i === si ? asSub({ ...base, ...patch }) : s)).filter(Boolean)
-    onChange({ ...item, subs })
-  }
-
-  const subCount = (item.subs || []).length
-  return (
-    <div className="pack-line">
-      <div className="pack-flat">
-        <AutoResizeTextarea
-          className="pack-flat-name"
-          compact
-          minRows={1}
-          value={item.name || item.text || ''}
-          onChange={(e) => {
-            const v = e.target.value
-            onChange(asItem({ ...item, name: v, fromDb: item.fromDb && v.trim().toLowerCase() === (item.name || '').toLowerCase(), subs: item.subs || [] }))
-            setOpen(true)
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="пункт, рекомендация или анализ"
-        />
-        <input value={item.dosage || ''} onChange={(e) => patchDrug({ dosage: e.target.value })} placeholder="доза" />
-        <input value={item.frequency || ''} onChange={(e) => patchDrug({ frequency: e.target.value })} placeholder="кратность" />
-        <input value={item.duration || ''} onChange={(e) => patchDrug({ duration: e.target.value })} placeholder="курс" />
-        {label ? <InfoDot query={label} /> : null}
-        <button type="button" className="remove-btn" onClick={onRemove}>×</button>
-        <button type="button" className="pack-depend-btn" onClick={() => setDependOpen((v) => !v)}>
-          +зависимость
-        </button>
-        <button type="button" className="pack-depend-btn" onClick={() => setSubsOpen((v) => !v)}>
-          {subCount ? `+подпункты · ${subCount}` : '+подпункты'}
-        </button>
-      </div>
-      {open && hits.length > 0 && (
-        <div className="pack-drug-hits">
-          {hits.map((h) => (
-            <button
-              type="button"
-              key={h.line}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(applyDrug(item, h))
-                setOpen(false)
-              }}
-            >
-              <strong>{h.name}</strong>
-              <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {dependOpen && <StudyDepends quiet triggers={item.studyTriggers || []} onChange={(studyTriggers) => onChange({ ...item, studyTriggers })} />}
-      {subsOpen && (
-        <div className="pack-subs">
-          {(item.subs || []).map((sub, si) => {
-            const subLabel = sub.name || sub.text || ''
-            return (
-              <div key={si} className="pack-flat">
-                <input
-                  className="pack-flat-name"
-                  value={subLabel}
-                  onChange={(e) => patchSub(si, { name: e.target.value })}
-                  placeholder="подпункт"
-                />
-                <input value={sub.dosage || ''} onChange={(e) => patchSub(si, { dosage: e.target.value })} placeholder="доза" />
-                <input value={sub.frequency || ''} onChange={(e) => patchSub(si, { frequency: e.target.value })} placeholder="кратность" />
-                <input value={sub.duration || ''} onChange={(e) => patchSub(si, { duration: e.target.value })} placeholder="курс" />
-                <button
-                  type="button"
-                  className="pack-depend-btn"
-                  onClick={() => onChange({ ...item, subs: item.subs.filter((_, j) => j !== si) })}
-                >
-                  убрать
-                </button>
-              </div>
-            )
-          })}
-          <div className="pack-flat">
-            <input
-              className="pack-flat-name"
-              value={subDraft}
-              onChange={(e) => {
-                setSubDraft(e.target.value)
-                setSubOpen(true)
-              }}
-              onFocus={() => setSubOpen(true)}
-              onBlur={() => setTimeout(() => setSubOpen(false), 150)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addPlain(subDraft)
-                }
-              }}
-              placeholder="подпункт"
-            />
-          </div>
-          {subOpen && subHits.length > 0 && (
-            <div className="pack-drug-hits">
-              {subHits.map((h) => (
-                <button
-                  type="button"
-                  key={h.line}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addDrugSub(h)}
-                >
-                  <strong>{h.name}</strong>
-                  <span className="pack-drug-meta">{[h.dosage, h.frequency, h.duration].filter(Boolean).join(' · ')}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

@@ -31,10 +31,26 @@ import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
 import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { collectDeviations, patientRefWho } from "./data/studies";
-import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea, LiveTextarea } from "./StudyCard";
+import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea, LiveTextarea, flushLiveText } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
 import { formatPatient, useAppStore, workKindOf } from "./store";
 import type { LocalItem, LocalPack, LocalPick, SessionState } from "./types";
+
+function snapshotProtocol() {
+  flushLiveText();
+  const st = useAppStore.getState();
+  const session = st.session;
+  const patient = st.patients.find((p) => p.id === session.patientId);
+  const deviations = st.settings.studyDeviations !== false;
+  return {
+    session,
+    patient,
+    deviations,
+    blocks: composeBlocks(session, patient, { deviations }),
+    header: composeHeader(session, patient),
+    toast: st.setToast,
+  };
+}
 
 const SPLIT_MIN = 22;
 const SPLIT_MAX = 70;
@@ -310,18 +326,21 @@ export function ProtocolPage() {
 
   useEffect(() => {
     function copyAll() {
-      copyText(composeAll(session, patient, false, { deviations: settings.studyDeviations !== false })).then((ok) =>
-        store.setToast(ok ? "В буфере — без шапки" : "Не скопировалось"),
+      const snap = snapshotProtocol();
+      copyText(composeAll(snap.session, snap.patient, false, { deviations: snap.deviations })).then((ok) =>
+        snap.toast(ok ? "В буфере — без шапки" : "Не скопировалось"),
       );
     }
     function copyHeader() {
-      copyText(header).then((ok) => store.setToast(ok ? "Шапка в буфере" : "Не скопировалось"));
+      const snap = snapshotProtocol();
+      copyText(snap.header).then((ok) => snap.toast(ok ? "Шапка в буфере" : "Не скопировалось"));
     }
     function copyBlock() {
-      const open = session.openSection;
-      const b = blocks.find((x) => x.id === open) || blocks[0];
+      const snap = snapshotProtocol();
+      const open = snap.session.openSection;
+      const b = snap.blocks.find((x) => x.id === open) || snap.blocks[0];
       if (!b) return;
-      copyText(b.text).then((ok) => store.setToast(ok ? `${b.title} в буфере` : "Не скопировалось"));
+      copyText(b.text).then((ok) => snap.toast(ok ? `${b.title} в буфере` : "Не скопировалось"));
     }
     window.addEventListener("medconsult-copy-all", copyAll);
     window.addEventListener("medconsult-copy-header", copyHeader);
@@ -331,7 +350,7 @@ export function ProtocolPage() {
       window.removeEventListener("medconsult-copy-header", copyHeader);
       window.removeEventListener("medconsult-copy-block", copyBlock);
     };
-  }, [blocks, header, patient, session, store]);
+  }, []);
 
   useEffect(() => {
     const root = splitWrap.current;
@@ -369,6 +388,10 @@ export function ProtocolPage() {
   };
 
   async function polish(section: "complaints" | "anamnesis" | "recommendations" | "all") {
+    flushLiveText();
+    const live = useAppStore.getState();
+    const session = live.session;
+    const patient = live.patients.find((p) => p.id === session.patientId);
     setAiBusy(true);
     try {
       if (section === "complaints") {
@@ -446,10 +469,11 @@ export function ProtocolPage() {
   }
 
   function printProtocol() {
+    const snap = snapshotProtocol();
     const html = `
       <div class="print-letterhead"><h1>MedConsult</h1><p>протокол консультации</p></div>
-      <div class="print-meta">${escapeHtml(header).replace(/\n/g, "<br/>")}</div>
-      ${blocks
+      <div class="print-meta">${escapeHtml(snap.header).replace(/\n/g, "<br/>")}</div>
+      ${snap.blocks
         .map(
           (b) =>
             `<div class="print-section"><h3>${escapeHtml(b.title)}</h3><div>${hasMarkup(b.text) ? mdToHtml(b.text) : escapeHtml(b.text).replace(/\n/g, "<br/>").replace(/(^|<br\/>)(Источник: [^<]*)/g, '$1<span class="pack-source">$2</span>')}</div></div>`,
@@ -1324,11 +1348,12 @@ export function ProtocolPage() {
         <button
           type="button"
           className="shrink-0 rounded-lg bg-teal px-3 py-1.5 text-sm font-semibold text-paper whitespace-nowrap"
-          onClick={() =>
-            copyText(composeAll(session, patient, false, { deviations: settings.studyDeviations !== false })).then((ok) =>
-              store.setToast(ok ? "В буфере — без шапки" : "Не скопировалось"),
-            )
-          }
+          onClick={() => {
+            const snap = snapshotProtocol();
+            copyText(composeAll(snap.session, snap.patient, false, { deviations: snap.deviations })).then((ok) =>
+              snap.toast(ok ? "В буфере — без шапки" : "Не скопировалось"),
+            );
+          }}
         >
           Копировать всё
         </button>
@@ -1349,7 +1374,10 @@ export function ProtocolPage() {
           type="button"
           title="Копировать шапку"
           className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-paper px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
-          onClick={() => copyText(header).then((ok) => store.setToast(ok ? "Шапка в буфере" : "Не скопировалось"))}
+          onClick={() => {
+            const snap = snapshotProtocol();
+            copyText(snap.header).then((ok) => snap.toast(ok ? "Шапка в буфере" : "Не скопировалось"));
+          }}
         >
           <Copy className="size-3" /> шапка
         </button>
@@ -1398,7 +1426,11 @@ export function ProtocolPage() {
                 type="button"
                 title="Копировать блок"
                 className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-line bg-paper text-ink-soft"
-                onClick={() => copyText(b.text).then((ok) => store.setToast(ok ? `${b.title} в буфере` : "Не скопировалось"))}
+                onClick={() => {
+                  const snap = snapshotProtocol();
+                  const text = snap.blocks.find((x) => x.id === b.id)?.text || b.text;
+                  copyText(text).then((ok) => snap.toast(ok ? `${b.title} в буфере` : "Не скопировалось"));
+                }}
               >
                 <Copy className="size-3.5" />
               </button>
@@ -1435,7 +1467,7 @@ export function ProtocolPage() {
             <Eraser className="size-3.5" />
             стереть
           </button>
-          <button type="button" className="rounded-lg border border-line px-2 py-1 text-xs" onClick={() => store.saveVisit()}>
+          <button type="button" className="rounded-lg border border-line px-2 py-1 text-xs" onClick={() => { flushLiveText(); store.saveVisit(); }}>
             Сохранить в историю
           </button>
         </div>

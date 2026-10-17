@@ -499,7 +499,7 @@ function triggerWhy(
       for (const field of def.fields || []) {
         if (!fieldKeys.has(field.key)) continue;
         const val = inst.fields?.[field.key] || "";
-        if (!indicatorHit(val, field, inst.fields || {})) continue;
+        if (!indicatorHit(val, field, inst.fields || {}, who)) continue;
         hits.push(`${def.label}: ${field.label} ${val.trim()}`);
       }
     }
@@ -568,41 +568,135 @@ export function studyDrugHints(entries: StudyEntry[], who?: RefWho | null): Stud
       out.push({ id: `${drug.name}|${hits.join("|")}`, name: drug.name, line, why: hits.join("; ") });
     }
   }
+  return out;
+}
+
+export type StudyPackLine = { id: string; text: string; subs: { id: string; text: string }[] };
+
+export type StudyPackTree = {
+  id: string;
+  name: string;
+  note: string;
+  why: string;
+  lines: StudyPackLine[];
+};
+
+type PackTrigger = { studyKeys?: string[]; fieldKeys?: string[] };
+
+function presenceLabels(studyKeys: string[], entries: StudyEntry[]): string[] {
+  const keys = new Set(studyKeys);
+  const labels: string[] = [];
+  for (const entry of entries || []) {
+    if (!keys.has(entry.key)) continue;
+    labels.push(getStudyLive(entry.key)?.label || entry.key);
+  }
+  return labels;
+}
+
+/** Исследование в приёме достаточно. Показатели — только если их явно выбрали. */
+function triggerMatch(triggers: PackTrigger[] | undefined, entries: StudyEntry[], who?: RefWho | null): string[] | null {
+  const why: string[] = [];
+  let hit = false;
+  for (const trigger of triggers || []) {
+    const studyKeys = (trigger.studyKeys || []).map(String).filter(Boolean);
+    if (!studyKeys.length) continue;
+    const fieldKeys = (trigger.fieldKeys || []).map(String).filter(Boolean);
+    const labels = fieldKeys.length ? triggerWhy([trigger], entries, who) : presenceLabels(studyKeys, entries);
+    if (!labels.length) continue;
+    hit = true;
+    why.push(...labels);
+  }
+  return hit ? why : null;
+}
+
+function packLineText(raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; dose?: string } | string) {
+  return rxText(raw).trim();
+}
+
+/** Пакеты, чьё исследование есть в протоколе: дерево пунктов и подпунктов плюс примечание. */
+export function studyPackTrees(entries: StudyEntry[], who?: RefWho | null): StudyPackTree[] {
   let packs: {
     id?: string;
     name?: string;
-    studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[]; timesPerDay?: string; days?: string; note?: string }[];
-    items?: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[] }[]; subs?: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; studyTriggers?: { studyKeys?: string[]; fieldKeys?: string[] }[] }[] }[];
+    note?: string;
+    activeSubtype?: number;
+    studyTriggers?: PackTrigger[];
+    items?: PackNode[];
+    phases?: { items?: PackNode[] }[];
+    subtypes?: { note?: string; phases?: { items?: PackNode[] }[] }[];
   }[] = [];
   try {
     packs = store.getRecommendationPacks() || [];
   } catch {
-    packs = [];
+    return [];
   }
-  const lineOf = (raw: { text?: string; name?: string; dosage?: string; frequency?: string; duration?: string; dose?: string } | string) => rxText(raw);
+  const out: StudyPackTree[] = [];
   for (const pack of packs) {
-    const packHits = triggerWhy(pack.studyTriggers, entries, who);
-    for (const item of pack.items || []) {
-      const itemHits = triggerWhy(item.studyTriggers, entries, who);
-      const why = [...packHits, ...itemHits];
-      if (why.length) {
-        const head = lineOf(item);
-        const lines = [head, ...(item.subs || []).map(lineOf)].map((s) => String(s || "").trim()).filter(Boolean);
-        lines.forEach((line, i) => {
-          out.push({ id: `${pack.id}|${i}|${line}`, name: pack.name || head, line, why: why.join("; ") });
-        });
-      }
-      for (const sub of item.subs || []) {
-        const subHits = triggerWhy(sub.studyTriggers, entries, who);
-        if (!subHits.length) continue;
-        const line = lineOf(sub);
-        if (!line) continue;
-        out.push({ id: `${pack.id}|sub|${line}`, name: pack.name || line, line, why: subHits.join("; ") });
-      }
+    const subtypes = pack.subtypes || [];
+    let items: PackNode[] = [];
+    let note = "";
+    if (subtypes.length) {
+      const i = Math.min(Math.max(pack.activeSubtype || 0, 0), subtypes.length - 1);
+      const sub = subtypes[i] || subtypes[0];
+      items = (sub?.phases || []).flatMap((phase) => phase.items || []);
+      if (!items.length) items = pack.items || [];
+      const own = String(sub?.note || "").trim();
+      const split = subtypes.some((s) => String(s?.note || "").trim());
+      note = own || (split ? "" : String(pack.note || "").trim());
+    } else if ((pack.phases || []).length) {
+      items = (pack.phases || []).flatMap((phase) => phase.items || []);
+      note = String(pack.note || "").trim();
+    } else {
+      items = pack.items || [];
+      note = String(pack.note || "").trim();
     }
+    const packWhy = triggerMatch(pack.studyTriggers, entries, who);
+    const lines: StudyPackLine[] = [];
+    const whyBits = packWhy ? [...packWhy] : [];
+    items.forEach((item, index) => {
+      const itemWhy = triggerMatch(item?.studyTriggers, entries, who);
+      const head = packLineText(item || "");
+      const subsRaw = item?.subs || [];
+      if (packWhy || itemWhy) {
+        if (itemWhy) whyBits.push(...itemWhy);
+        const subs = subsRaw
+          .map((sub, j) => ({ id: `${pack.id}|${index}|${j}`, text: packLineText(sub) }))
+          .filter((sub) => sub.text);
+        if (!head && !subs.length) return;
+        lines.push({ id: `${pack.id}|${index}`, text: head, subs });
+        return;
+      }
+      const subs: { id: string; text: string }[] = [];
+      subsRaw.forEach((sub, j) => {
+        const subWhy = triggerMatch(sub?.studyTriggers, entries, who);
+        const text = packLineText(sub);
+        if (!subWhy || !text) return;
+        whyBits.push(...subWhy);
+        subs.push({ id: `${pack.id}|${index}|${j}`, text });
+      });
+      if (subs.length) lines.push({ id: `${pack.id}|${index}`, text: head, subs });
+    });
+    if (!lines.length && !(packWhy && note)) continue;
+    out.push({
+      id: String(pack.id || pack.name || out.length),
+      name: String(pack.name || "Пакет"),
+      note,
+      why: [...new Set(whyBits)].join("; "),
+      lines,
+    });
   }
   return out;
 }
+
+type PackNode = {
+  text?: string;
+  name?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  studyTriggers?: PackTrigger[];
+  subs?: PackNode[];
+};
 
 function overlayComputed(def: StudyDef): StudyDef {
   const seed = STUDIES.find((s) => s.key === def.key);

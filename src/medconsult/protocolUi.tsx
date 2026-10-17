@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import RecPackSearch from "@/legacy/components/RecPackSearch";
 import VoiceInputButton from "@/legacy/components/VoiceInputButton";
 import { EditableChips, ParenText, ToggleChips } from "./EditableChip";
-import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, parseDrugLine, searchDrugs, studyDrugHints, variantsOf } from "./live";
+import { analogsOf, DEFAULT_DRUG_FORM, dosesForDrug, extraOfLine, formatDrugMention, liveDrugRecords, liveGeneralRecs, parseDrugLine, searchDrugs, studyDrugHints, studyPackTrees, variantsOf, type StudyPackTree } from "./live";
 import { Typeahead, type TypeaheadItem } from "./Typeahead";
 import { patientRefWho } from "./data/studies";
 import { useAppStore } from "./store";
@@ -19,8 +19,38 @@ export function StudyDrugHints({
 }) {
   const patient = useAppStore((s) => s.patients.find((p) => p.id === s.session.patientId));
   const hints = useMemo(() => studyDrugHints(studies, patientRefWho(patient)), [studies, patient]);
+  const trees = useMemo(() => studyPackTrees(studies, patientRefWho(patient)), [studies, patient]);
   const visible = hints.filter((h) => !selected.some((s) => s === h.line || s.toLowerCase().startsWith(h.name.toLowerCase())));
-  if (!visible.length) return null;
+  const packs = trees
+    .map((tree) => ({
+      ...tree,
+      lines: tree.lines
+        .map((line) => ({ ...line, subs: line.subs.filter((sub) => sub.text && !selected.includes(sub.text)) }))
+        .filter((line) => (line.text && !selected.includes(line.text)) || line.subs.length),
+    }))
+    .filter((tree) => tree.lines.length || (tree.note && !selected.includes(tree.note)));
+  if (!visible.length && !packs.length) return null;
+
+  function addLines(lines: string[]) {
+    const have = new Set(selected);
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line || have.has(line)) continue;
+      have.add(line);
+      onAdd(line);
+    }
+  }
+
+  function addTree(tree: StudyPackTree) {
+    const lines: string[] = [];
+    if (tree.note) lines.push(tree.note);
+    for (const line of tree.lines) {
+      if (line.text) lines.push(line.text);
+      for (const sub of line.subs) lines.push(sub.text);
+    }
+    addLines(lines);
+  }
+
   return (
     <div className="mt-2">
       <div className="text-[10px] tracking-wide text-mute uppercase">по результатам</div>
@@ -37,6 +67,43 @@ export function StudyDrugHints({
             </span>
             <span className="mt-0.5 block text-[10px] text-mute">{h.why}</span>
           </button>
+        ))}
+        {packs.map((tree) => (
+          <div key={tree.id} className="rounded-lg border border-dashed border-teal/40 bg-paper px-2 py-1.5">
+            <button type="button" onClick={() => addTree(tree)} className="text-left text-xs font-medium text-teal">
+              {tree.name}
+            </button>
+            {tree.note ? <p className="mt-0.5 text-[11px] leading-snug whitespace-pre-wrap text-mute">{tree.note}</p> : null}
+            {tree.why ? <p className="mt-0.5 text-[10px] text-mute">{tree.why}</p> : null}
+            {tree.lines.length > 0 && (
+              <ul className="mt-1 space-y-1">
+                {tree.lines.map((line) => (
+                  <li key={line.id} className={line.subs.length ? "border-l border-line pl-2" : ""}>
+                    {line.text ? (
+                      <button
+                        type="button"
+                        onClick={() => addLines([line.text, ...line.subs.map((sub) => sub.text)])}
+                        className="text-left text-xs text-teal"
+                      >
+                        {line.text}
+                      </button>
+                    ) : null}
+                    {line.subs.length > 0 && (
+                      <ul className="mt-0.5 space-y-0.5">
+                        {line.subs.map((sub) => (
+                          <li key={sub.id} className="border-l border-dashed border-line pl-2">
+                            <button type="button" onClick={() => onAdd(sub.text)} className="text-left text-xs text-ink">
+                              {sub.text}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ))}
       </div>
     </div>
@@ -94,10 +161,11 @@ function DrugSearch({
   const [focusName, setFocusName] = useState(0);
   const [genOpen, setGenOpen] = useState(false);
   const doseRef = useRef<HTMLInputElement>(null);
-  const hits = useMemo(() => searchDrugs(q, diagnosisCode), [q, diagnosisCode]);
+  const deferredQ = useDeferredValue(q);
+  const hits = useMemo(() => searchDrugs(deferredQ, diagnosisCode), [deferredQ, diagnosisCode]);
   const items = useMemo(() => {
     const out: TypeaheadItem[] = [];
-    const qn = q.trim().toLowerCase();
+    const qn = deferredQ.trim().toLowerCase();
     if (qn.length >= 2) {
       for (const r of liveGeneralRecs()) {
         if (selected.includes(r.text)) continue;
@@ -149,7 +217,7 @@ function DrugSearch({
       });
     }
     return out;
-  }, [hits, selected, q]);
+  }, [hits, selected, deferredQ]);
   const doses = useMemo(() => dosesForDrug(name), [name]);
   const brandOptions = useMemo(() => {
     const rec = liveDrugRecords().find((d) => d.name.toLowerCase() === name.trim().toLowerCase());

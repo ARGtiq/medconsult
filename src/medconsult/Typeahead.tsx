@@ -54,6 +54,7 @@ export function Typeahead({
   wrapLabels?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [armed, setArmed] = useState(false);
   const [idx, setIdx] = useState(0);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +63,7 @@ export function Typeahead({
 
   useEffect(() => {
     setIdx(0);
+    setArmed(false);
   }, [items, value]);
 
   useEffect(() => {
@@ -109,12 +111,14 @@ export function Typeahead({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
+      setArmed(true);
       setIdx((i) => Math.min(i + 1, Math.max(items.length - 1, 0)));
       return;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
       setOpen(true);
+      setArmed(true);
       setIdx((i) => Math.max(i - 1, 0));
       return;
     }
@@ -136,7 +140,19 @@ export function Typeahead({
       pick(items[idx], "tab");
       return;
     }
-    if (e.key === "Escape") setOpen(false);
+    if (e.key === " ") {
+      // Пока пункт подсвечен стрелками, Chrome забирает пробел на выбор.
+      if (!open || !armed) return;
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart ?? value.length;
+      const end = el.selectionEnd ?? value.length;
+      const next = `${value.slice(0, start)} ${value.slice(end)}`;
+      onChange(next);
+      const caret = start + 1;
+      requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+      return;
+    }
   }
 
   const showList = open && (items.length > 0 || (!!value.trim() && !!emptyHint));
@@ -232,7 +248,7 @@ export function Typeahead({
         autoFocus={autoFocus}
         role="combobox"
         aria-expanded={showList}
-        aria-activedescendant={showList ? `ta-opt-${idx}` : undefined}
+        aria-activedescendant={armed && showList && items[idx] ? `ta-opt-${idx}` : undefined}
       />
       {showIdle && (
         <span className="pointer-events-none absolute inset-0 flex items-center truncate px-2 text-sm font-medium text-ink">

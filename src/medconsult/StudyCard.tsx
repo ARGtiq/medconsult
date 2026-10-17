@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition, type TextareaHTMLAttributes } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import {
   applyComputed,
@@ -33,12 +33,50 @@ function splitMulti(value: string) {
     .filter(Boolean);
 }
 
+const liveFlushers = new Set<() => void>();
+
+/** Сбросить отложенный текст в хранилище до копирования или печати. */
+export function flushLiveText() {
+  liveFlushers.forEach((fn) => fn());
+}
+
 function useLiveText(value: string, onChange: (v: string) => void) {
   const [text, setText] = useState(value ?? "");
+  const textRef = useRef(text);
+  const valueRef = useRef(value ?? "");
+  const onChangeRef = useRef(onChange);
   const focused = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  onChangeRef.current = onChange;
+  valueRef.current = value ?? "";
+  textRef.current = text;
+
+  function commit(next: string) {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (next !== valueRef.current) onChangeRef.current(next);
+  }
+
+  useEffect(() => {
+    const flush = () => commit(textRef.current);
+    liveFlushers.add(flush);
+    return () => {
+      liveFlushers.delete(flush);
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+        const next = textRef.current;
+        if (next !== valueRef.current) onChangeRef.current(next);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!focused.current) setText(value ?? "");
   }, [value]);
+
   return {
     text,
     onFocus: () => {
@@ -46,11 +84,13 @@ function useLiveText(value: string, onChange: (v: string) => void) {
     },
     onBlur: () => {
       focused.current = false;
-      if (text !== (value ?? "")) startTransition(() => onChange(text));
+      commit(textRef.current);
     },
     onChange: (v: string) => {
+      textRef.current = v;
       setText(v);
-      startTransition(() => onChange(v));
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => commit(v), 480);
     },
   };
 }

@@ -228,7 +228,7 @@ function cleanStudyTriggers(list) {
       days: String(t?.days || '').trim(),
       note: String(t?.note || '').trim(),
     }))
-    .filter((t) => t.studyKeys.length && t.fieldKeys.length)
+    .filter((t) => t.studyKeys.length)
 }
 
 function itemHit(raw, q) {

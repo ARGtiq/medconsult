@@ -95,7 +95,22 @@
   color: #8b909a;
   font-weight: 400;
 }
-.legacy-surface .pack-subs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.legacy-surface .pack-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 6px 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+}
+.legacy-surface .pack-entry { min-width: 0; }
+.legacy-surface .pack-choice,
+.legacy-surface .pack-doses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
 .legacy-surface .pack-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .legacy-surface .pack-sub .pack-regimen { flex-basis: 100%; }
 .legacy-surface .drug-pack-refs {
