@@ -169,20 +169,24 @@ export default function StudiesTab({ scope = 'studies' }) {
             fields.map((f, i) => (i === idx ? '' : (f.key || '').trim())).filter(Boolean),
           )
           let n = 2
-          while (used.has(auto)) auto = `${slugifyFieldKey(patch.label)}_${n++}`
-        }
-        if (oldKey !== auto) {
-          if (oldKey && auto) {
-            template = retargetToken(template, oldKey, auto)
+          const base = auto
+          while (used.has(auto)) auto = `${base}_${n++}`
+          let from = oldKey
+          if (!from && tagEdit) {
+            const seen = [...(tagEdit.seenKeys || []), tagEdit.originKey, tagEdit.key].filter(Boolean)
+            from = [...seen].reverse().find((k) => k !== auto && (template.includes(`{${k}}`) || template.includes(`{+${k}}`))) || ''
+          }
+          if (from && from !== auto) {
+            template = retargetToken(template, from, auto)
             fields = fields.map((f, i) => {
               if (i === idx) return { ...f, key: auto }
               let next = f
-              if (next.showIf?.field === oldKey) next = { ...next, showIf: { ...next.showIf, field: auto } }
-              if (next.formula) next = { ...next, formula: retargetToken(String(next.formula), oldKey, auto) }
-              if (next.refOf === oldKey) next = { ...next, refOf: auto }
+              if (next.showIf?.field === from) next = { ...next, showIf: { ...next.showIf, field: auto } }
+              if (next.formula) next = { ...next, formula: retargetToken(String(next.formula), from, auto) }
+              if (next.refOf === from) next = { ...next, refOf: auto }
               return next
             })
-          } else {
+          } else if (!from) {
             fields = fields.map((f, i) => (i === idx ? { ...f, key: auto } : f))
           }
         }
@@ -875,7 +879,7 @@ export default function StudiesTab({ scope = 'studies' }) {
               <div className={`study-editor-split is-${templateSide}`}>
               <StudyFieldList form={form} dragKids={dragKids} overField={overField} addChild={addChild} addField={addField} addGroup={addGroup} addGroupOpt={addGroupOpt} addHeading={addHeading} addOptions={addOptions} applyFormulaPreset={applyFormulaPreset} descendantIdxs={descendantIdxs} dragFrom={dragFrom} duplicateField={duplicateField} foldIdle={foldIdle} insertFormulaToken={insertFormulaToken} moveField={moveField} openField={openField} parentChoices={parentChoices} removeField={removeField} removeGroup={removeGroup} removeGroupOpt={removeGroupOpt} removeOption={removeOption} renameGroupOpt={renameGroupOpt} renameOption={renameOption} setDragKids={setDragKids} setGroupDraft={setGroupDraft} setOpenField={setOpenField} setOverField={setOverField} toggleRef={toggleRef} toggleShowValue={toggleShowValue} updateField={updateField} />
 
-              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} />
+              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} />
               </div>
 
               <AutoResizeTextarea

@@ -140,8 +140,17 @@ function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, on
         if (painting.current) return
         const el = e.currentTarget
         const next = serializeMark(el)
+        if (onChange(next) === false) {
+          const pos = markCaret(el)?.start ?? 0
+          painting.current = true
+          paintMark(el, template, fields)
+          skip.current = template
+          paintedSig.current = fieldSig(fields)
+          if (document.activeElement === el) placeMarkCaret(el, pos)
+          painting.current = false
+          return
+        }
         skip.current = next
-        onChange(next)
         if (markDirty(el)) {
           const pos = markCaret(el)?.start ?? next.length
           painting.current = true
@@ -190,17 +199,38 @@ export function StudyTemplatePane(props) {
     if (!key || SYSTEM_TAGS.has(key)) return
     const idx = (form.fields || []).findIndex((f) => fieldKeyOf(f) === key || f.key === key)
     if (idx >= 0) {
-      setTagEdit({ isNew: false, index: idx, key: form.fields[idx].key || key })
+      setTagEdit({ isNew: false, index: idx, key: form.fields[idx].key || key, originKey: form.fields[idx].key || key, seenKeys: [form.fields[idx].key || key].filter(Boolean) })
       return
     }
     setForm((prev) => {
       if (prev.fields.some((f) => fieldKeyOf(f) === key || f.key === key)) return prev
       return { ...prev, fields: [...prev.fields, { ...blankField(), key, label: key }] }
     })
-    setTagEdit({ isNew: true, index: null, selected: '', key })
+    setTagEdit({ isNew: true, index: null, selected: '', key, originKey: key, seenKeys: [key] })
+  }
+  const tagEditRef = useRef(null)
+  tagEditRef.current = props.tagEdit
+  function tokenKeys(text) {
+    return new Set([...String(text || '').matchAll(/\{[+]?([a-zA-Z0-9_]+)\}/g)].map((m) => m[1]))
   }
   function commitTemplate(value) {
-    setForm((prev) => ({ ...prev, template: value, templateEdited: true }))
+    const prev = props.form
+    if ((prev.template || '') === value) return true
+    if (tagEditRef.current) return false
+    const prevKeys = tokenKeys(prev.template)
+    const nextKeys = tokenKeys(value)
+    const fieldKeys = new Set((prev.fields || []).map((f) => (f.key || '').trim()).filter(Boolean))
+    for (const k of nextKeys) {
+      if (prevKeys.has(k) || fieldKeys.has(k)) continue
+      for (const pk of prevKeys) {
+        if (!nextKeys.has(pk) && fieldKeys.has(pk)) return false
+      }
+    }
+    setForm((cur) => {
+      if ((cur.template || '') === value) return cur
+      return { ...cur, template: value, templateEdited: true }
+    })
+    return true
   }
   function addTagFromSelection() {
     if (tagLock.current || !selAsk) return
@@ -229,7 +259,7 @@ export function StudyTemplatePane(props) {
           return { ...prev, fields: [...prev.fields, field], template, templateEdited: true }
         })
       })
-      setTagEdit({ isNew: true, index: at, selected, key: made })
+      setTagEdit({ isNew: true, index: at, selected, key: made, originKey: made, seenKeys: [made] })
       setSelAsk(null)
     } finally {
       tagLock.current = false
