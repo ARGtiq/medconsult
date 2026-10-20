@@ -362,6 +362,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const needsAge = !!def?.fields.some((f) => f.refBy?.includes("age"));
   const lateral = !!def?.lateral;
   const [folded, setFolded] = useState<Record<string, boolean>>({});
+  const [presetPick, setPresetPick] = useState("");
   if (!def || !entry) return null;
   const side = entry.side === "l" ? "l" : "r";
   const selected = openSection === studyKey;
@@ -431,6 +432,34 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       ) : null}
       {open && !entry.textMode && (
         <div className="mt-2 space-y-2">
+          {(def.presets || []).some((p) => p.name || Object.keys(p.values || {}).length) && (
+            <label className="flex items-center gap-2 text-[11px] text-ink-soft">
+              подшаблон
+              <select
+                aria-label="Подшаблон значений"
+                value={presetPick}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setPresetPick(id);
+                  const preset = (def.presets || []).find((p) => p.id === id);
+                  const inst = entry.instances[0];
+                  if (!preset || !inst) return;
+                  const shown = lateral ? sideView(inst, side).fields : inst.fields;
+                  updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date);
+                }}
+                className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
+              >
+                <option value="">выбрать</option>
+                {(def.presets || [])
+                  .filter((p) => p.name || Object.keys(p.values || {}).length)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || "без названия"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           {lateral && (
             <div className="flex gap-1" role="tablist" aria-label="Сторона">
               {(

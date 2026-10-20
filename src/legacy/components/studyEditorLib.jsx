@@ -70,6 +70,7 @@ export function blankForm() {
     dateFormat: 'ДД.ММ.ГГГГ',
     templateEdited: false,
     lateral: false,
+    presets: [],
   }
 }
 

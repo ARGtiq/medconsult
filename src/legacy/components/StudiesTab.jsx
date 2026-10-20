@@ -31,6 +31,7 @@ import { StudyFieldList } from './StudyFieldList'
 import { StudyTemplatePane } from './StudyTemplatePane'
 import { StudyTagModal } from './StudyTagModal'
 import { StudyTemplateList } from './StudyTemplateList'
+import { FieldControl } from '../../medconsult/StudyCard'
 
 export default function StudiesTab({ scope = 'studies' }) {
   const vitae = scope === 'vitae'
@@ -69,6 +70,7 @@ export default function StudiesTab({ scope = 'studies' }) {
   const [selAsk, setSelAsk] = useState(null)
   const [tagEdit, setTagEdit] = useState(null)
   const [openField, setOpenField] = useState(null)
+  const [activePreset, setActivePreset] = useState('')
   const [tagH, setTagH] = useState(() => {
     try {
       const n = Number(localStorage.getItem('medconsult_study_tag_h'))
@@ -120,6 +122,7 @@ export default function StudiesTab({ scope = 'studies' }) {
     if (vitae) next.category = 'vitae'
     setForm(next)
     setOpenField(null)
+    setActivePreset('')
     setFormOpen(true)
   }
 
@@ -138,8 +141,16 @@ export default function StudiesTab({ scope = 'studies' }) {
       templateEdited: merged.templateEdited === true,
       isDefault: !!merged.isDefault,
       lateral: !!merged.lateral,
+      presets: Array.isArray(merged.presets)
+        ? merged.presets.map((p) => ({
+            id: String(p?.id || `p_${Math.random().toString(36).slice(2, 8)}`),
+            name: String(p?.name || ''),
+            values: p?.values && typeof p.values === 'object' ? { ...p.values } : {},
+          }))
+        : [],
     })
     setOpenField(null)
+    setActivePreset('')
     setFormOpen(true)
   }
 
@@ -617,6 +628,33 @@ export default function StudiesTab({ scope = 'studies' }) {
     e.dataTransfer.effectAllowed = 'copy'
   }
 
+  function addPreset() {
+    const id = `p_${Date.now().toString(36)}`
+    setForm((prev) => ({ ...prev, presets: [...(prev.presets || []), { id, name: '', values: {} }] }))
+    setActivePreset(id)
+  }
+
+  function patchPreset(id, patch) {
+    setForm((prev) => ({
+      ...prev,
+      presets: (prev.presets || []).map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    }))
+  }
+
+  function setPresetValue(id, key, value) {
+    setForm((prev) => ({
+      ...prev,
+      presets: (prev.presets || []).map((p) =>
+        p.id === id ? { ...p, values: { ...(p.values || {}), [key]: value } } : p,
+      ),
+    }))
+  }
+
+  function removePreset(id) {
+    setForm((prev) => ({ ...prev, presets: (prev.presets || []).filter((p) => p.id !== id) }))
+    setActivePreset('')
+  }
+
   function save(e) {
     e.preventDefault()
     if (!form.label.trim() || !form.template.trim()) {
@@ -626,7 +664,17 @@ export default function StudiesTab({ scope = 'studies' }) {
     setValidationError('')
     const key = form.key || slugifyKey(form.label)
     const fields = form.fields.map(serializeField).filter(Boolean)
-    const payload = { ...form, key, fields, sparse: form.sparse, hint: form.hint }
+    const presets = (form.presets || [])
+      .map((p) => {
+        const values = {}
+        Object.entries(p.values || {}).forEach(([k, v]) => {
+          const text = String(v ?? '').trim()
+          if (k && text) values[k] = text
+        })
+        return { id: p.id, name: String(p.name || '').trim(), values }
+      })
+      .filter((p) => p.name || Object.keys(p.values).length)
+    const payload = { ...form, key, fields, presets, sparse: form.sparse, hint: form.hint }
     if (vitae) store.saveVitaeTemplate({ ...payload, category: 'vitae' })
     else store.saveCustomStudy(payload)
     refresh()
@@ -685,6 +733,10 @@ export default function StudiesTab({ scope = 'studies' }) {
   }
 
   const fieldTags = (form.fields || []).filter((f) => f && f.kind !== 'heading' && fieldKeyOf(f) && String(f.label || '').trim())
+  const presetRow = (form.presets || []).find((p) => p.id === activePreset) || null
+  const presetFields = (form.fields || []).filter(
+    (f) => f && f.kind !== 'heading' && f.kind !== 'formula' && !f.computed && fieldKeyOf(f) && String(f.label || f.key || '').trim(),
+  )
 
   return (
     <div className="settings-tab">
@@ -714,26 +766,6 @@ export default function StudiesTab({ scope = 'studies' }) {
             </div>
             <form className="drug-form" onSubmit={save}>
               <div className="study-editor-scroll">
-              <div className="study-side-bar" role="group" aria-label="Окно шаблона">
-                <span>Текст шаблона</span>
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>справа</button>
-                <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
-                <button type="button" className={`btn-secondary btn-small${markMode ? ' is-on' : ''}`} onClick={() => setMarkMode((v) => !v)} title="Выдели слова в тексте и сделай из них тег">
-                  {markMode ? 'выделение вкл' : 'выделение'}
-                </button>
-                <button type="button" className={`btn-secondary btn-small${templateMax ? ' is-on' : ''}`} onClick={() => setTemplateMax((v) => !v)}>
-                  {templateMax ? 'свернуть окно' : 'на всё окно'}
-                </button>
-                <button
-                  type="button"
-                  className={`btn-secondary btn-small${foldIdle ? ' is-on' : ''}`}
-                  title="Неактивные пункты сворачиваются в строку: название и краткое описание"
-                  onClick={() => pickFold(!foldIdle)}
-                >
-                  {foldIdle ? 'спойлер вкл' : 'спойлер'}
-                </button>
-              </div>
               <div className="drug-form-row">
                 <input
                   autoFocus
@@ -776,10 +808,74 @@ export default function StudiesTab({ scope = 'studies' }) {
               </div>
               {validationError && <div className="ai-error">{validationError}</div>}
 
+              {!vitae && (
+                <div className="study-preset-bar">
+                  <button type="button" className="btn-secondary btn-small" onClick={addPreset}>
+                    + подшаблон
+                  </button>
+                  {(form.presets || []).length > 0 && (
+                    <select
+                      aria-label="Подшаблон"
+                      value={presetRow ? presetRow.id : ''}
+                      onChange={(e) => setActivePreset(e.target.value)}
+                    >
+                      <option value="">не выбран</option>
+                      {(form.presets || []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name || 'без названия'}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {presetRow && (
+                    <>
+                      <input
+                        key={presetRow.id}
+                        className="study-preset-name"
+                        autoFocus={!presetRow.name}
+                        value={presetRow.name}
+                        placeholder="название, например диагноз"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault()
+                        }}
+                        onChange={(e) => patchPreset(presetRow.id, { name: e.target.value })}
+                      />
+                      <button type="button" className="study-preset-x" title="Убрать подшаблон" onClick={() => removePreset(presetRow.id)}>
+                        ×
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {!vitae && presetRow && (
+                <div className="study-preset-values">
+                  {presetFields.length === 0 ? (
+                    <p className="settings-note-inline">Сначала добавь пункты — здесь задаются их готовые значения.</p>
+                  ) : (
+                    presetFields.map((f) => {
+                      const key = fieldKeyOf(f)
+                      return (
+                        <label key={key}>
+                          <span>
+                            {f.label || key}
+                            {f.unit ? `, ${f.unit}` : ''}
+                          </span>
+                          <FieldControl
+                            f={f}
+                            value={(presetRow.values || {})[key] || ''}
+                            onChange={(v) => setPresetValue(presetRow.id, key, v)}
+                          />
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+
               <div className={`study-editor-split is-${templateSide}`}>
               <StudyFieldList form={form} dragKids={dragKids} overField={overField} addChild={addChild} addField={addField} addGroup={addGroup} addGroupOpt={addGroupOpt} addHeading={addHeading} addOptions={addOptions} applyFormulaPreset={applyFormulaPreset} descendantIdxs={descendantIdxs} dragFrom={dragFrom} duplicateField={duplicateField} foldIdle={foldIdle} insertFormulaToken={insertFormulaToken} moveField={moveField} openField={openField} parentChoices={parentChoices} removeField={removeField} removeGroup={removeGroup} removeGroupOpt={removeGroupOpt} removeOption={removeOption} renameGroupOpt={renameGroupOpt} renameOption={renameOption} setDragKids={setDragKids} setGroupDraft={setGroupDraft} setOpenField={setOpenField} setOverField={setOverField} toggleRef={toggleRef} toggleShowValue={toggleShowValue} updateField={updateField} />
 
-              <StudyTemplatePane form={form} fieldTags={fieldTags} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickNamed={pickNamed} selAsk={selAsk} setForm={setForm} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} />
+              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} />
               </div>
 
               <AutoResizeTextarea

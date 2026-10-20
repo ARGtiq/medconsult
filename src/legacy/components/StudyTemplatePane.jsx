@@ -173,7 +173,7 @@ function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, on
 }
 
 export function StudyTemplatePane(props) {
-  const { form, fieldTags, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickNamed, selAsk, setForm, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown } = props
+  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickFold, pickNamed, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown } = props
   const tagLock = useRef(false)
   function onFormatKey(e) {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return false
@@ -459,6 +459,26 @@ export function StudyTemplatePane(props) {
                   добавить тег
                 </button>
               )}
+              </div>
+              <div className="study-side-bar is-under" role="group" aria-label="Окно шаблона">
+                <span>Текст шаблона</span>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'right' ? ' is-on' : ''}`} onClick={() => pickSide('right')}>справа</button>
+                <button type="button" className={`btn-secondary btn-small${templateSide === 'below' ? ' is-on' : ''}`} onClick={() => pickSide('below')}>снизу</button>
+                <button type="button" className={`btn-secondary btn-small${markMode ? ' is-on' : ''}`} onClick={() => setMarkMode((v) => !v)} title="Выдели слова в тексте и сделай из них тег">
+                  {markMode ? 'выделение вкл' : 'выделение'}
+                </button>
+                <button type="button" className={`btn-secondary btn-small${templateMax ? ' is-on' : ''}`} onClick={() => setTemplateMax((v) => !v)}>
+                  {templateMax ? 'свернуть окно' : 'на всё окно'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary btn-small${foldIdle ? ' is-on' : ''}`}
+                  title="Неактивные пункты сворачиваются в строку: название и краткое описание"
+                  onClick={() => pickFold(!foldIdle)}
+                >
+                  {foldIdle ? 'спойлер вкл' : 'спойлер'}
+                </button>
               </div>
               </div>
   )

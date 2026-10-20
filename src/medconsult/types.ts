@@ -73,6 +73,14 @@ export type StudyDef = {
   templateEdited?: boolean;
   /** Одно и то же исследование для правой и левой стороны. */
   lateral?: boolean;
+  /** Готовые наборы значений, например по диагнозу. */
+  presets?: StudyPreset[];
+};
+
+export type StudyPreset = {
+  id: string;
+  name: string;
+  values: Record<string, string>;
 };
 
 export type StudyExtra = {

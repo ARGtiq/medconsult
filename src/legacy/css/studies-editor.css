@@ -560,6 +560,70 @@
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
+.legacy-surface .study-side-bar.is-under {
+  position: static;
+  z-index: auto;
+  flex: 0 0 auto;
+  margin: 8px 0 0;
+  padding: 6px 0 0;
+  background: transparent;
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+.legacy-surface .study-preset-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.legacy-surface .study-preset-bar select,
+.legacy-surface .study-preset-name {
+  min-width: 10rem;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+.legacy-surface .study-preset-name { flex: 1 1 12rem; }
+.legacy-surface .study-preset-x {
+  border: none;
+  background: none;
+  color: var(--red, #b23a3a);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.legacy-surface .study-preset-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.legacy-surface .study-preset-values label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.legacy-surface .study-preset-values textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
 .legacy-surface .study-side-bar > span {
   font-size: 12px;
   font-weight: 650;
