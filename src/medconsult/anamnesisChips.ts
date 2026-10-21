@@ -230,6 +230,14 @@ export function normalizeVitae(d?: Partial<VitaeDraft> | null): VitaeDraft {
   };
 }
 
+export function cloneVitae(raw?: Partial<VitaeDraft> | null): VitaeDraft {
+  try {
+    return normalizeVitae(raw ? (JSON.parse(JSON.stringify(raw)) as Partial<VitaeDraft>) : null);
+  } catch {
+    return normalizeVitae(raw);
+  }
+}
+
 export function normalizeAnamnesis(d?: Partial<AnamnesisDraft> | null): AnamnesisDraft {
   return {
     ...emptyAnamnesis(),

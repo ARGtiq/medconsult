@@ -8,6 +8,7 @@ import {
   emptyVitae,
   normalizeAnamnesis,
   normalizeVitae,
+  cloneVitae,
   risksDenied,
   DEV_PRESETS,
   OCC_PRESETS,
@@ -1006,165 +1007,34 @@ export function AnamnesisDisease({
   );
 }
 
-function useVitaeTemplates() {
-  const [list, setList] = useState<VitaeTemplate[]>(() => vitaeTemplates());
-  useEffect(() => {
-    const sync = () => setList(vitaeTemplates());
-    window.addEventListener("medconsult-vitae-templates", sync);
-    return () => window.removeEventListener("medconsult-vitae-templates", sync);
-  }, []);
-  return list;
-}
-
-export function AnamnesisVitae({
+export function VitaeChipFields({
   draft,
-  text,
-  chipMode,
   onDraft,
-  onText,
-  onMode,
+  allergies = [],
+  medications = [],
+  medicationNotes,
+  onAllergies,
+  onMedications,
+  onMedNote,
+  showCard = true,
+  footer,
 }: {
   draft: VitaeDraft;
-  text: string;
-  chipMode: boolean;
   onDraft: (d: VitaeDraft) => void;
-  onText: (t: string) => void;
-  onMode: (chips: boolean) => void;
+  allergies?: string[];
+  medications?: string[];
+  medicationNotes?: Record<string, string>;
+  onAllergies?: (items: string[]) => void;
+  onMedications?: (items: string[]) => void;
+  onMedNote?: (name: string, value: string | null) => void;
+  showCard?: boolean;
+  footer?: ReactNode;
 }) {
   const d = useMemo(() => normalizeVitae(draft), [draft]);
   const patch = (p: Partial<VitaeDraft>) => onDraft({ ...d, ...p });
   const templates = useTemplates();
   const chronicPresets = templates.chronic;
   const surgeryPresets = templates.surgeries;
-  const { session, setSession } = useAppStore();
-  const vitaeTpls = useVitaeTemplates();
-  const ctx = {
-    medications: session.currentMedications,
-    medicationNotes: session.medicationNotes,
-    allergies: session.allergies,
-  };
-  const defaultKey = vitaeDefaultKey();
-  const mode =
-    session.vitaeTemplateId === "chips"
-      ? "chips"
-      : session.vitaeTemplateId && vitaeTpls.some((t) => t.key === session.vitaeTemplateId)
-        ? session.vitaeTemplateId
-        : vitaeDraftTouched(d)
-          ? "chips"
-          : text.trim() && !session.vitaeTemplateId
-            ? "text"
-            : defaultKey;
-  const tpl = vitaeTpls.find((t) => t.key === mode);
-  const fields = tpl ? (session.vitaeTemplateId === tpl.key ? session.vitaeFields || templateDefaults(tpl) : templateDefaults(tpl)) : {};
-
-  function choose(id: string) {
-    if (id === "chips") {
-      setSession({ vitaeTemplateId: "chips", vitaeChipMode: true, anamnesisVitae: composeVitae(d, ctx) });
-      return;
-    }
-    const next = vitaeTpls.find((t) => t.key === id);
-    if (!next) return;
-    const nextFields = session.vitaeTemplateId === id ? session.vitaeFields || templateDefaults(next) : templateDefaults(next);
-    setSession({
-      vitaeTemplateId: id,
-      vitaeFields: nextFields,
-      vitaeChipMode: true,
-      anamnesisVitae: fillVitaeTemplate(next, nextFields, ctx),
-    });
-  }
-
-  function writeField(key: string, value: string) {
-    if (!tpl) return;
-    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), [key]: value };
-    setSession({
-      vitaeTemplateId: tpl.key,
-      vitaeFields: nextFields,
-      vitaeChipMode: true,
-      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
-    });
-  }
-
-  function writeFields(patchFields: Record<string, string>) {
-    if (!tpl) return;
-    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), ...patchFields };
-    setSession({
-      vitaeTemplateId: tpl.key,
-      vitaeFields: nextFields,
-      vitaeChipMode: true,
-      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
-    });
-  }
-
-  function setCard(patch: { allergies?: string[]; currentMedications?: string[]; medicationNotes?: Record<string, string> }) {
-    const allergies = patch.allergies ?? session.allergies ?? [];
-    const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
-    const rawNotes = patch.medicationNotes ?? session.medicationNotes ?? {};
-    const medicationNotes = Object.fromEntries(
-      Object.entries(rawNotes).filter(([name]) => currentMedications.includes(name)),
-    );
-    const nextCtx = { allergies, medications: currentMedications, medicationNotes };
-    const usingTpl = !!(tpl && mode !== "chips" && mode !== "text");
-    setSession({
-      allergies,
-      currentMedications,
-      medicationNotes,
-      anamnesisVitae: usingTpl ? fillVitaeTemplate(tpl, session.vitaeFields || fields, nextCtx) : composeVitae(d, nextCtx),
-    });
-  }
-
-  function setMedNote(name: string, value: string | null) {
-    const next = { ...(session.medicationNotes || {}) };
-    if (value === null) delete next[name];
-    else next[name] = value;
-    setCard({ medicationNotes: next });
-  }
-
-  const cardFields = (
-    <>
-      <CardFill
-        label="аллергия"
-        items={session.allergies || []}
-        allergy
-        placeholder="аллерген или препарат"
-        onChange={(allergies) => setCard({ allergies })}
-      />
-      <CardFill
-        label="принимает сейчас"
-        items={session.currentMedications || []}
-        placeholder="препарат"
-        notes={session.medicationNotes}
-        onNote={setMedNote}
-        onChange={(currentMedications) => setCard({ currentMedications })}
-      />
-    </>
-  );
-
-  const picker = (
-    <div className="mb-2 flex flex-wrap gap-1">
-      <button
-        type="button"
-        onClick={() => choose("chips")}
-        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-          mode === "chips" ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
-        }`}
-      >
-        чипы{defaultKey === "chips" ? " · умолч." : ""}
-      </button>
-      {vitaeTpls.map((t) => (
-        <button
-          key={t.key}
-          type="button"
-          onClick={() => choose(t.key)}
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-            mode === t.key ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
-          }`}
-        >
-          {t.label}
-          {defaultKey === t.key ? " · умолч." : ""}
-        </button>
-      ))}
-    </div>
-  );
   const openDev = d.development === "features" || d.developmentItems.length > 0;
   const openPast = d.pastIllness === "other" || d.pastItems.length > 0;
   const openInf = d.infections === "has" || d.infectionItems.length > 0;
@@ -1177,141 +1047,33 @@ export function AnamnesisVitae({
     else set.delete(id);
     patch({ omit: [...set] });
   };
-
-  if (!chipMode) {
-    return (
-      <div>
-        {picker}
-        <LiveTextarea
-          value={text}
-          onChange={onText}
-          rows={11}
-          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
-        />
-        <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={() => onMode(true)}>
-          вернуть чипы
-        </button>
-      </div>
-    );
-  }
-
-  if (tpl && mode !== "chips" && mode !== "text") {
-    const shown = visibleVitaeFields(tpl, fields);
-    const omittedField = (key: string) => fields[`__omit_${key}`] === "1";
-    const riskKeys = ["occupation", "smoke", "alcohol"];
-    const defs = templateDefaults(tpl);
-    const risksOn =
-      fields.__risks === "1" ||
-      (fields.__risks !== "0" &&
-        riskKeys.some((k) => {
-          const v = (fields[k] || "").trim();
-          const dflt = (defs[k] || "").trim();
-          return !!v && v !== dflt;
-        }));
-    let riskGate = false;
-    return (
-      <div>
-        {picker}
-        {shown.map((f) => {
-          if (f.kind === "heading") {
-            return (
-              <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
-                {f.label}
-              </div>
-            );
-          }
-          const risk = riskKeys.includes(f.key);
-          const gate =
-            risk && !riskGate ? (
-              <VitaeField key="__risks" label="вредные привычки / профвредности">
-                <ChipRow
-                  label=""
-                  value={risksOn ? "yes" : "no"}
-                  onChange={(id) => {
-                    if (id === "yes") {
-                      writeFields({ __risks: "1" });
-                      return;
-                    }
-                    writeFields({
-                      __risks: "0",
-                      occupation: defs.occupation || "отрицает",
-                      smoke: defs.smoke || "не курит",
-                      alcohol: defs.alcohol || "алкоголь отрицает",
-                    });
-                  }}
-                  options={[
-                    { id: "no", text: "нет" },
-                    { id: "yes", text: "есть" },
-                  ]}
-                />
-              </VitaeField>
-            ) : null;
-          if (risk) riskGate = true;
-          if (risk && !risksOn) return gate;
-          return (
-            <div key={f.key}>
-              {gate}
-              <VitaeField
-                label={f.label}
-                omitted={omittedField(f.key)}
-                onToggleOmit={() => writeField(`__omit_${f.key}`, omittedField(f.key) ? "" : "1")}
-                dim={f.optional && fields[`__on_${f.key}`] !== "1"}
-                onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}
-              >
-                {(!f.optional || fields[`__on_${f.key}`] === "1") && (
-                  <FieldControl
-                    boxed
-                    f={f}
-                    value={
-                      f.key === "employment"
-                        ? fields[f.key] === "не работает"
-                          ? "нет"
-                          : fields[f.key] === "работает"
-                            ? "да"
-                            : fields[f.key] || ""
-                        : fields[f.key] || ""
-                    }
-                    onChange={(v) => (risk ? writeFields({ [f.key]: v, __risks: "1" }) : writeField(f.key, v))}
-                  />
-                )}
-              </VitaeField>
-            </div>
-          );
-        })}
-        {cardFields}
-        <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
-      </div>
-    );
-  }
-
   return (
     <div>
-      {picker}
       <VitaeSection id="development" title="развитие" omitted={omitted("development")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.development}
-        fallback="normal"
-        onChange={(id) =>
-          patch({
-            development: id as VitaeDraft["development"],
-            developmentItems: id === "normal" ? [] : d.developmentItems,
-          })
-        }
-        options={[
-          { id: "normal", text: "без особенностей" },
-          { id: "features", text: "есть" },
-        ]}
-      />
-      {openDev && (
-        <PresetPicker
-          presets={DEV_PRESETS}
-          selected={d.developmentItems}
-          onChange={(developmentItems) =>
-            patch({ developmentItems, development: developmentItems.length ? "features" : "normal" })
+        <ChipRow
+          label=""
+          value={d.development}
+          fallback="normal"
+          onChange={(id) =>
+            patch({
+              development: id as VitaeDraft["development"],
+              developmentItems: id === "normal" ? [] : d.developmentItems,
+            })
           }
+          options={[
+            { id: "normal", text: "без особенностей" },
+            { id: "features", text: "есть" },
+          ]}
         />
-      )}
+        {openDev && (
+          <PresetPicker
+            presets={DEV_PRESETS}
+            selected={d.developmentItems}
+            onChange={(developmentItems) =>
+              patch({ developmentItems, development: developmentItems.length ? "features" : "normal" })
+            }
+          />
+        )}
       </VitaeSection>
       <VitaeSection id="work" title="работает" omitted={omitted("work")} onOmit={setOmit}>
         <ChipRow
@@ -1513,161 +1275,467 @@ export function AnamnesisVitae({
         )}
       </VitaeSection>
       <VitaeSection id="past" title="перенесённые заболевания" omitted={omitted("past")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.pastIllness}
-        fallback="typical"
-        onChange={(id) =>
-          patch({
-            pastIllness: id as VitaeDraft["pastIllness"],
-            pastItems: id === "typical" ? [] : d.pastItems,
-          })
-        }
-        options={[
-          { id: "typical", text: "типичные" },
-          { id: "other", text: "есть" },
-        ]}
-      />
-      {openPast && (
-        <PresetPicker
-          presets={chronicPresets}
-          selected={d.pastItems}
-          onChange={(pastItems) => {
-            pastItems.forEach((it) => rememberDisease(it.label));
-            patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" });
-          }}
-          disease
-          suggest
+        <ChipRow
+          label=""
+          value={d.pastIllness}
+          fallback="typical"
+          onChange={(id) =>
+            patch({
+              pastIllness: id as VitaeDraft["pastIllness"],
+              pastItems: id === "typical" ? [] : d.pastItems,
+            })
+          }
+          options={[
+            { id: "typical", text: "типичные" },
+            { id: "other", text: "есть" },
+          ]}
         />
-      )}
+        {openPast && (
+          <PresetPicker
+            presets={chronicPresets}
+            selected={d.pastItems}
+            onChange={(pastItems) => {
+              pastItems.forEach((it) => rememberDisease(it.label));
+              patch({ pastItems, pastIllness: pastItems.length ? "other" : "typical" });
+            }}
+            disease
+            suggest
+          />
+        )}
       </VitaeSection>
       <VitaeSection id="infections" title="туберкулёз, гепатиты, вен. заб." omitted={omitted("infections")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.infections}
-        fallback="denies"
-        onChange={(id) =>
-          patch({
-            infections: id as VitaeDraft["infections"],
-            infectionItems: id === "denies" ? [] : d.infectionItems,
-          })
-        }
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
-      />
-      {openInf && (
-        <PresetPicker
-          presets={INFECTION_PRESETS}
-          selected={d.infectionItems}
-          onChange={(infectionItems) =>
-            patch({ infectionItems, infections: infectionItems.length ? "has" : "denies" })
+        <ChipRow
+          label=""
+          value={d.infections}
+          fallback="denies"
+          onChange={(id) =>
+            patch({
+              infections: id as VitaeDraft["infections"],
+              infectionItems: id === "denies" ? [] : d.infectionItems,
+            })
           }
+          options={[
+            { id: "denies", text: "отрицает" },
+            { id: "has", text: "есть" },
+          ]}
         />
-      )}
+        {openInf && (
+          <PresetPicker
+            presets={INFECTION_PRESETS}
+            selected={d.infectionItems}
+            onChange={(infectionItems) =>
+              patch({ infectionItems, infections: infectionItems.length ? "has" : "denies" })
+            }
+          />
+        )}
       </VitaeSection>
       <VitaeSection id="heritage" title="наследственность" omitted={omitted("heritage")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.heritage}
-        fallback="clear"
-        onChange={(id) =>
-          patch({
-            heritage: id as VitaeDraft["heritage"],
-            heritageItems: id === "clear" ? [] : d.heritageItems,
-          })
-        }
-        options={[
-          { id: "clear", text: "не отягощена" },
-          { id: "burdened", text: "есть" },
-        ]}
-      />
-      {openHer && (
-        <PresetPicker
-          presets={HERITAGE_PRESETS}
-          selected={d.heritageItems}
-          onChange={(heritageItems) =>
-            patch({ heritageItems, heritage: heritageItems.length ? "burdened" : "clear" })
+        <ChipRow
+          label=""
+          value={d.heritage}
+          fallback="clear"
+          onChange={(id) =>
+            patch({
+              heritage: id as VitaeDraft["heritage"],
+              heritageItems: id === "clear" ? [] : d.heritageItems,
+            })
           }
+          options={[
+            { id: "clear", text: "не отягощена" },
+            { id: "burdened", text: "есть" },
+          ]}
         />
-      )}
+        {openHer && (
+          <PresetPicker
+            presets={HERITAGE_PRESETS}
+            selected={d.heritageItems}
+            onChange={(heritageItems) =>
+              patch({ heritageItems, heritage: heritageItems.length ? "burdened" : "clear" })
+            }
+          />
+        )}
       </VitaeSection>
-      <VitaeSection id="allergy" title="аллергия" omitted={omitted("allergy")} onOmit={setOmit}>
-      <ChipList
-        label=""
+      {showCard && (
+        <VitaeSection id="allergy" title="аллергия" omitted={omitted("allergy")} onOmit={setOmit}>
+          <ChipList
+            label=""
+            items={allergies}
+            allergy
+            placeholder="аллерген + Enter"
+            onChange={(next) => onAllergies?.(next)}
+          />
+        </VitaeSection>
+      )}
+      {showCard && (
+        <VitaeSection id="meds" title="принимает сейчас" omitted={omitted("meds")} onOmit={setOmit}>
+          <ChipList
+            label=""
+            items={medications}
+            placeholder="препарат + Enter"
+            notes={medicationNotes}
+            onNote={onMedNote || (() => {})}
+            onChange={(next) => onMedications?.(next)}
+          />
+        </VitaeSection>
+      )}
+      <VitaeSection id="surgery" title="операции" omitted={omitted("surgery")} onOmit={setOmit}>
+        <ChipRow
+          label=""
+          value={d.surgery}
+          fallback="none"
+          onChange={(id) =>
+            patch({
+              surgery: id as VitaeDraft["surgery"],
+              surgeryItems: id === "none" ? [] : d.surgeryItems,
+            })
+          }
+          options={[
+            { id: "none", text: "не было" },
+            { id: "has", text: "были" },
+          ]}
+        />
+        {d.surgery === "has" && (
+          <PresetPicker
+            presets={surgeryPresets}
+            selected={d.surgeryItems}
+            onChange={(surgeryItems) => patch({ surgeryItems })}
+            yearAlways
+            suggest
+            onRemember={(label) => addSurgeryPreset(label)}
+          />
+        )}
+      </VitaeSection>
+      <VitaeSection id="transfusion" title="гемотрансфузии" omitted={omitted("transfusion")} onOmit={setOmit}>
+        <ChipRow
+          label=""
+          value={d.transfusion}
+          fallback="denies"
+          onChange={(id) =>
+            patch({
+              transfusion: id as VitaeDraft["transfusion"],
+              transfusionItems: id === "denies" ? [] : d.transfusionItems,
+            })
+          }
+          options={[
+            { id: "denies", text: "отрицает" },
+            { id: "has", text: "есть" },
+          ]}
+        />
+        {openTf && (
+          <PresetPicker
+            presets={TRANSFUSION_PRESETS}
+            selected={d.transfusionItems}
+            onChange={(transfusionItems) =>
+              patch({ transfusionItems, transfusion: transfusionItems.length ? "has" : "denies" })
+            }
+          />
+        )}
+      </VitaeSection>
+      {footer}
+    </div>
+  );
+}
+
+function useVitaeTemplates() {
+  const [list, setList] = useState<VitaeTemplate[]>(() => vitaeTemplates());
+  useEffect(() => {
+    const sync = () => setList(vitaeTemplates());
+    window.addEventListener("medconsult-vitae-templates", sync);
+    return () => window.removeEventListener("medconsult-vitae-templates", sync);
+  }, []);
+  return list;
+}
+
+export function AnamnesisVitae({
+  draft,
+  text,
+  chipMode,
+  onDraft,
+  onText,
+  onMode,
+}: {
+  draft: VitaeDraft;
+  text: string;
+  chipMode: boolean;
+  onDraft: (d: VitaeDraft) => void;
+  onText: (t: string) => void;
+  onMode: (chips: boolean) => void;
+}) {
+  const d = useMemo(() => normalizeVitae(draft), [draft]);
+  const templates = useTemplates();
+  const chipTpls = templates.vitaeChips || [];
+  const { session, setSession } = useAppStore();
+  const vitaeTpls = useVitaeTemplates();
+  const ctx = {
+    medications: session.currentMedications,
+    medicationNotes: session.medicationNotes,
+    allergies: session.allergies,
+  };
+  const legacyHit =
+    session.vitaeTemplateId && session.vitaeTemplateId !== "chips"
+      ? vitaeTpls.find((t) => t.key === session.vitaeTemplateId)
+      : undefined;
+  const legacyOn =
+    !!legacyHit &&
+    (legacyHit.key !== "standard" || !!(session.vitaeFields && Object.keys(session.vitaeFields).length));
+  const activeChip = legacyOn
+    ? ""
+    : chipTpls.some((t) => t.id === session.vitaeTemplateId)
+      ? session.vitaeTemplateId
+      : !vitaeDraftTouched(d) &&
+          (!session.vitaeTemplateId || session.vitaeTemplateId === "chips" || session.vitaeTemplateId === "standard")
+        ? chipTpls.find((t) => t.isDefault)?.id || chipTpls[0]?.id || ""
+        : "";
+  const tpl = legacyOn ? legacyHit : undefined;
+  const fields = tpl ? session.vitaeFields || templateDefaults(tpl) : {};
+
+  function chooseChip(id: string) {
+    const next = chipTpls.find((t) => t.id === id);
+    if (!next) return;
+    const nextDraft = cloneVitae(next.draft);
+    setSession({
+      vitaeTemplateId: id,
+      vitaeDraft: nextDraft,
+      vitaeFields: undefined,
+      vitaeChipMode: true,
+      anamnesisVitae: composeVitae(nextDraft, ctx),
+    });
+  }
+
+  function choose(id: string) {
+    const next = vitaeTpls.find((t) => t.key === id);
+    if (!next || next.key === "standard") return;
+    const nextFields = session.vitaeTemplateId === id ? session.vitaeFields || templateDefaults(next) : templateDefaults(next);
+    setSession({
+      vitaeTemplateId: id,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(next, nextFields, ctx),
+    });
+  }
+
+  function writeField(key: string, value: string) {
+    if (!tpl) return;
+    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), [key]: value };
+    setSession({
+      vitaeTemplateId: tpl.key,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
+    });
+  }
+
+  function writeFields(patchFields: Record<string, string>) {
+    if (!tpl) return;
+    const nextFields = { ...(session.vitaeFields || templateDefaults(tpl)), ...patchFields };
+    setSession({
+      vitaeTemplateId: tpl.key,
+      vitaeFields: nextFields,
+      vitaeChipMode: true,
+      anamnesisVitae: fillVitaeTemplate(tpl, nextFields, ctx),
+    });
+  }
+
+  function setCard(patch: { allergies?: string[]; currentMedications?: string[]; medicationNotes?: Record<string, string> }) {
+    const allergies = patch.allergies ?? session.allergies ?? [];
+    const currentMedications = patch.currentMedications ?? session.currentMedications ?? [];
+    const rawNotes = patch.medicationNotes ?? session.medicationNotes ?? {};
+    const medicationNotes = Object.fromEntries(
+      Object.entries(rawNotes).filter(([name]) => currentMedications.includes(name)),
+    );
+    const nextCtx = { allergies, medications: currentMedications, medicationNotes };
+    const usingTpl = !!tpl;
+    setSession({
+      allergies,
+      currentMedications,
+      medicationNotes,
+      anamnesisVitae: usingTpl ? fillVitaeTemplate(tpl, session.vitaeFields || fields, nextCtx) : composeVitae(d, nextCtx),
+    });
+  }
+
+  function setMedNote(name: string, value: string | null) {
+    const next = { ...(session.medicationNotes || {}) };
+    if (value === null) delete next[name];
+    else next[name] = value;
+    setCard({ medicationNotes: next });
+  }
+
+  const cardFields = (
+    <>
+      <CardFill
+        label="аллергия"
         items={session.allergies || []}
         allergy
-        placeholder="аллерген + Enter"
+        placeholder="аллерген или препарат"
         onChange={(allergies) => setCard({ allergies })}
       />
-      </VitaeSection>
-      <VitaeSection id="meds" title="принимает сейчас" omitted={omitted("meds")} onOmit={setOmit}>
-      <ChipList
-        label=""
+      <CardFill
+        label="принимает сейчас"
         items={session.currentMedications || []}
-        placeholder="препарат + Enter"
+        placeholder="препарат"
         notes={session.medicationNotes}
         onNote={setMedNote}
         onChange={(currentMedications) => setCard({ currentMedications })}
       />
-      </VitaeSection>
-      <VitaeSection id="surgery" title="операции" omitted={omitted("surgery")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.surgery}
-        fallback="none"
-        onChange={(id) =>
-          patch({
-            surgery: id as VitaeDraft["surgery"],
-            surgeryItems: id === "none" ? [] : d.surgeryItems,
-          })
-        }
-        options={[
-          { id: "none", text: "не было" },
-          { id: "has", text: "были" },
-        ]}
-      />
-      {d.surgery === "has" && (
-        <PresetPicker
-          presets={surgeryPresets}
-          selected={d.surgeryItems}
-          onChange={(surgeryItems) => patch({ surgeryItems })}
-          yearAlways
-          suggest
-          onRemember={(label) => addSurgeryPreset(label)}
+    </>
+  );
+
+  const picker = (
+    <div className="mb-2 flex flex-wrap gap-1">
+      {chipTpls.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => chooseChip(t.id)}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            activeChip === t.id ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+          }`}
+        >
+          {t.name || "без названия"}
+          {t.isDefault ? " · умолч." : ""}
+        </button>
+      ))}
+      {vitaeTpls
+        .filter((t) => t.key !== "standard")
+        .map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => choose(t.key)}
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              legacyOn && tpl?.key === t.key ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+            }`}
+          >
+            {t.label}
+            {vitaeDefaultKey() === t.key ? " · умолч." : ""}
+          </button>
+        ))}
+    </div>
+  );
+
+  if (!chipMode) {
+    return (
+      <div>
+        {picker}
+        <LiveTextarea
+          value={text}
+          onChange={onText}
+          rows={11}
+          className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm leading-relaxed"
         />
-      )}
-      </VitaeSection>
-      <VitaeSection id="transfusion" title="гемотрансфузии" omitted={omitted("transfusion")} onOmit={setOmit}>
-      <ChipRow
-        label=""
-        value={d.transfusion}
-        fallback="denies"
-        onChange={(id) =>
-          patch({
-            transfusion: id as VitaeDraft["transfusion"],
-            transfusionItems: id === "denies" ? [] : d.transfusionItems,
-          })
-        }
-        options={[
-          { id: "denies", text: "отрицает" },
-          { id: "has", text: "есть" },
-        ]}
-      />
-      {openTf && (
-        <PresetPicker
-          presets={TRANSFUSION_PRESETS}
-          selected={d.transfusionItems}
-          onChange={(transfusionItems) =>
-            patch({ transfusionItems, transfusion: transfusionItems.length ? "has" : "denies" })
+        <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={() => onMode(true)}>
+          вернуть чипы
+        </button>
+      </div>
+    );
+  }
+
+  if (tpl) {
+    const shown = visibleVitaeFields(tpl, fields);
+    const omittedField = (key: string) => fields[`__omit_${key}`] === "1";
+    const riskKeys = ["occupation", "smoke", "alcohol"];
+    const defs = templateDefaults(tpl);
+    const risksOn =
+      fields.__risks === "1" ||
+      (fields.__risks !== "0" &&
+        riskKeys.some((k) => {
+          const v = (fields[k] || "").trim();
+          const dflt = (defs[k] || "").trim();
+          return !!v && v !== dflt;
+        }));
+    let riskGate = false;
+    return (
+      <div>
+        {picker}
+        {shown.map((f) => {
+          if (f.kind === "heading") {
+            return (
+              <div key={f.key} className="mt-2 text-xs font-medium text-ink-soft">
+                {f.label}
+              </div>
+            );
           }
-        />
-      )}
-      </VitaeSection>
-      <DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} preview={false} />
+          const risk = riskKeys.includes(f.key);
+          const gate =
+            risk && !riskGate ? (
+              <VitaeField key="__risks" label="вредные привычки / профвредности">
+                <ChipRow
+                  label=""
+                  value={risksOn ? "yes" : "no"}
+                  onChange={(id) => {
+                    if (id === "yes") {
+                      writeFields({ __risks: "1" });
+                      return;
+                    }
+                    writeFields({
+                      __risks: "0",
+                      occupation: defs.occupation || "отрицает",
+                      smoke: defs.smoke || "не курит",
+                      alcohol: defs.alcohol || "алкоголь отрицает",
+                    });
+                  }}
+                  options={[
+                    { id: "no", text: "нет" },
+                    { id: "yes", text: "есть" },
+                  ]}
+                />
+              </VitaeField>
+            ) : null;
+          if (risk) riskGate = true;
+          if (risk && !risksOn) return gate;
+          return (
+            <div key={f.key}>
+              {gate}
+              <VitaeField
+                label={f.label}
+                omitted={omittedField(f.key)}
+                onToggleOmit={() => writeField(`__omit_${f.key}`, omittedField(f.key) ? "" : "1")}
+                dim={f.optional && fields[`__on_${f.key}`] !== "1"}
+                onLabel={f.optional ? () => writeField(`__on_${f.key}`, fields[`__on_${f.key}`] === "1" ? "" : "1") : undefined}
+              >
+                {(!f.optional || fields[`__on_${f.key}`] === "1") && (
+                  <FieldControl
+                    boxed
+                    f={f}
+                    value={
+                      f.key === "employment"
+                        ? fields[f.key] === "не работает"
+                          ? "нет"
+                          : fields[f.key] === "работает"
+                            ? "да"
+                            : fields[f.key] || ""
+                        : fields[f.key] || ""
+                    }
+                    onChange={(v) => (risk ? writeFields({ [f.key]: v, __risks: "1" }) : writeField(f.key, v))}
+                  />
+                )}
+              </VitaeField>
+            </div>
+          );
+        })}
+        {cardFields}
+        <DoneBar sentence={fillVitaeTemplate(tpl, fields, ctx)} onDone={() => onMode(false)} preview={false} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {picker}
+      <VitaeChipFields
+        draft={d}
+        onDraft={onDraft}
+        allergies={session.allergies || []}
+        medications={session.currentMedications || []}
+        medicationNotes={session.medicationNotes}
+        onAllergies={(allergies) => setCard({ allergies })}
+        onMedications={(currentMedications) => setCard({ currentMedications })}
+        onMedNote={setMedNote}
+        footer={<DoneBar sentence={composeVitae(d, ctx)} onDone={() => onMode(false)} preview={false} />}
+      />
     </div>
   );
 }
+
 
 export { emptyAnamnesis, emptyVitae, composeAnamnesis, composeVitae };

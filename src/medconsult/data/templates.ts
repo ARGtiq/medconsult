@@ -1,5 +1,6 @@
 import { COMPLAINTS, LOCAL_PACKS } from "./catalog";
 import type { LocalItem, LocalPack, LocalPick, WorkKind } from "../types";
+import type { VitaeDraft } from "../anamnesisChips";
 import { useEffect, useState } from "react";
 import { cloneScales, QUESTION_SCALES, type ScaleDef } from "./questionnaires";
 
@@ -97,6 +98,16 @@ export type TemplatesState = {
   questionnaires: ScaleDef[];
   objective: ObjectiveTemplate[];
   globalTemplates: GlobalTemplate[];
+  /** Шаблоны анамнеза жизни: те же чипы, что на приёме, с готовыми значениями. */
+  vitaeChips: VitaeChipTemplate[];
+};
+
+/** Именованный набор значений чипов анамнеза жизни. */
+export type VitaeChipTemplate = {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+  draft: VitaeDraft;
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -228,6 +239,10 @@ export const SEED_OBJECTIVE: ObjectiveTemplate[] = [
   },
 ];
 
+export const SEED_VITAE_CHIPS: VitaeChipTemplate[] = [
+  { id: "vitae_std", name: "стандарт", isDefault: true, draft: {} as VitaeDraft },
+];
+
 export const seedTemplates = (): TemplatesState => ({
   localPacks: LOCAL_PACKS.map((p) => ({
     ...p,
@@ -242,7 +257,17 @@ export const seedTemplates = (): TemplatesState => ({
   questionnaires: cloneScales(QUESTION_SCALES),
   objective: SEED_OBJECTIVE.map((x) => ({ ...x, codes: x.codes ? [...x.codes] : [] })),
   globalTemplates: [],
+  vitaeChips: SEED_VITAE_CHIPS.map((x) => ({ ...x, draft: { ...x.draft } })),
 });
+
+function normalizeVitaeChip(raw: unknown, i: number): VitaeChipTemplate | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const id = String(r.id || "").trim() || `vitae_${i}`;
+  const name = String(r.name || "").trim() || "шаблон";
+  const draft = r.draft && typeof r.draft === "object" && !Array.isArray(r.draft) ? (r.draft as VitaeDraft) : ({} as VitaeDraft);
+  return { id, name, isDefault: !!r.isDefault, draft };
+}
 
 function normalizeOption(raw: unknown): ComplaintOption | null {
   if (typeof raw === "string") {
@@ -474,6 +499,9 @@ function read(): TemplatesState {
       globalTemplates: Array.isArray(parsed.globalTemplates)
         ? (parsed.globalTemplates.map(normalizeGlobal).filter(Boolean) as GlobalTemplate[])
         : [],
+      vitaeChips: Array.isArray(parsed.vitaeChips)
+        ? parsed.vitaeChips.map(normalizeVitaeChip).filter((x): x is VitaeChipTemplate => !!x)
+        : seed.vitaeChips,
     };
     if (migrated.changed || ordered.changed) {
       try {
@@ -668,6 +696,15 @@ export function addLocalOption(packId: string, itemId: string, option: string) {
 
 export function getLocalPacks(): LocalPack[] {
   return read().localPacks.map(normalizeLocalPack);
+}
+
+export function getVitaeChipTemplates(): VitaeChipTemplate[] {
+  return read().vitaeChips || [];
+}
+
+export function defaultVitaeChip(): VitaeChipTemplate | undefined {
+  const list = getVitaeChipTemplates();
+  return list.find((t) => t.isDefault) || list[0];
 }
 
 export function getChronicPresets(): VitaePreset[] {

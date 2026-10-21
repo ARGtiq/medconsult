@@ -4,9 +4,9 @@ import { checkAllergyLocal } from "@/legacy/data/drugSafety";
 import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
-import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS, defaultLocalValue } from "./data/templates";
-import { composeVitae, emptyVitae } from "./anamnesisChips";
-import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
+import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, getVitaeChipTemplates, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS, defaultLocalValue } from "./data/templates";
+import { cloneVitae, composeVitae, emptyVitae, normalizeVitae } from "./anamnesisChips";
+import { fillVitaeTemplate, templateDefaults, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { complaintBaseOf, complaintPicks, composeComplaintPicks, findComplaintVariant, getStudyLive, optionsForComplaint, subsForComplaint, type ComplaintPick } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
 
@@ -305,24 +305,36 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   let templateId = storedId;
   let vitaeFields = patient.globals?.vitaeFields;
   let composed = "";
-  if (templateId && templateId !== "chips") {
+  let nextDraft = draft;
+  const chipHit = templateId ? getVitaeChipTemplates().find((t) => t.id === templateId) : undefined;
+  if (chipHit) {
+    nextDraft = touched ? normalizeVitae(draft) : cloneVitae(chipHit.draft);
+    templateId = chipHit.id;
+    vitaeFields = undefined;
+    composed = composeVitae(nextDraft, card);
+  } else if (templateId && templateId !== "chips" && templateId !== "standard") {
     const tpl = vitaeTemplates().find((t) => t.key === templateId);
     if (tpl) composed = fillVitaeTemplate(tpl, vitaeFields || templateDefaults(tpl), card);
+  } else if (templateId === "standard" && vitaeFields && Object.keys(vitaeFields).length) {
+    const tpl = vitaeTemplates().find((t) => t.key === "standard");
+    if (tpl) composed = fillVitaeTemplate(tpl, vitaeFields, card);
   } else if (templateId === "chips" || touched) {
-    templateId = "chips";
-    composed = composeVitae(draft || emptyVitae(), card);
+    templateId = templateId || "chips";
+    nextDraft = normalizeVitae(draft);
+    composed = composeVitae(nextDraft, card);
   } else if (vitaeText.trim()) {
     composed = vitaeText;
   } else {
-    const key = vitaeDefaultKey();
-    const tpl = key !== "chips" ? vitaeTemplates().find((t) => t.key === key) : undefined;
-    if (tpl) {
-      templateId = tpl.key;
-      vitaeFields = templateDefaults(tpl);
-      composed = fillVitaeTemplate(tpl, vitaeFields, card);
+    const chip = getVitaeChipTemplates().find((t) => t.isDefault) || getVitaeChipTemplates()[0];
+    if (chip) {
+      nextDraft = cloneVitae(chip.draft);
+      templateId = chip.id;
+      vitaeFields = undefined;
+      composed = composeVitae(nextDraft, card);
     } else {
       templateId = "chips";
-      composed = composeVitae(draft || emptyVitae(), card);
+      nextDraft = emptyVitae();
+      composed = composeVitae(nextDraft, card);
     }
   }
   return {
@@ -331,7 +343,7 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
     currentMedications,
     medicationNotes,
     anamnesisVitae: composed || vitaeText,
-    vitaeDraft: draft,
+    vitaeDraft: nextDraft,
     vitaeTemplateId: templateId,
     vitaeFields,
     vitaeChipMode: !!(templateId && templateId !== ""),

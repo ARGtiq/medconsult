@@ -8,7 +8,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton, SaveGlobalButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, type OptionMenuState } from "./EditableChip";
-import { addLocalOption, localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, defaultLocalValue, type ObjectiveTemplate } from "./data/templates";
+import { localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, defaultLocalValue, getVitaeChipTemplates, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { complaintsTextOf, composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -28,8 +28,8 @@ import {
   getStudyLive,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
-import { composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
-import { fillVitaeTemplate, templateDefaults, vitaeDefaultKey, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
+import { cloneVitae, composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
+import { fillVitaeTemplate, templateDefaults, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { collectDeviations, patientRefWho } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea, LiveTextarea, flushLiveText } from "./StudyCard";
 import { Typeahead } from "./Typeahead";
@@ -75,18 +75,15 @@ function LocalOptionRow({
   subs,
   onChange,
   onSubs,
-  onAddOption,
 }: {
   item: LocalItem;
   value: string;
   subs: string[];
   onChange: (v: string, subs?: string[]) => void;
   onSubs: (v: string[]) => void;
-  onAddOption: (v: string) => void;
 }) {
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState(value);
-  const [custom, setCustom] = useState("");
   const options = item.options.length ? item.options : [];
   const selected = value.trim();
   const known = options.some((o) => o.toLowerCase() === selected.toLowerCase());
@@ -182,20 +179,6 @@ function LocalOptionRow({
           </button>
         )}
       </div>
-      <input
-        value={custom}
-        onChange={(e) => setCustom(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key !== "Enter") return;
-          const raw = custom.trim();
-          if (!raw) return;
-          e.preventDefault();
-          onAddOption(raw);
-          setCustom("");
-        }}
-        placeholder="свой вариант + Enter"
-        className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-xs"
-      />
       {(() => {
         const idx = options.findIndex((o) => o.toLowerCase() === selected.toLowerCase());
         const kids = idx >= 0 ? item.optionSubs?.[idx] || [] : [];
@@ -1015,14 +998,15 @@ export function ProtocolPage() {
               } else {
                 const patch: Partial<SessionState> = { openSection: "anamnesisVitae" };
                 if (!session.vitaeTemplateId && !vitaeDraftTouched(session.vitaeDraft) && !session.anamnesisVitae.trim()) {
-                  const key = vitaeDefaultKey();
-                  const tpl = key !== "chips" ? vitaeTemplates().find((t) => t.key === key) : undefined;
-                  if (tpl) {
-                    const fields = templateDefaults(tpl);
-                    patch.vitaeTemplateId = tpl.key;
-                    patch.vitaeFields = fields;
+                  const chips = getVitaeChipTemplates();
+                  const chip = chips.find((t) => t.isDefault) || chips[0];
+                  if (chip) {
+                    const draft = cloneVitae(chip.draft);
+                    patch.vitaeTemplateId = chip.id;
+                    patch.vitaeDraft = draft;
+                    patch.vitaeFields = undefined;
                     patch.vitaeChipMode = true;
-                    patch.anamnesisVitae = fillVitaeTemplate(tpl, fields, cardCtx);
+                    patch.anamnesisVitae = composeVitae(draft, cardCtx);
                   } else {
                     patch.vitaeTemplateId = "chips";
                     patch.vitaeChipMode = true;
@@ -1193,10 +1177,6 @@ export function ProtocolPage() {
                         subs={pick?.subs || []}
                         onChange={(v, subs) => setLocalPickValue(id, it.id, v, subs)}
                         onSubs={(subs) => setLocalPickValue(id, it.id, pick?.value || "", subs)}
-                        onAddOption={(v) => {
-                          addLocalOption(id, it.id, v);
-                          setLocalPickValue(id, it.id, v);
-                        }}
                       />
                     );
                   })}

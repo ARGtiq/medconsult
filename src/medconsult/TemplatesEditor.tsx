@@ -15,6 +15,7 @@ import {
   type GlobalTemplate,
   type ObjectiveTemplate,
   type TemplatesState,
+  type VitaeChipTemplate,
   type VitaePreset,
   type VisitPack,
 } from "./data/templates";
@@ -26,6 +27,8 @@ import { deleteDisease, diseaseKey, findDisease, listDiseases, saveDisease, type
 import StudiesTab from "@/legacy/components/StudiesTab";
 import { FitTextarea } from "./StudyCard";
 import { useAppStore } from "./store";
+import { VitaeChipFields } from "./AnamnesisBuilders";
+import { composeVitae, emptyVitae, type VitaeDraft } from "./anamnesisChips";
 
 type BlockTab = "vitae" | "packs" | "docs" | "questionnaires" | "studies";
 
@@ -197,8 +200,8 @@ export function TemplatesEditor({
               <Fold title="Жалобы" hint="Словарь жалоб для приёма. Опции и подпункты выпадают списком в протоколе.">
                 <ComplaintDictEditor items={data.complaints} onChange={(complaints) => persist({ complaints })} />
               </Fold>
-              <Fold title="Анамнез жизни" hint="Шаблоны текста анамнеза жизни. На приёме выбирается один.">
-                <StudiesTab scope="vitae" />
+              <Fold title="Анамнез жизни" hint="Те же чипы, что на приёме. У шаблона свои значения, на приёме выбирается один.">
+                <VitaeChipsEditor items={data.vitaeChips || []} onChange={(vitaeChips) => persist({ vitaeChips })} />
               </Fold>
               <Fold title="Перенесённые заболевания" hint="Один список с карточками болезней. Чипы на приёме берутся отсюда. «i» есть, если кроме названия что-то заполнено.">
                 <PastDiseaseEditor items={data.chronic} onChange={(chronic) => persist({ chronic })} />
@@ -1243,6 +1246,53 @@ function pointsText(points: StatusPoint[]) {
   return objectivePointsText(points);
 }
 
+function ChipLabel({ text, onCommit }: { text: string; onCommit: (next: string) => void }) {
+  const [edit, setEdit] = useState(false);
+  const [draft, setDraft] = useState(text);
+  const cancel = useRef(false);
+  if (!edit) {
+    return (
+      <button
+        type="button"
+        title="Править текст"
+        className="text-left"
+        onClick={() => {
+          cancel.current = false;
+          setDraft(text);
+          setEdit(true);
+        }}
+      >
+        {text}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cancel.current = true;
+          setEdit(false);
+        }
+      }}
+      onBlur={() => {
+        if (!cancel.current) onCommit(draft);
+        cancel.current = false;
+        setEdit(false);
+      }}
+      className="bg-transparent text-[11px] text-inherit outline-none"
+      style={{ width: `${Math.max(3, draft.length + 1)}ch` }}
+    />
+  );
+}
+
 function PointTree({
   points,
   onChange,
@@ -1279,7 +1329,7 @@ function PointTree({
     setOptDraft((d) => ({ ...d, [cur.id]: "" }));
   }
 
-  function addSub(i: number, option: string, raw: string) {
+  function addSub(i: number, option: string, raw: string, draftKey: string) {
     const t = raw.trim();
     if (!t) return;
     const cur = points[i];
@@ -1292,7 +1342,7 @@ function PointTree({
         return { ...o, options: [...kids, t] };
       }),
     });
-    setSubDraft((d) => ({ ...d, [`${cur.id}:${option}`]: "" }));
+    setSubDraft((d) => ({ ...d, [draftKey]: "" }));
   }
 
   function dropOption(i: number, text: string) {
@@ -1304,9 +1354,34 @@ function PointTree({
     patch(i, { options, defaultOption });
   }
 
+  function renameOption(i: number, oi: number, nextRaw: string) {
+    const next = nextRaw.trim();
+    const cur = points[i];
+    const from = cur?.options[oi]?.text ?? "";
+    if (!cur || !next || next === from) return;
+    if (cur.options.some((o, j) => j !== oi && o.text.toLowerCase() === next.toLowerCase())) return;
+    const options = cur.options.map((o, j) => (j === oi ? { ...o, text: next } : o));
+    const wasDefault = (cur.defaultOption || "").trim().toLowerCase() === from.toLowerCase();
+    patch(i, wasDefault ? { options, defaultOption: next } : { options });
+  }
+
+  function renameSub(i: number, oi: number, si: number, nextRaw: string) {
+    const next = nextRaw.trim();
+    const cur = points[i];
+    const kids = cur?.options[oi]?.options || [];
+    const from = kids[si] ?? "";
+    if (!cur || !next || next === from) return;
+    if (kids.some((s, j) => j !== si && s.toLowerCase() === next.toLowerCase())) return;
+    patch(i, {
+      options: cur.options.map((o, j) =>
+        j === oi ? { ...o, options: kids.map((s, k) => (k === si ? next : s)) } : o,
+      ),
+    });
+  }
+
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] text-ink-soft">↑↓ меняют порядок. «умолч.» на опции — значение по умолчанию.</p>
+      <p className="text-[10px] text-ink-soft">↑↓ меняют порядок. Клик по чипу правит текст. «умолч.» — значение по умолчанию.</p>
       {points.map((it, i) => (
         <div key={it.id} className="rounded-md border border-line/70 bg-surface px-2 py-1.5">
           <div className="flex items-start gap-1">
@@ -1349,18 +1424,18 @@ function PointTree({
           </div>
           {(it.options.length > 0 || openOpt === it.id) && (
             <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-line pl-2">
-              {it.options.map((raw) => {
+              {it.options.map((raw, oi) => {
                 const kids = raw.options || [];
-                const subKey = `${it.id}:${raw.text}`;
+                const subKey = `${it.id}:${oi}`;
                 const isDef = (it.defaultOption || "").trim().toLowerCase() === raw.text.toLowerCase();
                 return (
-                  <div key={raw.text}>
+                  <div key={`${raw.text}:${oi}`}>
                     <span
                       className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] ${
                         isDef ? "bg-teal font-medium text-paper" : "bg-teal-soft text-teal"
                       }`}
                     >
-                      {raw.text}
+                      <ChipLabel text={raw.text} onCommit={(next) => renameOption(i, oi, next)} />
                       <button
                         type="button"
                         className={isDef ? "text-paper/80" : "text-mute"}
@@ -1383,18 +1458,16 @@ function PointTree({
                     </span>
                     {(kids.length > 0 || openSub === subKey) && (
                       <div className="mt-0.5 ml-4 flex flex-wrap items-center gap-1 border-l border-line pl-2">
-                        {kids.map((s) => (
-                          <span key={s} className="inline-flex items-center gap-0.5 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]">
-                            {s}
+                        {kids.map((s, si) => (
+                          <span key={`${s}:${si}`} className="inline-flex items-center gap-0.5 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]">
+                            <ChipLabel text={s} onCommit={(next) => renameSub(i, oi, si, next)} />
                             <button
                               type="button"
                               className="text-mute"
                               onClick={() =>
                                 patch(i, {
-                                  options: it.options.map((x) =>
-                                    x.text.toLowerCase() === raw.text.toLowerCase()
-                                      ? { ...x, options: (x.options || []).filter((k) => k !== s) }
-                                      : x,
+                                  options: it.options.map((x, j) =>
+                                    j === oi ? { ...x, options: (x.options || []).filter((_, k) => k !== si) } : x,
                                   ),
                                 })
                               }
@@ -1411,12 +1484,12 @@ function PointTree({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
-                                addSub(i, raw.text, subDraft[subKey] || "");
+                                addSub(i, raw.text, subDraft[subKey] || "", subKey);
                               }
                               if (e.key === "Escape") setOpenSub(null);
                             }}
                             onBlur={() => {
-                              if ((subDraft[subKey] || "").trim()) addSub(i, raw.text, subDraft[subKey] || "");
+                              if ((subDraft[subKey] || "").trim()) addSub(i, raw.text, subDraft[subKey] || "", subKey);
                             }}
                             placeholder="подпункт + Enter"
                             className="w-36 rounded-full border border-line bg-paper px-2 py-0.5 text-[11px]"
@@ -1607,6 +1680,138 @@ function ObjectiveEditor({
   );
 }
 
+function VitaeChipsEditor({
+  items,
+  onChange,
+}: {
+  items: VitaeChipTemplate[];
+  onChange: (next: VitaeChipTemplate[]) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  function patch(i: number, p: Partial<VitaeChipTemplate>) {
+    onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  }
+  function setDefault(i: number, on: boolean) {
+    onChange(
+      items.map((x, idx) => ({
+        ...x,
+        isDefault: on ? idx === i : idx === i ? false : x.isDefault,
+      })),
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-soft">
+        Список названий. Клик открывает те же чипы, что на приёме, и задаёт их значения. «умолч.» открывается на новом
+        приёме. Аллергия и лекарства в шаблон не входят: на приёме они из карточки.
+      </p>
+      <div className="space-y-1">
+        {items.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setOpenId(p.id)}
+            className="flex w-full items-center gap-2 rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+          >
+            <span className="min-w-0 flex-1 truncate">{p.name.trim() || "без названия"}</span>
+            {p.isDefault ? <span className="shrink-0 text-[10px] text-teal">умолч.</span> : null}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="text-xs font-medium text-teal"
+        onClick={() => {
+          const id = `vitae_${Date.now().toString(36)}`;
+          onChange([...items, { id, name: "новый шаблон", draft: emptyVitae() }]);
+          setOpenId(id);
+        }}
+      >
+        + шаблон
+      </button>
+      {items.map((p, i) => {
+        if (openId !== p.id) return null;
+        const editor = (
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={p.name}
+                onChange={(e) => patch(i, { name: e.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
+              />
+              <label className="flex items-center gap-1 text-xs text-ink-soft">
+                <input type="checkbox" checked={!!p.isDefault} onChange={(e) => setDefault(i, e.target.checked)} />
+                по умолчанию
+              </label>
+              <button
+                type="button"
+                className="text-[11px] font-medium text-teal"
+                onClick={() => {
+                  const copy: VitaeChipTemplate = {
+                    ...p,
+                    id: `vitae_${Date.now().toString(36)}`,
+                    name: `${p.name || "шаблон"} (копия)`,
+                    isDefault: false,
+                    draft: { ...emptyVitae(), ...JSON.parse(JSON.stringify(p.draft || {})) },
+                  };
+                  onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
+                  setOpenId(copy.id);
+                }}
+              >
+                копия
+              </button>
+              <button
+                type="button"
+                className="text-xs text-danger"
+                onClick={() => {
+                  let rest = items.filter((_, j) => j !== i);
+                  if (p.isDefault && rest.length && !rest.some((x) => x.isDefault)) {
+                    rest = rest.map((x, idx) => (idx === 0 ? { ...x, isDefault: true } : x));
+                  }
+                  setOpenId(null);
+                  onChange(rest);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <VitaeChipFields
+              draft={(p.draft || {}) as VitaeDraft}
+              onDraft={(draft) => patch(i, { draft })}
+              showCard={false}
+              footer={
+                <p className="mt-2 text-xs leading-relaxed whitespace-pre-line text-ink-soft">
+                  {composeVitae(p.draft)}
+                </p>
+              }
+            />
+          </div>
+        );
+        if (typeof document === "undefined") return editor;
+        return createPortal(
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-3 sm:items-center">
+            <div
+              className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-3 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <div className="text-sm font-semibold">Шаблон анамнеза жизни</div>
+                <button type="button" className="ml-auto text-xs text-mute" onClick={() => setOpenId(null)}>
+                  закрыть
+                </button>
+              </div>
+              {editor}
+            </div>
+          </div>,
+          document.body,
+        );
+      })}
+    </div>
+  );
+}
+
 function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: LocalPack[]) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   function patch(i: number, p: Partial<LocalPack>) {
@@ -1713,27 +1918,6 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
               >
                 ×
               </button>
-            </div>
-            <div className="mt-1">
-              <div className="text-[10px] tracking-wide text-mute uppercase">разделители</div>
-              <div className="mt-1 flex gap-2">
-                <label className="min-w-0 flex-1 text-[10px] text-mute">
-                  между пунктами
-                  <input
-                    value={p.itemSep ?? ", "}
-                    onChange={(e) => patch(i, { itemSep: e.target.value })}
-                    className="mt-0.5 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
-                  />
-                </label>
-                <label className="min-w-0 flex-1 text-[10px] text-mute">
-                  после шаблона
-                  <input
-                    value={p.packSep ?? "."}
-                    onChange={(e) => patch(i, { packSep: e.target.value })}
-                    className="mt-0.5 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
-                  />
-                </label>
-              </div>
             </div>
             <div className="mt-1">
               <div className="text-[10px] tracking-wide text-mute uppercase">МКБ</div>
