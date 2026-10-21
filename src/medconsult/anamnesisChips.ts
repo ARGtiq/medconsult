@@ -4,12 +4,19 @@ export type AnamnesisDraft = {
   onset: "" | "first" | "chronic";
   amount: string;
   unit: "" | "hours" | "days" | "weeks" | "months" | "years";
+  /** Заболел остро, отдельно от срока болезни. */
+  acute: "" | "yes";
+  acuteAmount: string;
+  acuteUnit: "" | "hours" | "days";
   treated: "" | "no" | "yes";
   drugs: string[];
   effect: "" | "none" | "temp" | "full" | "worse";
   related: string[];
   relatedOther: string;
   relatedOtherOn: boolean;
+  /** Родительный падеж: «терапевта», «гинеколога». */
+  specialists: string[];
+  uroConsult: boolean;
 };
 
 export type VitaeItem = {
@@ -85,6 +92,21 @@ export const RELATED_PRESETS: VitaePreset[] = [
   { id: "partner", label: "сменой полового партнера" },
 ];
 
+/** «лечился у …» — уже в родительном падеже. */
+export const SPECIALIST_PRESETS: VitaePreset[] = [
+  { id: "therapist", label: "терапевта" },
+  { id: "gynecologist", label: "гинеколога" },
+  { id: "urologist", label: "уролога" },
+  { id: "nephrologist", label: "нефролога" },
+  { id: "surgeon", label: "хирурга" },
+  { id: "andrologist", label: "андролога" },
+  { id: "infect", label: "инфекциониста" },
+  { id: "derm", label: "дерматовенеролога" },
+  { id: "endo", label: "эндокринолога" },
+  { id: "onco", label: "онколога" },
+  { id: "neuro", label: "невролога" },
+];
+
 export const PAST_ALWAYS = ["простудные заболевания", "детские инфекции"];
 
 export type VitaeDraft = {
@@ -147,6 +169,7 @@ export const VITAE_LINES: { id: string; label: string }[] = [
   { id: "habits", label: "вредные привычки" },
   { id: "disability", label: "инвалидность" },
   { id: "past", label: "перенесённые заболевания" },
+  { id: "chronic", label: "хронические заболевания" },
   { id: "meds", label: "лекарства" },
   { id: "infections", label: "туберкулёз, гепатиты, вен. заб." },
   { id: "heritage", label: "наследственность" },
@@ -160,12 +183,17 @@ export const emptyAnamnesis = (): AnamnesisDraft => ({
   onset: "",
   amount: "",
   unit: "",
+  acute: "",
+  acuteAmount: "",
+  acuteUnit: "",
   treated: "",
   drugs: [],
   effect: "",
   related: [],
   relatedOther: "",
   relatedOtherOn: false,
+  specialists: [],
+  uroConsult: false,
 });
 
 export const emptyVitae = (): VitaeDraft => ({
@@ -238,6 +266,17 @@ export function cloneVitae(raw?: Partial<VitaeDraft> | null): VitaeDraft {
   }
 }
 
+export function withRemoved(raw: Partial<VitaeDraft> | null | undefined, removed?: string[]): VitaeDraft {
+  const d = normalizeVitae(raw);
+  if (!removed?.length) return d;
+  const extra = new Set(removed);
+  if (extra.has("habits") || extra.has("occupation")) {
+    extra.add("habits");
+    extra.add("occupation");
+  }
+  return { ...d, omit: [...new Set([...(d.omit || []), ...extra])] };
+}
+
 export function normalizeAnamnesis(d?: Partial<AnamnesisDraft> | null): AnamnesisDraft {
   return {
     ...emptyAnamnesis(),
@@ -246,6 +285,10 @@ export function normalizeAnamnesis(d?: Partial<AnamnesisDraft> | null): Anamnesi
     related: d?.related || [],
     relatedOther: d?.relatedOther || "",
     relatedOtherOn: !!d?.relatedOtherOn,
+    specialists: d?.specialists || [],
+    uroConsult: !!d?.uroConsult,
+    acute: d?.acute === "yes" ? "yes" : "",
+    acuteUnit: d?.acuteUnit === "hours" || d?.acuteUnit === "days" ? d.acuteUnit : "",
   };
 }
 
@@ -273,16 +316,34 @@ function span(amount: string, unit: AnamnesisDraft["unit"]) {
   return `${shown} ${ruCount(n, forms[0], forms[1], forms[2])}`;
 }
 
-export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
+function ago(amount: string, unit: AnamnesisDraft["acuteUnit"]) {
+  const raw = amount.trim().replace(".", ",");
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0 || !unit) return "";
+  const shown = raw.replace(/,0+$/, "").replace(/,$/, "");
+  const forms = unit === "hours" ? (["час", "часа", "часов"] as const) : (["день", "дня", "дней"] as const);
+  if (!Number.isInteger(n)) return `${shown} ${forms[1]}`;
+  return `${shown} ${ruCount(n, forms[0], forms[1], forms[2])}`;
+}
+
+export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null, sex?: "m" | "f") {
   const d = normalizeAnamnesis(raw);
+  const she = sex === "f";
   const parts: string[] = [];
   const howLong = span(d.amount, d.unit);
   if (d.onset === "chronic") parts.push("Болеет давно");
   else if (howLong) parts.push(`Болеет ${howLong}`);
+  if (d.acute === "yes") {
+    const when = ago(d.acuteAmount, d.acuteUnit);
+    parts.push(when ? `${she ? "Заболела" : "Заболел"} остро, ${when} назад` : `${she ? "Заболела" : "Заболел"} остро`);
+  }
   const related = [...d.related, d.relatedOtherOn ? d.relatedOther.trim() : ""].filter(Boolean);
   if (related.length) parts.push(`связывает с ${related.join(", ")}`);
-  if (d.treated === "no") parts.push("Не лечился");
+  if (d.treated === "no") parts.push(she ? "Не лечилась" : "Не лечился");
   if (d.treated === "yes") {
+    const verb = she ? "лечилась" : "лечился";
+    const took = she ? "принимала" : "принимал";
+    const who = d.specialists.map((s) => s.trim().replace(/^у\s+/i, "")).filter(Boolean).map((s) => `${verb} у ${s}`);
     const drugs = d.drugs.filter(Boolean).join(", ");
     const effect =
       d.effect === "none"
@@ -294,12 +355,16 @@ export function composeAnamnesis(raw?: Partial<AnamnesisDraft> | null) {
             : d.effect === "worse"
               ? "на фоне лечения стало хуже"
               : "";
-    let bit = drugs ? `Лечился, принимал ${drugs}` : "Лечился";
+    let bit = "";
+    if (who.length && drugs) bit = `${who.join(", ")}, ${took} ${drugs}`;
+    else if (who.length) bit = who.join(", ");
+    else bit = drugs ? `${she ? "Лечилась" : "Лечился"}, ${took} ${drugs}` : she ? "Лечилась" : "Лечился";
     if (effect) bit += ` (${effect})`;
     parts.push(bit);
   }
+  if (d.uroConsult) parts.push("Рекомендована консультация уролога");
   if (!parts.length) return "";
-  const text = parts.join(". ");
+  const text = parts.map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)).join(". ");
   return text.endsWith(".") ? text : `${text}.`;
 }
 
@@ -415,11 +480,14 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
 
   const pastExtra = [
     ...namedItems(d.pastItems, chronicPresets),
-    ...namedItems(d.chronicItems, chronicPresets),
     d.pastIllness === "other" ? d.pastIllnessText.trim() : "",
-    d.chronicText.trim(),
   ].filter(Boolean);
   const past = `Перенесённые заболевания: ${[...PAST_ALWAYS, ...Array.from(new Set(pastExtra))].join(", ")}`;
+
+  const chronicNamed = [...namedItems(d.chronicItems, chronicPresets), d.chronicText.trim()].filter(Boolean);
+  const chronic = chronicNamed.length
+    ? `Хронические заболевания: ${chronicNamed.join(", ")}`
+    : "Хронические заболевания: отрицает";
 
   const medsFromCard = formatMedicationList(ctx?.medications, ctx?.medicationNotes);
   const meds = medsFromCard.length
@@ -461,6 +529,7 @@ export function composeVitae(raw?: Partial<VitaeDraft> | null, ctx?: VitaeContex
     ["habits", habits],
     ["disability", disability],
     ["past", past],
+    ["chronic", chronic],
     ["meds", meds],
     ["infections", infections],
     ["heritage", heritage],

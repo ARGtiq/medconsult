@@ -14,6 +14,7 @@ import { complaintsTextOf, composeAll, composeBlocks, composeHeader, composeHead
 import { copyText, hasMarkup, polishLocal } from "./copy";
 import {
   compactGuideline,
+  interactionDrugNames,
   complaintsForSession,
   drugLine,
   liveDrugRecords,
@@ -28,7 +29,7 @@ import {
   getStudyLive,
 } from "./live";
 import { AnamnesisDisease, AnamnesisVitae } from "./AnamnesisBuilders";
-import { cloneVitae, composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae } from "./anamnesisChips";
+import { cloneVitae, composeAnamnesis, composeVitae, emptyAnamnesis, emptyVitae, withRemoved } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { collectDeviations, patientRefWho } from "./data/studies";
 import { PlusStudyButton, StudyCard, DeviationsSpoiler, FitTextarea, LiveTextarea, flushLiveText } from "./StudyCard";
@@ -427,12 +428,10 @@ export function ProtocolPage() {
   }
 
   async function runInteractions() {
-    const names = [
+    const names = interactionDrugNames([
       ...session.recommendations,
       ...(session.currentMedications || []),
-    ]
-      .map((s) => s.split(/\s+/)[0])
-      .filter(Boolean);
+    ]);
     if (!names.length) {
       store.setToast("Нет назначений для проверки");
       return;
@@ -589,6 +588,8 @@ export function ProtocolPage() {
     medicationNotes: session.medicationNotes || {},
     allergies: session.allergies || [],
   };
+  const vitaeRemoved = getVitaeChipTemplates().find((t) => t.id === session.vitaeTemplateId)?.removed;
+  const vitaeSentence = (d: Parameters<typeof composeVitae>[0]) => composeVitae(withRemoved(d || emptyVitae(), vitaeRemoved), cardCtx);
 
   const splitPct = clampSplit(liveSplit ?? settings.splitPct ?? SPLIT_DEFAULT);
   splitLive.current = splitPct;
@@ -946,7 +947,7 @@ export function ProtocolPage() {
             open={session.openSection === "anamnesis"}
             onOpen={() => {
               if (session.openSection === "anamnesis") {
-                const t = composeAnamnesis(session.anamnesisDraft || emptyAnamnesis());
+                const t = composeAnamnesis(session.anamnesisDraft || emptyAnamnesis(), patient?.sex);
                 setSession({
                   openSection: null,
                   anamnesisChipMode: t ? false : session.anamnesisChipMode,
@@ -964,12 +965,12 @@ export function ProtocolPage() {
               draft={session.anamnesisDraft || emptyAnamnesis()}
               text={session.anamnesis}
               chipMode={session.anamnesisChipMode ?? !session.anamnesis}
-              onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d), anamnesisChipMode: true })}
+              onDraft={(d) => setSession({ anamnesisDraft: d, anamnesis: composeAnamnesis(d, patient?.sex), anamnesisChipMode: true })}
               onText={(t) => setSession({ anamnesis: t })}
               onMode={(chipsMode) =>
                 setSession({
                   anamnesisChipMode: chipsMode,
-                  anamnesis: chipsMode ? composeAnamnesis(session.anamnesisDraft || emptyAnamnesis()) : session.anamnesis,
+                  anamnesis: chipsMode ? composeAnamnesis(session.anamnesisDraft || emptyAnamnesis(), patient?.sex) : session.anamnesis,
                 })
               }
             />
@@ -989,7 +990,7 @@ export function ProtocolPage() {
                 const tpl = usingTpl ? vitaeTemplates().find((t) => t.key === session.vitaeTemplateId) : undefined;
                 const t = tpl
                   ? fillVitaeTemplate(tpl, session.vitaeFields || templateDefaults(tpl), cardCtx)
-                  : composeVitae(session.vitaeDraft || emptyVitae(), cardCtx);
+                  : vitaeSentence(session.vitaeDraft || emptyVitae());
                 setSession({
                   openSection: null,
                   vitaeChipMode: t ? false : session.vitaeChipMode,
@@ -1001,12 +1002,12 @@ export function ProtocolPage() {
                   const chips = getVitaeChipTemplates();
                   const chip = chips.find((t) => t.isDefault) || chips[0];
                   if (chip) {
-                    const draft = cloneVitae(chip.draft);
+                    const draft = withRemoved(cloneVitae(chip.draft), chip.removed);
                     patch.vitaeTemplateId = chip.id;
                     patch.vitaeDraft = draft;
                     patch.vitaeFields = undefined;
                     patch.vitaeChipMode = true;
-                    patch.anamnesisVitae = composeVitae(draft, cardCtx);
+                    patch.anamnesisVitae = vitaeSentence(draft);
                   } else {
                     patch.vitaeTemplateId = "chips";
                     patch.vitaeChipMode = true;
@@ -1026,7 +1027,7 @@ export function ProtocolPage() {
                 setSession({
                   vitaeDraft: d,
                   vitaeChipMode: true,
-                  anamnesisVitae: composeVitae(d, cardCtx),
+                  anamnesisVitae: vitaeSentence(d),
                 })
               }
               onText={(t) => setSession({ anamnesisVitae: t })}
@@ -1039,7 +1040,7 @@ export function ProtocolPage() {
                     chipsMode && tpl
                       ? fillVitaeTemplate(tpl, session.vitaeFields || templateDefaults(tpl), cardCtx)
                       : chipsMode
-                        ? composeVitae(session.vitaeDraft || emptyVitae(), cardCtx)
+                        ? vitaeSentence(session.vitaeDraft || emptyVitae())
                         : session.anamnesisVitae,
                 });
               }}

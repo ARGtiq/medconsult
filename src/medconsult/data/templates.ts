@@ -108,6 +108,8 @@ export type VitaeChipTemplate = {
   name: string;
   isDefault?: boolean;
   draft: VitaeDraft;
+  /** Пункты, убранные из этого шаблона. */
+  removed?: string[];
 };
 
 export const SEED_CHRONIC: VitaePreset[] = [
@@ -266,7 +268,8 @@ function normalizeVitaeChip(raw: unknown, i: number): VitaeChipTemplate | null {
   const id = String(r.id || "").trim() || `vitae_${i}`;
   const name = String(r.name || "").trim() || "шаблон";
   const draft = r.draft && typeof r.draft === "object" && !Array.isArray(r.draft) ? (r.draft as VitaeDraft) : ({} as VitaeDraft);
-  return { id, name, isDefault: !!r.isDefault, draft };
+  const removed = Array.isArray(r.removed) ? r.removed.map((x) => String(x || "").trim()).filter(Boolean) : [];
+  return { id, name, isDefault: !!r.isDefault, draft, removed: removed.length ? removed : undefined };
 }
 
 function normalizeOption(raw: unknown): ComplaintOption | null {

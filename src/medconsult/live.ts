@@ -914,6 +914,44 @@ export function parseDrugLine(line: string): { name: string; brand: string; dosa
   };
 }
 
+const DRUG_FORM_WORD = /^(?:таб\.?|капс\.?|капсулы|таблетки|супп\.?|р-р|амп\.?|мазь|крем|гель|капли|спрей|порошок|сироп|сусп\.?)$/i;
+const DRUG_FORM_PREFIX = /^(?:таб\.|капс\.|супп\.|р-р|амп\.|мазь|крем|гель|капли|спрей|порошок|сироп|сусп\.)\s+/i;
+
+/** МНН из строки назначения. Первое слово часто «таб.» — его нельзя слать в проверку взаимодействий. */
+export function interactionDrugName(line: string): string {
+  const parsed = parseDrugLine(line);
+  if (parsed?.name) {
+    const brand = (parsed.brand || "").trim();
+    return brand && brand.toLowerCase() !== parsed.name.toLowerCase() ? `${parsed.name} (${brand})` : parsed.name;
+  }
+  let text = line.trim().replace(DRUG_FORM_PREFIX, "");
+  if (!text || DRUG_FORM_WORD.test(text)) return "";
+  const head = (text.split(/\s+-\s+/)[0] || text).trim();
+  const paren = head.match(/\(([^)]+)\)/);
+  let brand = "";
+  if (paren) {
+    const inside = paren[1].trim();
+    if (inside && !/аналоги/i.test(inside) && !inside.includes("+")) brand = inside;
+  }
+  let name = head.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  name = name.replace(/\s+\d[\d.,\s/+-]*.*$/, "").replace(DRUG_FORM_PREFIX, "").trim();
+  if (!name || DRUG_FORM_WORD.test(name)) return "";
+  return brand && brand.toLowerCase() !== name.toLowerCase() ? `${name} (${brand})` : name;
+}
+
+export function interactionDrugNames(lines: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const name = interactionDrugName(line);
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
 export function analogsOf(lineOrName: string): { name: string; line: string }[] {
   const raw = lineOrName.trim();
   if (!raw) return [];

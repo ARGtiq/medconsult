@@ -28,7 +28,7 @@ import StudiesTab from "@/legacy/components/StudiesTab";
 import { FitTextarea } from "./StudyCard";
 import { useAppStore } from "./store";
 import { VitaeChipFields } from "./AnamnesisBuilders";
-import { composeVitae, emptyVitae, type VitaeDraft } from "./anamnesisChips";
+import { composeVitae, emptyVitae, normalizeVitae, withRemoved, VITAE_LINES, type VitaeDraft } from "./anamnesisChips";
 
 type BlockTab = "vitae" | "packs" | "docs" | "questionnaires" | "studies";
 
@@ -1702,8 +1702,8 @@ function VitaeChipsEditor({
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-soft">
-        Список названий. Клик открывает те же чипы, что на приёме, и задаёт их значения. «умолч.» открывается на новом
-        приёме. Аллергия и лекарства в шаблон не входят: на приёме они из карточки.
+        Те же чипы, что на приёме. «×» у названия пункта убирает его из шаблона, «+» внизу возвращает. «умолч.»
+        открывается на новом приёме. Аллергия и лекарства на приёме берутся из карточки.
       </p>
       <div className="space-y-1">
         {items.map((p) => (
@@ -1753,6 +1753,7 @@ function VitaeChipsEditor({
                     name: `${p.name || "шаблон"} (копия)`,
                     isDefault: false,
                     draft: { ...emptyVitae(), ...JSON.parse(JSON.stringify(p.draft || {})) },
+                    removed: p.removed ? [...p.removed] : undefined,
                   };
                   onChange([...items.slice(0, i + 1), copy, ...items.slice(i + 1)]);
                   setOpenId(copy.id);
@@ -1778,11 +1779,40 @@ function VitaeChipsEditor({
             <VitaeChipFields
               draft={(p.draft || {}) as VitaeDraft}
               onDraft={(draft) => patch(i, { draft })}
+              removed={p.removed}
+              onRemove={(id) => {
+                const extra = id === "habits" || id === "occupation" ? ["habits", "occupation"] : [id];
+                patch(i, { removed: [...new Set([...(p.removed || []), ...extra])] });
+              }}
               showCard={false}
               footer={
-                <p className="mt-2 text-xs leading-relaxed whitespace-pre-line text-ink-soft">
-                  {composeVitae(p.draft)}
-                </p>
+                <>
+                  {(p.removed || []).filter((id) => id !== "occupation").length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(p.removed || [])
+                        .filter((id) => id !== "occupation")
+                        .map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            className="rounded-full border border-line bg-paper px-2 py-0.5 text-[10px]"
+                            onClick={() =>
+                              patch(i, {
+                                removed: (p.removed || []).filter(
+                                  (x) => x !== id && !(id === "habits" && x === "occupation"),
+                                ),
+                              })
+                            }
+                          >
+                            + {VITAE_LINES.find((l) => l.id === id)?.label || id}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs leading-relaxed whitespace-pre-line text-ink-soft">
+                    {composeVitae(withRemoved(normalizeVitae(p.draft), p.removed))}
+                  </p>
+                </>
               }
             />
           </div>

@@ -5,7 +5,7 @@ import { showToast } from "@/legacy/lib/toast";
 import { exportAllBackup, importBackup } from "./data/backup";
 import { applyComputed, applyConditionalDefaults, buildAddedInstance } from "./data/studies";
 import { addLocalChipToCode, addComplaintTemplate, getComplaintTemplates, getDocKinds, getGlobalTemplates, getLocalPacks, getVisitPacks, getVitaeChipTemplates, localItems, localStatusLines, packsForCodeLive, STD_DOC_BLOCKS, defaultLocalValue } from "./data/templates";
-import { cloneVitae, composeVitae, emptyVitae, normalizeVitae } from "./anamnesisChips";
+import { cloneVitae, composeVitae, emptyVitae, normalizeVitae, withRemoved } from "./anamnesisChips";
 import { fillVitaeTemplate, templateDefaults, vitaeDraftTouched, vitaeTemplates } from "./vitaeTemplates";
 import { complaintBaseOf, complaintPicks, composeComplaintPicks, findComplaintVariant, getStudyLive, optionsForComplaint, subsForComplaint, type ComplaintPick } from "./live";
 import type { ExtraBlock, Patient, SessionState, SettingsState, StudyEntry, StudyInstance, VisitKind, VisitRecord } from "./types";
@@ -308,7 +308,7 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   let nextDraft = draft;
   const chipHit = templateId ? getVitaeChipTemplates().find((t) => t.id === templateId) : undefined;
   if (chipHit) {
-    nextDraft = touched ? normalizeVitae(draft) : cloneVitae(chipHit.draft);
+    nextDraft = withRemoved(touched ? normalizeVitae(draft) : cloneVitae(chipHit.draft), touched ? undefined : chipHit.removed);
     templateId = chipHit.id;
     vitaeFields = undefined;
     composed = composeVitae(nextDraft, card);
@@ -327,7 +327,7 @@ function applyGlobals(session: SessionState, patient: Patient | undefined): Sess
   } else {
     const chip = getVitaeChipTemplates().find((t) => t.isDefault) || getVitaeChipTemplates()[0];
     if (chip) {
-      nextDraft = cloneVitae(chip.draft);
+      nextDraft = withRemoved(cloneVitae(chip.draft), chip.removed);
       templateId = chip.id;
       vitaeFields = undefined;
       composed = composeVitae(nextDraft, card);
