@@ -41,7 +41,7 @@ function dropExtraAutoLine(template, label, key) {
 }
 
 export function StudyTagModal(props) {
-  const { form, setForm, setTagEdit, tagEdit, fieldProps, dockLeft } = props
+  const { form, setForm, setTagEdit, tagEdit, fieldProps, dockLeft, editorW, onEditorSplit } = props
   const index = tagIndex(form.fields, tagEdit)
   const field = index >= 0 ? form.fields?.[index] : null
   useEffect(() => {
@@ -138,7 +138,7 @@ export function StudyTagModal(props) {
         if (e.key === 'ArrowRight') { e.preventDefault(); go(1) }
       }}
     >
-      <div className="study-tag-modal-card modal-box" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="study-tag-modal-card modal-box" style={dockLeft ? { width: editorW || 460 } : undefined} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <button type="button" className="btn-secondary btn-small" disabled={!neighbor(-1)} onClick={() => go(-1)} title="Предыдущий тег" aria-label="Предыдущий тег">←</button>
           <h3>{tagEdit.isNew ? 'Новый пункт' : `Пункт: ${field.label || field.key}`}</h3>
@@ -152,6 +152,17 @@ export function StudyTagModal(props) {
           </div>
         </div>
       </div>
+      {dockLeft && (
+        <div
+          className="study-editor-split-x"
+          style={{ left: editorW || 460 }}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ширина панели пункта и текста шаблона"
+          title="Потяни, чтобы изменить ширину панели и текста"
+          onPointerDown={onEditorSplit}
+        />
+      )}
     </div>,
     host,
   )

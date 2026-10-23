@@ -77,6 +77,20 @@ export default function StudiesTab({ scope = 'studies' }) {
   })
   const tagHRef = useRef(160)
   tagHRef.current = tagH
+  const [editorW, setEditorW] = useState(() => {
+    const min = 280
+    let max = 900
+    try {
+      if (typeof window !== 'undefined') max = Math.max(min, Math.round(window.innerWidth * 0.78))
+      const n = Number(localStorage.getItem('medconsult_study_editor_w'))
+      if (Number.isFinite(n) && n > 0) return Math.min(max, Math.max(min, Math.round(n)))
+    } catch {
+      /* ignore */
+    }
+    return Math.min(460, max)
+  })
+  const editorWRef = useRef(editorW)
+  editorWRef.current = editorW
   function pickSide(side) {
     setTemplateSide(side)
     try {
@@ -334,6 +348,40 @@ export default function StudiesTab({ scope = 'studies' }) {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+  }
+
+  function onEditorSplitDown(e) {
+    if (e.button != null && e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = editorWRef.current
+    const prevCursor = document.body.style.cursor
+    const prevSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    const move = (ev) => {
+      ev.preventDefault()
+      const max = Math.max(320, Math.round(window.innerWidth * 0.78))
+      const next = Math.round(Math.min(max, Math.max(280, startW + (ev.clientX - startX))))
+      editorWRef.current = next
+      setEditorW(next)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      document.body.style.cursor = prevCursor
+      document.body.style.userSelect = prevSelect
+      try {
+        localStorage.setItem('medconsult_study_editor_w', String(editorWRef.current))
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   function moveField(from, to) {
@@ -886,7 +934,7 @@ export default function StudiesTab({ scope = 'studies' }) {
               <div className={`study-editor-split is-${templateSide}`}>
               <StudyFieldList form={form} dragKids={dragKids} overField={overField} addChild={addChild} addField={addField} addGroup={addGroup} addGroupOpt={addGroupOpt} addHeading={addHeading} addOptions={addOptions} applyFormulaPreset={applyFormulaPreset} descendantIdxs={descendantIdxs} dragFrom={dragFrom} duplicateField={duplicateField} foldIdle={foldIdle} insertFormulaToken={insertFormulaToken} moveField={moveField} openField={openField} parentChoices={parentChoices} removeField={removeField} removeGroup={removeGroup} removeGroupOpt={removeGroupOpt} removeOption={removeOption} renameGroupOpt={renameGroupOpt} renameOption={renameOption} setDragKids={setDragKids} setGroupDraft={setGroupDraft} setOpenField={setOpenField} setOverField={setOverField} toggleRef={toggleRef} toggleShowValue={toggleShowValue} updateField={updateField} />
 
-              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} addPreset={addPreset} activePreset={activePreset} setActivePreset={setActivePreset} patchPreset={patchPreset} removePreset={removePreset} />
+              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} editorW={editorW} addPreset={addPreset} activePreset={activePreset} setActivePreset={setActivePreset} patchPreset={patchPreset} removePreset={removePreset} />
               </div>
 
               <AutoResizeTextarea
@@ -904,6 +952,8 @@ export default function StudiesTab({ scope = 'studies' }) {
                 setTagEdit={setTagEdit}
                 tagEdit={tagEdit}
                 dockLeft={templateMax}
+                editorW={editorW}
+                onEditorSplit={onEditorSplitDown}
                 fieldProps={{
                   dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions,
                   applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle: false, insertFormulaToken,

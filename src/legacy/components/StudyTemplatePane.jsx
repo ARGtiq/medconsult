@@ -299,7 +299,7 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
 }
 
 export function StudyTemplatePane(props) {
-  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, onChipDragStart, pickFold, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown, addPreset, activePreset, setActivePreset, patchPreset, removePreset } = props
+  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, onChipDragStart, pickFold, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown, editorW, addPreset, activePreset, setActivePreset, patchPreset, removePreset } = props
   const tagLock = useRef(false)
   const [sideEdit, setSideEdit] = useState(null)
   function openSide(key) {
@@ -446,7 +446,10 @@ export function StudyTemplatePane(props) {
   const pattern = datePattern(form.dateFormat)
   const datePreview = formatStudyDate('2026-09-25', form.dateFormat || 'ДД.ММ.ГГГГ')
   return (
-              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}${templateMax && props.tagEdit ? ' is-with-editor' : ''}`}>
+              <div
+                className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}${templateMax && props.tagEdit ? ' is-with-editor' : ''}`}
+                style={templateMax && props.tagEdit ? { paddingLeft: editorW || 460 } : undefined}
+              >
               {templateMax && (
                 <div className="study-date-format study-max-head">
                   <input

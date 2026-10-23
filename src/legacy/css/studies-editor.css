@@ -364,6 +364,30 @@
   border-right: 1px solid var(--line);
   box-shadow: 8px 0 28px rgba(0, 0, 0, 0.16);
 }
+.legacy-surface .study-editor-split-x {
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  margin-left: -6px;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.legacy-surface .study-editor-split-x::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: var(--line);
+}
+.legacy-surface .study-editor-split-x:hover::after,
+.legacy-surface .study-editor-split-x:active::after {
+  background: var(--teal, #3d6b5e);
+}
 .legacy-surface .study-tag-modal-card .modal-header {
   display: flex;
   align-items: center;
