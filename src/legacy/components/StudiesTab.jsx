@@ -52,13 +52,6 @@ export default function StudiesTab({ scope = 'studies' }) {
   const [overField, setOverField] = useState(null)
   const [dragKids, setDragKids] = useState([])
   const [listTab, setListTab] = useState('all')
-  const [namedTag, setNamedTag] = useState(() => {
-    try {
-      return localStorage.getItem('medconsult_study_named_tag') === '1'
-    } catch {
-      return false
-    }
-  })
   const [foldIdle, setFoldIdle] = useState(() => {
     try {
       return localStorage.getItem('medconsult_study_fold_idle') === '1'
@@ -88,14 +81,6 @@ export default function StudiesTab({ scope = 'studies' }) {
     setTemplateSide(side)
     try {
       localStorage.setItem('medconsult_study_template_side', side)
-    } catch {
-      /* ignore */
-    }
-  }
-  function pickNamed(on) {
-    setNamedTag(on)
-    try {
-      localStorage.setItem('medconsult_study_named_tag', on ? '1' : '0')
     } catch {
       /* ignore */
     }
@@ -231,7 +216,7 @@ export default function StudiesTab({ scope = 'studies' }) {
       const nextKey = (nextField.key || '').trim()
       const touchLine = patch.label !== undefined || patch.key !== undefined || patch.kind !== undefined
       if (touchLine) {
-        template = adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, namedTag, current.kind === 'heading')
+        template = adoptFieldLine(template, oldLabel, oldKey, nextField, nextKey, false, current.kind === 'heading')
         const tokenOnly = oldKey && nextKey ? retargetToken(prev.template || '', oldKey, nextKey) : (prev.template || '')
         var templateEdited = template !== tokenOnly ? true : !!prev.templateEdited
       } else {
@@ -293,11 +278,9 @@ export default function StudiesTab({ scope = 'studies' }) {
       const fields = [...prev.fields]
       fields.splice(idx + 1, 0, copy)
       let template = prev.template || ''
-      const named = `{+${key}}`
       const plain = `{${key}}`
-      const line = src.kind === 'heading' ? '' : namedTag ? named : autoFieldLine(copy.label, key)
-      const already = namedTag ? template.includes(named) || template.includes(plain) : template.includes(plain)
-      if (line && !already) {
+      const line = src.kind === 'heading' ? '' : plain
+      if (line && !template.includes(plain)) {
         const trimmed = template.replace(/\s+$/, '')
         template = trimmed ? `${trimmed}\n${line}` : line
       }
@@ -903,7 +886,7 @@ export default function StudiesTab({ scope = 'studies' }) {
               <div className={`study-editor-split is-${templateSide}`}>
               <StudyFieldList form={form} dragKids={dragKids} overField={overField} addChild={addChild} addField={addField} addGroup={addGroup} addGroupOpt={addGroupOpt} addHeading={addHeading} addOptions={addOptions} applyFormulaPreset={applyFormulaPreset} descendantIdxs={descendantIdxs} dragFrom={dragFrom} duplicateField={duplicateField} foldIdle={foldIdle} insertFormulaToken={insertFormulaToken} moveField={moveField} openField={openField} parentChoices={parentChoices} removeField={removeField} removeGroup={removeGroup} removeGroupOpt={removeGroupOpt} removeOption={removeOption} renameGroupOpt={renameGroupOpt} renameOption={renameOption} setDragKids={setDragKids} setGroupDraft={setGroupDraft} setOpenField={setOpenField} setOverField={setOverField} toggleRef={toggleRef} toggleShowValue={toggleShowValue} updateField={updateField} />
 
-              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} addPreset={addPreset} activePreset={activePreset} setActivePreset={setActivePreset} patchPreset={patchPreset} removePreset={removePreset} />
+              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} addPreset={addPreset} activePreset={activePreset} setActivePreset={setActivePreset} patchPreset={patchPreset} removePreset={removePreset} />
               </div>
 
               <AutoResizeTextarea

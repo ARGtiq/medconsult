@@ -1,9 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { createPortal } from 'react-dom'
-import { formatStudyDate } from '../../medconsult/data/studies'
-import { autoFieldLine } from '../lib/studyLine'
-import { SIDE_FORMS } from '../../medconsult/data/studies'
+import { formatStudyDate, SIDE_FORMS } from '../../medconsult/data/studies'
 import {
   AUTO_TAGS, fieldKeyOf, slugifyFieldKey, blankField, splitTemplate,
   serializeMark, markCaret, placeMarkCaret,
@@ -279,7 +277,7 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
 }
 
 export function StudyTemplatePane(props) {
-  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickFold, pickNamed, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown, addPreset, activePreset, setActivePreset, patchPreset, removePreset } = props
+  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, onChipDragStart, pickFold, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown, addPreset, activePreset, setActivePreset, patchPreset, removePreset } = props
   const tagLock = useRef(false)
   const [sideEdit, setSideEdit] = useState(null)
   function openSide(key) {
@@ -504,25 +502,6 @@ export function StudyTemplatePane(props) {
                 />
                 <span className="settings-note-inline">{datePreview}</span>
               </div>
-              <div className="study-date-format" role="group" aria-label="Название в теге">
-                <span>Тег</span>
-                <button
-                  type="button"
-                  className={`btn-secondary btn-small${namedTag ? '' : ' is-on'}`}
-                  onClick={() => pickNamed(false)}
-                  title="Чип вставляет только значение. Название остаётся текстом рядом"
-                >
-                  значение
-                </button>
-                <button
-                  type="button"
-                  className={`btn-secondary btn-small${namedTag ? ' is-on' : ''}`}
-                  onClick={() => pickNamed(true)}
-                  title="В тег входит название. Скрытый, пустой или условный пункт пропадает вместе с названием"
-                >
-                  с названием
-                </button>
-              </div>
               {!(templateMax && markMode && tagsFold) && (
               <div
                 className="study-template-chips-scroll"
@@ -582,35 +561,24 @@ export function StudyTemplatePane(props) {
                 {fieldTags.map((f, idx) => {
                   const key = fieldKeyOf(f)
                   const plain = `{${key}}`
-                  const named = `{+${key}}`
-                  const line = autoFieldLine(f.label, key)
-                  const payload = namedTag ? named : line && !(form.template || '').includes(plain) ? line : plain
-                  const used = (form.template || '').includes(plain) || (form.template || '').includes(named)
+                  const used = (form.template || '').includes(plain) || (form.template || '').includes(`{+${key}}`)
                   return (
                     <button
                       type="button"
                       key={`${key}-${idx}`}
                       className={`study-template-chip${used ? ' is-used' : ''}`}
                       draggable
-                      onDragStart={(e) => onChipDragStart(e, payload)}
-                      onClick={() => insertToken(payload)}
-                      title={
-                        used
-                          ? 'Уже есть в тексте шаблона'
-                          : namedTag
-                          ? 'Вставить тег с названием. Если пункт скрыт или пустой, строка не появляется'
-                          : payload === line
-                            ? 'Вставить название и тег'
-                            : 'Вставить тег в место курсора'
-                      }
+                      onDragStart={(e) => onChipDragStart(e, plain)}
+                      onClick={() => insertToken(plain)}
+                      title={used ? 'Уже есть в тексте шаблона' : 'Вставить тег в место курсора'}
                     >
-                      {f.label} {namedTag ? named : plain}
+                      {f.label} {plain}
                     </button>
                   )
                 })}
               </div>
               <p className="settings-note-inline study-template-chips-hint">
-                Подсвечены теги, которые уже стоят в тексте. Перетащи чип в текст. {'{+тег}'} — «название - значение». Если условный пункт скрыт, пустой или убран кликом, строка не появляется.
+                Подсвечены теги, которые уже стоят в тексте. Перетащи чип в текст.
               </p>
               </div>
               )}
@@ -683,6 +651,7 @@ export function StudyTemplatePane(props) {
                 </button>
               )}
               </div>
+              {!templateMax && (
               <div className="study-side-bar is-under" role="group" aria-label="Окно шаблона">
                 <span>Текст шаблона</span>
                 <button type="button" className={`btn-secondary btn-small${templateSide === 'left' ? ' is-on' : ''}`} onClick={() => pickSide('left')}>слева</button>
@@ -703,6 +672,7 @@ export function StudyTemplatePane(props) {
                   {foldIdle ? 'спойлер вкл' : 'спойлер'}
                 </button>
               </div>
+              )}
               {sideEdit && <SideWordModal edit={sideEdit} onSave={saveSide} onCancel={cancelSide} />}
               </div>
   )
