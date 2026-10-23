@@ -1,5 +1,5 @@
 import { formatPatient, modeLabel, shortName, visitKindLabel } from "./store";
-import { fillStudyTemplate, collectDeviations, formatDeviations, patientRefWho } from "./data/studies";
+import { studyProtocolText, collectDeviations, formatDeviations, patientRefWho } from "./data/studies";
 import { formatLocalStatus, getLocalPacks, localStatusLines, protocolBlockOrder } from "./data/templates";
 import { getStudyLive } from "./live";
 import type { Patient, SessionState } from "./types";
@@ -93,11 +93,7 @@ export function composeBlocks(
         const def = getStudyLive(entry.key);
         if (entry.textMode && (entry.text || "").trim()) return entry.text.trim();
         if (!def) return "";
-        return entry.instances
-          .map((inst, idx) =>
-            fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1], who),
-          )
-          .join(" ");
+        return studyProtocolText(def, entry, who);
       })
       .filter(Boolean);
     if (studyParts.length) push("studies", "Обследования", studyParts.join("\n"));

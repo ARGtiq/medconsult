@@ -458,6 +458,30 @@ function withPrev(cur: string, prev?: string, prevDate?: string) {
   return d ? `${c} (${p}, ${d})` : `${c} (${p})`;
 }
 
+type HistoryPoint = { date: string; value: string };
+type FieldHistory = Record<string, HistoryPoint[]>;
+
+/** Старые значения анализа: «15,5 (27.08.2024 - 7,7, 06.02.2026 - 16,7)». */
+function appendHistory(shown: string, points?: HistoryPoint[]): string {
+  if (!points?.length) return shown;
+  const note = points.map((x) => `${prettyDate(x.date)} - ${x.value}`).join(", ");
+  if (!note) return shown;
+  if (!shown || shown === "—") return `(${note})`;
+  return `${shown} (${note})`;
+}
+
+function seriesValue(
+  v: string,
+  prev: string | undefined,
+  prevDate: string | undefined,
+  abnormal: boolean,
+  points: HistoryPoint[] | undefined,
+  series: boolean,
+): string {
+  if (!series) return markDeviant(v, prev, prevDate, abnormal);
+  return appendHistory(markDeviant(v, "", undefined, abnormal), points);
+}
+
 /** Underline the current value in the copy block when it sits outside the reference. */
 function markDeviant(cur: string, prev: string | undefined, prevDate: string | undefined, abnormal: boolean) {
   const base = withPrev(cur, prev, prevDate);
@@ -1078,13 +1102,23 @@ function filledFieldBit(
   prevFields?: Record<string, string>,
   prevDate?: string,
   who?: RefWho | null,
+  history?: FieldHistory,
 ): { label: string; shown: string } | null {
   const v = (fields[f.key] || "").trim();
-  if (!v) return null;
+  if (!v && !history?.[f.key]?.length) return null;
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const bad = fieldAbnormal(v, f.normal, f, fields, who);
-  const value = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
+  const bad = !!v && fieldAbnormal(v, f.normal, f, fields, who);
+  const series = history != null;
+  const core = seriesValue(
+    series ? v : `${v}${unit}`.trim(),
+    series ? p : p ? `${p}${unit}`.trim() : "",
+    prevDate,
+    bad,
+    history?.[f.key],
+    series,
+  );
+  const value = series ? `${core}${unit}`.trim() : core;
   const shown = fieldShownText(f, value);
   return { label: f.showHeading === false ? "" : f.label, shown: withFieldNote(shown, f.note) };
 }
@@ -1098,6 +1132,7 @@ function studyAutoTag(
   omit: Set<string>,
   prevDate?: string,
   who?: RefWho | null,
+  history?: FieldHistory,
 ): string | null {
   if (def.fields.some((f) => f.kind !== "heading" && f.key === tag)) return null;
   if (tag === "name") return def.label;
@@ -1107,9 +1142,9 @@ function studyAutoTag(
     if (f.kind === "heading") continue;
     if (omit.has(f.key) || !fieldShown(f, fields)) continue;
     const v = (fields[f.key] || "").trim();
-    if (!v) continue;
-    if (tag === "abnormal" && !fieldAbnormal(v, f.normal, f, fields, who)) continue;
-    const bit = filledFieldBit(f, fields, prevFields, prevDate, who);
+    if (!v && !history?.[f.key]?.length) continue;
+    if (tag === "abnormal" && (!v || !fieldAbnormal(v, f.normal, f, fields, who))) continue;
+    const bit = filledFieldBit(f, fields, prevFields, prevDate, who, history);
     if (bit) bits.push(bit);
   }
   const line = (b: { label: string; shown: string }) => (b.label ? `${b.label} - ${b.shown}` : b.shown);
@@ -1250,8 +1285,9 @@ export function fillStudyTemplate(
   },
   previous?: StudyInstance,
   who?: RefWho | null,
+  history?: FieldHistory,
 ) {
-  if (!def.lateral) return hoistFieldNotes(fillStudyBody(def, instance, previous, who));
+  if (!def.lateral) return hoistFieldNotes(fillStudyBody(def, instance, previous, who, history));
   const parts = (["r", "l"] as const)
     .map((side) => {
       const cur = sideView(instance, side);
@@ -1296,6 +1332,7 @@ function fillStudyBody(
   instance: { date: string; fields: Record<string, string>; omit?: string[]; extras?: { name?: string; value?: string }[] },
   previous?: StudyInstance,
   who?: RefWho | null,
+  history?: FieldHistory,
 ) {
   const seeded = applyConditionalDefaults(def, instance.fields);
   const fields = applyComputed(def, seeded);
@@ -1354,13 +1391,15 @@ function fillStudyBody(
       if (f.kind === "heading") continue;
       if (!fieldShown(f, fields)) continue;
       const v = (fields[f.key] || "").trim();
-      if (!v) continue;
+      if (!v && !history?.[f.key]?.length) continue;
       const p = prevFields ? (prevFields[f.key] || "").trim() : "";
       const unit = f.unit ? ` ${f.unit}` : "";
       const cur = `${v}${unit}`.trim();
       const prev = p ? `${p}${unit}`.trim() : "";
-      const bad = fieldAbnormal(v, f.normal, f, fields, who);
-      const shown = markDeviant(cur, prev, prevDate, bad);
+      const series = history != null;
+      const bad = !!v && fieldAbnormal(v, f.normal, f, fields, who);
+      const core = seriesValue(series ? v : cur, series ? p : prev, prevDate, bad, history?.[f.key], series);
+      const shown = series ? `${core}${unit}`.trim() : core;
       const text = fieldShownText(f, shown);
       const label = f.showHeading === false ? "" : f.label;
       bits.push(withFieldNote(`${label} ${text}`.trim(), f.note));
@@ -1373,23 +1412,24 @@ function fillStudyBody(
   for (const f of def.fields) {
     const named = `{+${f.key}}`;
     if (!text.includes(named)) continue;
-    text = text.split(named).join(withFieldNote(namedFieldText(f, fields, prevFields, omit, prevDate, who), f.note));
+    text = text.split(named).join(withFieldNote(namedFieldText(f, fields, prevFields, omit, prevDate, who, history), f.note));
   }
   for (const f of def.fields) {
     const hidden = !fieldShown(f, fields);
     const v = omit.has(f.key) || hidden ? "" : (fields[f.key] || "").trim();
     const p = prevFields ? (prevFields[f.key] || "").trim() : "";
+    const series = history != null;
     const bad = !!v && fieldAbnormal(v, f.normal, f, fields, who);
-    const valueBit = markDeviant(v, p, prevDate, bad);
+    const valueBit = seriesValue(v, p, prevDate, bad, history?.[f.key], series);
     const replacement =
-      f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
+      f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed && !history?.[f.key]?.length)
         ? ""
         : fieldShownText(f, valueBit);
     text = text.replaceAll(`{${f.key}}`, withFieldNote(replacement, f.note));
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {
     if (!text.includes(`{${tag}}`)) continue;
-    const value = studyAutoTag(tag, def, fields, prevFields, omit, prevDate, who);
+    const value = studyAutoTag(tag, def, fields, prevFields, omit, prevDate, who, history);
     if (value == null) continue;
     text = text.replaceAll(`{${tag}}`, value);
   }
@@ -1425,15 +1465,73 @@ function namedFieldText(
   omit: Set<string>,
   prevDate?: string,
   who?: RefWho | null,
+  history?: FieldHistory,
 ): string {
   if (f.kind === "heading" || omit.has(f.key) || !fieldShown(f, fields)) return "";
   const v = (fields[f.key] || "").trim();
-  if (!v) return "";
+  if (!v && !history?.[f.key]?.length) return "";
   const p = prevFields ? (prevFields[f.key] || "").trim() : "";
   const unit = f.unit ? ` ${f.unit}` : "";
-  const bad = fieldAbnormal(v, f.normal, f, fields, who);
-  const shown = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
+  const bad = !!v && fieldAbnormal(v, f.normal, f, fields, who);
+  const series = history != null;
+  const core = seriesValue(series ? v : `${v}${unit}`.trim(), series ? p : p ? `${p}${unit}`.trim() : "", prevDate, bad, history?.[f.key], series);
+  const shown = series ? `${core}${unit}`.trim() : core;
   if (f.before || f.after || f.phrase) return fieldShownText(f, shown);
   if (f.showHeading === false) return shown;
   return `${(f.label || f.key).trim()} - ${shown}`.trim();
+}
+
+function pointFields(def: StudyDef, inst: StudyInstance): Record<string, string> {
+  return applyComputed(def, applyConditionalDefaults(def, inst.fields || {}));
+}
+
+function dateRank(iso: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if (!m) return 0;
+  return Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
+}
+
+/** Текст исследования в протоколе. Анализы с несколькими датами — одна строка, старые значения в скобках по дате. */
+export function studyProtocolText(
+  def: StudyDef,
+  entry: { instances: StudyInstance[]; previous?: StudyInstance },
+  who?: RefWho | null,
+  join = " ",
+): string {
+  const instances = entry.instances || [];
+  if (!instances.length) return "";
+  if (def.category !== "questionnaire" && !def.lateral && instances.length > 1) {
+    return fillDatedSeries(def, instances, entry.previous, who);
+  }
+  return instances
+    .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : instances[idx - 1], who))
+    .filter(Boolean)
+    .join(join);
+}
+
+function fillDatedSeries(
+  def: StudyDef,
+  instances: StudyInstance[],
+  previous: StudyInstance | undefined,
+  who?: RefWho | null,
+): string {
+  const points: { date: string; inst: StudyInstance; order: number }[] = [];
+  let order = 0;
+  if (previous) points.push({ date: previous.date || "", inst: previous, order: order++ });
+  for (const inst of instances) points.push({ date: inst.date || "", inst, order: order++ });
+  if (!points.length) return "";
+  points.sort((a, b) => dateRank(a.date) - dateRank(b.date) || a.order - b.order);
+  const latest = points[points.length - 1];
+  const history: FieldHistory = {};
+  for (const p of points.slice(0, -1)) {
+    const fields = pointFields(def, p.inst);
+    const omit = new Set(p.inst.omit || []);
+    for (const f of def.fields) {
+      if (f.kind === "heading" || omit.has(f.key) || !fieldShown(f, fields)) continue;
+      const value = (fields[f.key] || "").trim();
+      if (!value) continue;
+      (history[f.key] ||= []).push({ date: p.date, value });
+    }
+  }
+  return fillStudyTemplate(def, latest.inst, undefined, who, history);
 }

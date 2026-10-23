@@ -7,7 +7,7 @@ import {
   collectDeviations,
   fieldAbnormal,
   fieldShown,
-  fillStudyTemplate,
+  studyProtocolText,
   seedDefaultValues,
   formatRefHint,
   groupDeviations,
@@ -388,10 +388,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
     });
   };
   const asText = () => {
-    const text = entry.instances
-      .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : entry.instances[idx - 1], who))
-      .filter(Boolean)
-      .join("\n");
+    const text = studyProtocolText(def, entry, who, "\n");
     patchStudy({ textMode: true, text: text || entry.text || "" });
   };
 
