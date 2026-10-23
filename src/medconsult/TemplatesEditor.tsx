@@ -2410,35 +2410,109 @@ function PresetEditor({
 }
 
 function DocKindsEditor({ items, onChange }: { items: DocKind[]; onChange: (p: DocKind[]) => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   function patch(i: number, p: Partial<DocKind>) {
     onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
+  function addPreset(i: number) {
+    const it = items[i];
+    if (!it) return;
+    const preset = { id: `dp_${Date.now().toString(36)}`, name: "новый", text: it.template || "" };
+    patch(i, { presets: [...(it.presets || []), preset] });
+  }
+  function copyPreset(i: number, pi: number) {
+    const list = items[i]?.presets || [];
+    const src = list[pi];
+    if (!src) return;
+    const copy = { ...src, id: `dp_${Date.now().toString(36)}`, name: `${src.name || "подшаблон"} (копия)` };
+    patch(i, { presets: [...list.slice(0, pi + 1), copy, ...list.slice(pi + 1)] });
+  }
   return (
-    <div>
-      <p className="mb-2 text-xs text-ink-soft">Доп. блоки «другого документа». Дневник может копировать прошлый текст.</p>
+    <div className="space-y-2">
+      <p className="text-xs text-ink-soft">
+        Свой вид блока. Шаблон — образец. Подшаблон начинается с этого текста, его можно поправить. На приёме подшаблон
+        вставляется в блок.
+      </p>
       {items.map((it, i) => (
-        <div key={it.id} className="mb-1 flex flex-wrap items-center gap-1">
-          <input
-            value={it.title}
-            onChange={(e) => patch(i, { title: e.target.value })}
-            className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
-          />
-          <label className="flex items-center gap-1 text-[11px] text-mute">
+        <div key={it.id} className="rounded-md border border-line bg-paper px-2 py-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             <input
-              type="checkbox"
-              checked={!!it.copyPrevious}
-              onChange={(e) => patch(i, { copyPrevious: e.target.checked })}
+              value={it.title}
+              onChange={(e) => patch(i, { title: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-sm"
             />
-            копировать прошлый
-          </label>
-          <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-            ×
-          </button>
+            <label className="flex items-center gap-1 text-[11px] text-mute">
+              <input
+                type="checkbox"
+                checked={!!it.copyPrevious}
+                onChange={(e) => patch(i, { copyPrevious: e.target.checked })}
+              />
+              копировать прошлый
+            </label>
+            <button type="button" className="text-[11px] font-medium text-teal" onClick={() => setOpenId(openId === it.id ? null : it.id)}>
+              {openId === it.id ? "свернуть" : `шаблоны${it.presets?.length ? ` ${it.presets.length}` : ""}`}
+            </button>
+            <button type="button" className="text-xs text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+              ×
+            </button>
+          </div>
+          {openId === it.id && (
+            <div className="mt-2 space-y-2">
+              <label className="block text-xs">
+                <span className="text-[10px] tracking-wide text-mute uppercase">шаблон</span>
+                <textarea
+                  value={it.template || ""}
+                  onChange={(e) => patch(i, { template: e.target.value })}
+                  rows={4}
+                  placeholder="Образец. Новый подшаблон копирует этот текст."
+                  className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-sm"
+                />
+              </label>
+              {(it.presets || []).map((p, pi) => (
+                <div key={p.id} className="rounded-md border border-line/70 bg-surface p-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <input
+                      value={p.name}
+                      onChange={(e) => {
+                        const presets = (it.presets || []).map((x, idx) => (idx === pi ? { ...x, name: e.target.value } : x));
+                        patch(i, { presets });
+                      }}
+                      placeholder="название подшаблона"
+                      className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                    />
+                    <button type="button" className="text-[11px] font-medium text-teal" onClick={() => copyPreset(i, pi)}>
+                      по подобию
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-danger"
+                      onClick={() => patch(i, { presets: (it.presets || []).filter((_, idx) => idx !== pi) })}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <textarea
+                    value={p.text}
+                    onChange={(e) => {
+                      const presets = (it.presets || []).map((x, idx) => (idx === pi ? { ...x, text: e.target.value } : x));
+                      patch(i, { presets });
+                    }}
+                    rows={3}
+                    placeholder="текст подшаблона"
+                    className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
+                  />
+                </div>
+              ))}
+              <button type="button" className="text-xs font-medium text-teal" onClick={() => addPreset(i)}>
+                + подшаблон
+              </button>
+            </div>
+          )}
         </div>
       ))}
       <button
         type="button"
-        className="mt-2 text-xs font-medium text-teal"
+        className="text-xs font-medium text-teal"
         onClick={() => onChange([...items, { id: `d_${Date.now()}`, title: "Новый блок" }])}
       >
         + вид блока

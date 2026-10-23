@@ -13,7 +13,7 @@ export function SettingsPage() {
         <h1 className="font-display text-2xl">Как ведёт себя станок</h1>
         <div className="grid gap-3 md:grid-cols-2">
           <Card title="Интерфейс">
-            <p className="mt-1 text-xs text-ink-soft">Акцентный цвет, тёмная тема и анимации. Действует на весь станок.</p>
+            <p className="mt-1 text-xs text-ink-soft">Акцентный цвет, тёмная тема, анимации и шрифт. Действует на весь станок.</p>
             <div className="legacy-surface mt-2">
               <ThemeSettings />
             </div>

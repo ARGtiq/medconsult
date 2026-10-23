@@ -153,6 +153,20 @@
 }
 .legacy-surface .theme-swatch.active { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel); }
 .legacy-surface .theme-dark-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.legacy-surface .theme-font-label { font-size: 12px; color: var(--ink-soft); }
+.legacy-surface .theme-font-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.legacy-surface .theme-font-btn {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.legacy-surface .theme-font-btn.active { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+.legacy-surface .theme-font-link { display: flex; gap: 6px; }
+.legacy-surface .theme-font-link input { flex: 1; min-width: 0; }
 
 html.theme-dark .legacy-surface {
   --red: #e3a0a0;

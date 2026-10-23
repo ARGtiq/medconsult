@@ -1237,7 +1237,10 @@ export function ProtocolPage() {
       </Slot>
 
       <Slot order={tailOrder}>
-      {(session.extraBlocks || []).map((b) => (
+      {(session.extraBlocks || []).map((b) => {
+        const kind = (templates.docKinds || []).find((k) => k.id === b.kindId);
+        const presets = kind?.presets || [];
+        return (
         <Sec
           key={b.id}
           id={b.id}
@@ -1247,15 +1250,35 @@ export function ProtocolPage() {
           onRemove={() => store.removeExtraBlock(b.id)}
           voice={(t) => store.updateExtraBlock(b.id, { text: b.text ? `${b.text} ${t}` : t })}
         >
+          {presets.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {presets.map((p) => {
+                const on = !!p.text.trim() && b.text.trim() === p.text.trim();
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      on ? "bg-teal text-paper" : "border border-line bg-paper text-ink"
+                    }`}
+                    onClick={() => store.updateExtraBlock(b.id, { text: on ? "" : p.text })}
+                  >
+                    {p.name.trim() || "подшаблон"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <LiveTextarea
             value={b.text}
             onChange={(text) => store.updateExtraBlock(b.id, { text })}
             rows={5}
             className="w-full rounded-md border border-line bg-paper px-2 py-1 text-sm"
-            placeholder={b.title}
+            placeholder={kind?.template?.trim() || b.title}
           />
         </Sec>
-      ))}
+        );
+      })}
       </Slot>
 
       <Slot order={tailOrder + 5}>

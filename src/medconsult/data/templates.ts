@@ -14,10 +14,19 @@ export type VitaePreset = {
   about?: string;
 };
 
+export type DocPreset = {
+  id: string;
+  name: string;
+  text: string;
+};
+
 export type DocKind = {
   id: string;
   title: string;
   copyPrevious?: boolean;
+  /** Образец. Новый подшаблон начинается с этого текста. */
+  template?: string;
+  presets?: DocPreset[];
 };
 
 /** Document/visit template = named set of block-templates. */

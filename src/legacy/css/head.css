@@ -14,8 +14,8 @@
   --radius: 10px;
   --radius-sm: 8px;
   --radius-lg: 12px;
-  --font-display: 'IBM Plex Serif', Georgia, serif;
-  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: var(--mc-font-display, 'IBM Plex Serif', Georgia, serif);
+  --font-body: var(--mc-font-body, 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif);
 }
 
 .legacy-surface * { box-sizing: border-box; }
