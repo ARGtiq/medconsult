@@ -497,7 +497,7 @@ export function StudyTemplatePane(props) {
                     </button>
                   )}
                   <button type="button" className="btn-secondary btn-small" onClick={() => setTemplateMax(false)}>
-                    закрыть и вернуться
+                    свернуть
                   </button>
                 </div>
               )}
