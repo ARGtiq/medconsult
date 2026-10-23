@@ -448,7 +448,7 @@ export function StudyTemplatePane(props) {
   return (
               <div
                 className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}${templateMax && props.tagEdit ? ' is-with-editor' : ''}`}
-                style={templateMax && props.tagEdit ? { paddingLeft: editorW || 460 } : undefined}
+                style={templateMax && props.tagEdit ? { paddingLeft: (editorW || 460) + 20 } : undefined}
               >
               {templateMax && (
                 <div className="study-date-format study-max-head">
@@ -462,6 +462,29 @@ export function StudyTemplatePane(props) {
                       setForm((prev) => ({ ...prev, label: value }))
                     }}
                   />
+                  {!vitae && (
+                    <button
+                      type="button"
+                      className={`btn-secondary btn-small${form.lateral ? ' is-on' : ''}`}
+                      title="Одни и те же пункты для правой и левой стороны"
+                      onClick={() => setForm((prev) => ({ ...prev, lateral: !prev.lateral }))}
+                    >
+                      по сторонам
+                    </button>
+                  )}
+                  {!vitae && (
+                    <select
+                      aria-label="Вид"
+                      value={form.category === 'lab' ? 'lab' : 'instrumental'}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setForm((prev) => ({ ...prev, category: value }))
+                      }}
+                    >
+                      <option value="instrumental">инструментальное</option>
+                      <option value="lab">лабораторное</option>
+                    </select>
+                  )}
                   {!vitae && (
                     <button type="button" className="btn-secondary btn-small" onClick={addPreset}>
                       + подшаблон

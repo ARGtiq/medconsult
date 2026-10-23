@@ -265,9 +265,11 @@ export function ProtocolPage() {
         return u === code || u === prefix || code.startsWith(`${u}.`) || u.startsWith(`${code}.`);
       });
     };
-    return [...(templates.localPacks || [])].sort(
-      (a, b) => Number(matches(b.codes)) - Number(matches(a.codes)) || a.label.localeCompare(b.label, "ru"),
-    );
+    const list = templates.localPacks || [];
+    return list
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => Number(matches(b.p.codes)) - Number(matches(a.p.codes)) || a.i - b.i)
+      .map((x) => x.p);
   }, [session.diagnosisCode, templates.localPacks]);
   const objectiveTemplates = useMemo(() => {
     const code = session.diagnosisCode.trim().toUpperCase();
@@ -279,7 +281,10 @@ export function ProtocolPage() {
       if (!codes.length) return 1;
       return codes.some((c) => c === code || c === prefix) ? 0 : 2;
     };
-    return [...list].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label, "ru"));
+    return list
+      .map((item, i) => ({ item, i }))
+      .sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i)
+      .map((x) => x.item);
   }, [session.diagnosisCode, templates.objective]);
   const chips = complaintsForSession(session.diagnosisCode);
   const icd = liveIcdMerged();

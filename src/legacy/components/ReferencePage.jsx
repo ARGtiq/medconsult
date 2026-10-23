@@ -36,7 +36,7 @@ function startTab(initialTab) {
   if (initialTab === 'schemes') return 'recpacks'
   if (initialTab === 'groups') return 'drugs'
   if (initialTab === 'appointments') return 'guidelines'
-  return initialTab || 'mkb'
+  return initialTab || 'blocks'
 }
 
 export default function ReferencePage({ initialTab, initialItemId, blocksContent, packsContent, globalContent, drugsContent, recPacksContent, guidelinesContent, generalRecsContent, questionnairesContent, studiesContent }) {

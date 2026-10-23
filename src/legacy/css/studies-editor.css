@@ -298,6 +298,7 @@
 }
 .legacy-surface .study-template-pane.is-max.is-with-editor {
   padding-left: min(460px, 48vw);
+  padding-right: 16px;
   box-sizing: border-box;
 }
 .legacy-surface .study-max-title {

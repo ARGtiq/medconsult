@@ -255,6 +255,14 @@ export function TemplatesEditor({
   );
 }
 
+function reorderList<T>(list: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+  const next = list.slice();
+  const [row] = next.splice(from, 1);
+  next.splice(to, 0, row);
+  return next;
+}
+
 function Fold({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1565,6 +1573,7 @@ function ObjectiveEditor({
   onChange: (p: ObjectiveTemplate[]) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [over, setOver] = useState<number | null>(null);
   function patch(i: number, p: Partial<ObjectiveTemplate>) {
     onChange(items.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
@@ -1584,15 +1593,41 @@ function ObjectiveEditor({
       <p className="text-xs text-ink-soft">
         Список названий. Окно не закрывается по клику мимо. Поле пункта растёт по тексту.
       </p>
-      {items.map((item) => (
-        <button
+      {items.map((item, i) => (
+        <div
           key={item.id}
-          type="button"
-          onClick={() => setOpenId(item.id)}
-          className="flex w-full items-center rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+          className={`flex items-stretch overflow-hidden rounded-md border border-line bg-paper ${over === i ? "ring-1 ring-teal" : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(i);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const from = Number(e.dataTransfer.getData("text/plain"));
+            onChange(reorderList(items, from, i));
+            setOver(null);
+          }}
         >
-          <span className="min-w-0 flex-1 truncate">{item.label.trim() || "без названия"}</span>
-        </button>
+          <span
+            draggable
+            title="Перетащи"
+            className="flex cursor-grab items-center px-1.5 text-mute select-none"
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", String(i));
+            }}
+            onDragEnd={() => setOver(null)}
+          >
+            ⋮⋮
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpenId(item.id)}
+            className="min-w-0 flex-1 truncate py-1.5 pr-2 text-left text-sm"
+          >
+            <span className="min-w-0 flex-1 truncate">{item.label.trim() || "без названия"}</span>
+          </button>
+        </div>
       ))}
       <button
         type="button"
@@ -1844,6 +1879,7 @@ function VitaeChipsEditor({
 
 function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: LocalPack[]) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [over, setOver] = useState<number | null>(null);
   function patch(i: number, p: Partial<LocalPack>) {
     onChange(packs.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   }
@@ -1871,15 +1907,41 @@ function PacksEditor({ packs, onChange }: { packs: LocalPack[]; onChange: (p: Lo
         Список названий. Окно не закрывается по клику мимо. Поле пункта растёт по тексту. «умолч.» выбирается на приёме.
       </p>
       <div className="space-y-1">
-        {packs.map((p) => (
-          <button
+        {packs.map((p, i) => (
+          <div
             key={p.id}
-            type="button"
-            onClick={() => setOpenId(p.id)}
-            className="flex w-full items-center rounded-md border border-line bg-paper px-2 py-1.5 text-left text-sm"
+            className={`flex items-stretch overflow-hidden rounded-md border border-line bg-paper ${over === i ? "ring-1 ring-teal" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(i);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = Number(e.dataTransfer.getData("text/plain"));
+              onChange(reorderList(packs, from, i));
+              setOver(null);
+            }}
           >
-            <span className="min-w-0 flex-1 truncate">{p.label.trim() || "без названия"}</span>
-          </button>
+            <span
+              draggable
+              title="Перетащи"
+              className="flex cursor-grab items-center px-1.5 text-mute select-none"
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(i));
+              }}
+              onDragEnd={() => setOver(null)}
+            >
+              ⋮⋮
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpenId(p.id)}
+              className="min-w-0 flex-1 truncate py-1.5 pr-2 text-left text-sm"
+            >
+              <span className="min-w-0 flex-1 truncate">{p.label.trim() || "без названия"}</span>
+            </button>
+          </div>
         ))}
       </div>
       <button
