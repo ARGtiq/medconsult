@@ -27,6 +27,7 @@ import {
   presetByKey,
   listedStudies,
   normalizeSideWords,
+  orderFieldsLikeTemplate,
 } from './studyEditorLib'
 import { StudyFieldList } from './StudyFieldList'
 import { StudyTemplatePane } from './StudyTemplatePane'
@@ -133,12 +134,16 @@ export default function StudiesTab({ scope = 'studies' }) {
 
   function openEdit(study) {
     const merged = overlaySeedFields(study)
+    const template = typeof merged.template === 'string' ? merged.template : ''
+    const fields = merged.fields?.length
+      ? orderFieldsLikeTemplate(merged.fields.map(toEditorField), template)
+      : [blankField()]
     setForm({
       key: merged.key,
       label: String(merged.label || ''),
       category: merged.category || 'instrumental',
-      template: typeof merged.template === 'string' ? merged.template : '',
-      fields: merged.fields?.length ? merged.fields.map(toEditorField) : [blankField()],
+      template,
+      fields,
       referenceNotes: merged.referenceNotes || '',
       sparse: merged.sparse,
       hint: merged.hint,

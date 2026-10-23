@@ -1141,6 +1141,56 @@ function withStudyExtras(text: string, extras?: { name?: string; value?: string 
   return `${base}, ${tail}`;
 }
 
+/** Ключи тегов в порядке первого появления в тексте шаблона. */
+export function templateKeyOrder(template?: string): string[] {
+  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template || ""))) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * Порядок пунктов как в тексте шаблона.
+ * Заголовок остаётся перед своим блоком, подпункт без своего тега — сразу за родителем.
+ * Пункты, которых нет в тексте, сохраняют взаимный порядок в конце.
+ */
+export function orderFieldsLikeTemplate<T extends { key?: string; kind?: string; showIf?: { field?: string } | null }>(
+  fields: T[],
+  template?: string,
+): T[] {
+  if (!fields || fields.length < 2) return fields;
+  const order = templateKeyOrder(template);
+  if (!order.length) return fields;
+  const index = new Map(order.map((key, i) => [key, i]));
+  const score = fields.map((f) => {
+    const key = (f.key || "").trim();
+    if (key && index.has(key)) return index.get(key)!;
+    const parent = (f.showIf?.field || "").trim();
+    if (parent && index.has(parent)) return index.get(parent)! + 0.001;
+    return Number.POSITIVE_INFINITY;
+  });
+  for (let i = 0; i < fields.length; i++) {
+    if (fields[i].kind !== "heading") continue;
+    let min = Number.POSITIVE_INFINITY;
+    for (let j = i + 1; j < fields.length; j++) {
+      if (fields[j].kind === "heading") break;
+      if (score[j] < min) min = score[j];
+    }
+    score[i] = Number.isFinite(min) ? min - 0.01 : Number.POSITIVE_INFINITY;
+  }
+  const next = fields
+    .map((f, i) => ({ f, i, s: score[i] }))
+    .sort((a, b) => (a.s === b.s ? a.i - b.i : a.s < b.s ? -1 : 1))
+    .map((row) => row.f);
+  return next.every((f, i) => f === fields[i]) ? fields : next;
+}
+
 /** Склоняемый тег стороны. В шаблоне пишется форма «справа», в протоколе слева подставляется пара. */
 export const SIDE_FORMS: { token: string; r: string; l: string; group: string }[] = [
   { token: "{правая}", r: "правая", l: "левая", group: "жен." },

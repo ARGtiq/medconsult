@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
-import { STUDIES, SIDE_FORMS } from '../../medconsult/data/studies'
+import { STUDIES, SIDE_FORMS, orderFieldsLikeTemplate } from '../../medconsult/data/studies'
+
+export { orderFieldsLikeTemplate }
 import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
 
 export const KIND_OPTIONS = [
@@ -476,7 +478,10 @@ export function listedStudies() {
   const extra = STUDIES.filter(
     (s) => s.category !== 'questionnaire' && s.key !== 'questionnaires' && !keys.has(s.key) && !hidden.has(s.key),
   )
-  return [...live, ...extra]
+  return [...live, ...extra].map((s) => {
+    const fields = orderFieldsLikeTemplate(s.fields || [], s.template || '')
+    return fields === s.fields ? s : { ...s, fields }
+  })
 }
 
 export function splitTemplate(template) {

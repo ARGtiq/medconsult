@@ -4,7 +4,7 @@ import { explicitChips } from "@/legacy/lib/guidelineChips";
 import { getAllMkb10 } from "@/legacy/data/mkb10";
 import { COMPLAINTS, ICD, complaintsForCode } from "./data/catalog";
 import { getComplaintPresets, getComplaintTemplates, complaintOptionSubs, complaintOptionText, type ComplaintTemplate } from "./data/templates";
-import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal, type RefWho } from "./data/studies";
+import { STUDIES, getStudy as seedStudy, studiesFromScales, fieldAbnormal, orderFieldsLikeTemplate, type RefWho } from "./data/studies";
 import type { StudyDef, StudyEntry, StudyField } from "./types";
 
 export const DRUG_FORMS = ["таб.", "капс.", "супп.", "р-р", "амп.", "мазь", "крем", "гель", "капли", "спрей", "порошок", "сироп", "сусп."];
@@ -427,12 +427,12 @@ export function allStudiesLive(): StudyDef[] {
     const live = store.getAllStudies() as StudyDef[];
     if (live?.length) {
       const keys = new Set(live.map((s) => s.key));
-      base = [...live.map((s) => overlayComputed(s)), ...STUDIES.filter((s) => !keys.has(s.key))];
+      base = [...live.map((s) => presentStudy(s)), ...STUDIES.filter((s) => !keys.has(s.key)).map((s) => presentStudy(s))];
     }
   } catch {
     /* seed */
   }
-  if (!base.length) base = STUDIES;
+  if (!base.length) base = STUDIES.map((s) => presentStudy(s));
   const rest = base.filter((s) => s.category !== "questionnaire" && s.key !== "questionnaires" && !qKeys.has(s.key));
   return [...rest, ...qStudies].filter((s) => !hidden.has(s.key));
 }
@@ -697,6 +697,13 @@ type PackNode = {
   studyTriggers?: PackTrigger[];
   subs?: PackNode[];
 };
+
+function presentStudy(def: StudyDef): StudyDef {
+  const over = overlayComputed(def);
+  const fields = orderFieldsLikeTemplate(over.fields || [], over.template || "");
+  if (fields === over.fields) return over;
+  return { ...over, fields };
+}
 
 function overlayComputed(def: StudyDef): StudyDef {
   const seed = STUDIES.find((s) => s.key === def.key);
