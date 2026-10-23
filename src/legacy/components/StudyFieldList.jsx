@@ -159,11 +159,23 @@ export function StudyFieldList(props) {
                       </div>
                       {f.kind !== 'heading' && (
                         <div className="study-field-editor-row">
-                          <input
-                            placeholder="текст перед значением"
-                            value={f.before || ''}
-                            onChange={(e) => updateField(idx, { before: e.target.value })}
-                          />
+                          <span className={`study-before-slot${!(f.before || '').trim() && (f.label || '').trim() ? ' is-hint' : ''}`}>
+                            <input
+                              placeholder="текст перед значением"
+                              value={f.before || ''}
+                              onChange={(e) => updateField(idx, { before: e.target.value })}
+                            />
+                            {!(f.before || '').trim() && (f.label || '').trim() && (
+                              <button
+                                type="button"
+                                className="study-before-hint"
+                                title="Подставить название пункта"
+                                onClick={() => updateField(idx, { before: (f.label || '').trim() })}
+                              >
+                                {(f.label || '').trim()}
+                              </button>
+                            )}
+                          </span>
                           <input
                             placeholder="текст после значения"
                             value={f.after || ''}
