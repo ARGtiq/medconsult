@@ -611,6 +611,17 @@ export function patientRefWho(p?: { age?: string; sex?: string } | null): RefWho
   return { age, sex };
 }
 
+/** Референс исследования: свои пол и возраст, если в карточке пациента пусто. */
+export function mergeRefWho(
+  base: RefWho | null | undefined,
+  entry?: { refSex?: "m" | "f" | ""; refAge?: string },
+): RefWho {
+  const sex = entry?.refSex === "m" || entry?.refSex === "f" ? entry.refSex : base?.sex || "";
+  const ownAge = (entry?.refAge || "").trim();
+  const age = ownAge ? parseNumLoose(ownAge) : base?.age;
+  return { age: age ?? null, sex };
+}
+
 /** Полоса пола/возраста, если включена и пациент в неё попал. Иначе общий референс поля. */
 export function activeRef<T extends StudyField>(field: T, who?: RefWho | null): T {
   const axes = field.refBy || [];
@@ -952,7 +963,7 @@ export function buildAddedInstance(
   };
 }
 export function collectDeviations(
-  studies: { key: string; instances: StudyInstance[] }[],
+  studies: { key: string; instances: StudyInstance[]; hiddenSides?: StudySide[]; refSex?: "m" | "f"; refAge?: string }[],
   lookup: (key: string) => StudyDef | null | undefined,
   who?: RefWho | null,
 ): Deviation[] {
@@ -960,6 +971,8 @@ export function collectDeviations(
   for (const entry of studies || []) {
     const def = lookup(entry.key);
     if (!def) continue;
+    const entryWho = mergeRefWho(who, entry);
+    const hidden = new Set(entry.hiddenSides || []);
     for (const inst of entry.instances || []) {
       const date = prettyDate(inst.date);
       if (def.category === "questionnaire") {
@@ -983,7 +996,9 @@ export function collectDeviations(
         continue;
       }
       const packs = def.lateral
-        ? (["r", "l"] as const).map((side) => ({
+        ? (["r", "l"] as const)
+            .filter((side) => !hidden.has(side))
+            .map((side) => ({
             fields: sideView(inst, side).fields,
             study: `${def.label}, ${side === "r" ? "справа" : "слева"}`,
           }))
@@ -996,7 +1011,7 @@ export function collectDeviations(
           if (f.kind === "heading") continue;
           const val = (fields[f.key] || "").trim();
           if (!val || !fieldShown(f, fields)) continue;
-          const abnormal = fieldAbnormal(val, f.normal, f, fields, who);
+          const abnormal = fieldAbnormal(val, f.normal, f, fields, entryWho);
           const child = !!f.showIf?.field;
           if (!abnormal && !child) continue;
           out.push({
@@ -1004,7 +1019,7 @@ export function collectDeviations(
             studyKey: entry.key,
             label: f.label,
             value: f.unit ? `${val} ${f.unit}` : val,
-            normal: abnormal ? formatRefHint(f, who) : "",
+            normal: abnormal ? formatRefHint(f, entryWho) : "",
             date,
             depth: fieldDepth(f, byKey),
           });
@@ -1286,9 +1301,12 @@ export function fillStudyTemplate(
   previous?: StudyInstance,
   who?: RefWho | null,
   history?: FieldHistory,
+  hideSides?: StudySide[],
 ) {
   if (!def.lateral) return hoistFieldNotes(fillStudyBody(def, instance, previous, who, history));
+  const hidden = new Set(hideSides || []);
   const parts = (["r", "l"] as const)
+    .filter((side) => !hidden.has(side))
     .map((side) => {
       const cur = sideView(instance, side);
       const fields = seedDefaultValues(def, cur.fields);
@@ -1494,7 +1512,7 @@ function dateRank(iso: string): number {
 /** Текст исследования в протоколе. Анализы с несколькими датами — одна строка, старые значения в скобках по дате. */
 export function studyProtocolText(
   def: StudyDef,
-  entry: { instances: StudyInstance[]; previous?: StudyInstance },
+  entry: { instances: StudyInstance[]; previous?: StudyInstance; hiddenSides?: StudySide[] },
   who?: RefWho | null,
   join = " ",
 ): string {
@@ -1504,7 +1522,7 @@ export function studyProtocolText(
     return fillDatedSeries(def, instances, entry.previous, who);
   }
   return instances
-    .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : instances[idx - 1], who))
+    .map((inst, idx) => fillStudyTemplate(def, inst, idx === 0 ? entry.previous : instances[idx - 1], who, undefined, entry.hiddenSides))
     .filter(Boolean)
     .join(join);
 }

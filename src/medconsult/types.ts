@@ -120,6 +120,11 @@ export type StudyEntry = {
   text?: string;
   /** Какая сторона открыта во вкладке протокола. */
   side?: StudySide;
+  /** Стороны, которые не печатаются в протоколе. */
+  hiddenSides?: StudySide[];
+  /** Пол и возраст для референса, если в карточке пациента их нет. */
+  refSex?: "m" | "f";
+  refAge?: string;
 };
 
 export type ExtraBlock = {

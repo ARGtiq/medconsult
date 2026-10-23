@@ -525,6 +525,9 @@ export function StudyTemplatePane(props) {
                   <button type="button" className="btn-secondary btn-small" onClick={() => setTemplateMax(false)}>
                     свернуть
                   </button>
+                  <button type="button" className="study-max-close" title="Закрыть" aria-label="Закрыть" onClick={() => setTemplateMax(false)}>
+                    ×
+                  </button>
                 </div>
               )}
               <div className="study-date-format" role="group" aria-label="Формат даты">

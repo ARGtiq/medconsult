@@ -306,6 +306,19 @@
   min-width: 140px;
   font-weight: 650;
 }
+.legacy-surface .study-max-close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.legacy-surface .study-max-close:hover { background: var(--red-soft, #fbe8e6); color: var(--red, #b23a3a); }
 .legacy-surface .study-before-slot {
   position: relative;
   flex: 1 1 140px;

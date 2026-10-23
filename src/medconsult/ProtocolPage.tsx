@@ -248,6 +248,7 @@ export function ProtocolPage() {
   const complaintTa = useRef<HTMLDivElement>(null);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
+  const [studyOver, setStudyOver] = useState<number | null>(null);
   const [liveSplit, setLiveSplit] = useState<number | null>(null);
   const splitWrap = useRef<HTMLDivElement>(null);
   const splitDragging = useRef(false);
@@ -1230,8 +1231,44 @@ export function ProtocolPage() {
       {!showRecs && (
         <StudyDrugHints studies={session.studies} selected={session.recommendations} onAdd={addRecommendation} />
       )}
-      {session.studies.map((s) => (
-        <StudyCard key={s.key} studyKey={s.key} />
+      {session.studies.map((s, i) => (
+        <div
+          key={s.key}
+          className={`flex items-start gap-1 ${studyOver === i ? "rounded-[10px] ring-1 ring-teal" : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setStudyOver(i);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const from = Number(e.dataTransfer.getData("text/plain"));
+            const studies = session.studies.slice();
+            if (!Number.isInteger(from) || from < 0 || from >= studies.length || from === i) {
+              setStudyOver(null);
+              return;
+            }
+            const [row] = studies.splice(from, 1);
+            studies.splice(i, 0, row);
+            setSession({ studies });
+            setStudyOver(null);
+          }}
+        >
+          <span
+            draggable
+            title="Перетащи"
+            className="mt-2 cursor-grab px-0.5 text-xs text-mute select-none"
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", String(i));
+            }}
+            onDragEnd={() => setStudyOver(null)}
+          >
+            ⋮⋮
+          </span>
+          <div className="min-w-0 flex-1">
+            <StudyCard studyKey={s.key} />
+          </div>
+        </div>
       ))}
       <DeviationsSpoiler />
       </Slot>

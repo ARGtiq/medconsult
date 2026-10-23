@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import LegacySettings from "@/legacy/components/SettingsPage";
 import ThemeSettings from "@/legacy/components/ThemeSettings";
 import "@/legacy/legacy.css";
@@ -7,10 +7,40 @@ import { useAppStore } from "./store";
 
 export function SettingsPage() {
   const { settings, setSettings } = useAppStore();
+  const [keysOpen, setKeysOpen] = useState(false);
   return (
     <AppShell>
       <div className="mx-auto max-w-4xl space-y-3 p-4 pb-24 md:p-8">
         <h1 className="font-display text-2xl">Как ведёт себя станок</h1>
+        <div className="rounded-xl border border-line bg-surface">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium"
+            onClick={() => setKeysOpen((v) => !v)}
+          >
+            <span className="text-mute">{keysOpen ? "▾" : "▸"}</span>
+            Горячие клавиши · Windows
+          </button>
+          {keysOpen && (
+            <table className="w-full border-t border-line px-4 text-sm">
+              <tbody>
+                {[
+                  ["Ctrl + K", "Поиск и вставка фразы / препарата / визита"],
+                  ["Ctrl + Enter", "Копировать всё (без пустых, без шапки)"],
+                  ["Ctrl + Shift + C", "Копировать активный блок"],
+                  ["Ctrl + Shift + H", "Копировать шапку Медлока"],
+                  ["Ctrl + Z", "Отменить последнее «Причесать» AI"],
+                  ["Esc", "Закрыть список обследований / модалку / поиск"],
+                ].map(([k, v]) => (
+                  <tr key={k} className="border-t border-line first:border-t-0">
+                    <td className="py-1.5 pl-4 text-ink-soft">{k}</td>
+                    <td className="py-1.5 pr-4">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <Card title="Интерфейс">
             <p className="mt-1 text-xs text-ink-soft">Акцентный цвет, тёмная тема, анимации и шрифт. Действует на весь станок.</p>
@@ -98,26 +128,6 @@ export function SettingsPage() {
               Поле кода и формулировки переезжает наверх правой колонки. В сборке его нет.
             </p>
           </Card>
-        </div>
-        <div className="rounded-xl border border-line bg-surface p-4">
-          <h3 className="text-sm font-medium">Горячие клавиши · Windows</h3>
-          <table className="mt-2 w-full text-sm">
-            <tbody>
-              {[
-                ["Ctrl + K", "Поиск и вставка фразы / препарата / визита"],
-                ["Ctrl + Enter", "Копировать всё (без пустых, без шапки)"],
-                ["Ctrl + Shift + C", "Копировать активный блок"],
-                ["Ctrl + Shift + H", "Копировать шапку Медлока"],
-                ["Ctrl + Z", "Отменить последнее «Причесать» AI"],
-                ["Esc", "Закрыть список обследований / модалку / поиск"],
-              ].map(([k, v]) => (
-                <tr key={k} className="border-t border-line">
-                  <td className="py-1.5 text-ink-soft">{k}</td>
-                  <td className="py-1.5">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
         <div className="legacy-surface rounded-xl border border-line bg-surface p-3">
           <LegacySettings />

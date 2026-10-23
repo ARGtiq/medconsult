@@ -12,6 +12,7 @@ import {
   formatRefHint,
   groupDeviations,
   patientRefWho,
+  mergeRefWho,
   referenceInsertValue,
   relativeShare,
   sideView,
@@ -358,13 +359,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const toggleStudyOmit = useAppStore((s) => s.toggleStudyOmit);
   const addStudy = useAppStore((s) => s.addStudy);
   const def = getStudyLive(studyKey);
-  const who = patientRefWho(patient);
   const needsSex = !!def?.fields.some((f) => f.refBy?.includes("sex"));
   const needsAge = !!def?.fields.some((f) => f.refBy?.includes("age"));
   const lateral = !!def?.lateral;
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [presetPick, setPresetPick] = useState("");
   if (!def || !entry) return null;
+  const who = mergeRefWho(patientRefWho(patient), entry);
   const side = entry.side === "l" ? "l" : "r";
   const selected = openSection === studyKey;
   const open = !blocksAsSpoiler || selected;
@@ -466,44 +467,84 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   ["r", "справа"],
                   ["l", "слева"],
                 ] as const
-              ).map(([id, label]) => (
+              ).map(([id, label]) => {
+                const hidden = (entry.hiddenSides || []).includes(id);
+                const active = side === id;
+                return (
                 <button
                   key={id}
                   type="button"
                   role="tab"
-                  aria-selected={side === id}
+                  aria-selected={active}
+                  title={hidden ? "Вернуть сторону в протокол" : active ? "Скрыть сторону в протоколе" : "Открыть сторону. Повторный клик скроет её в протоколе"}
                   className={`rounded-md px-3 py-1 text-xs font-medium ${
-                    side === id ? "bg-teal text-paper" : "border border-line bg-paper text-ink-soft"
+                    hidden
+                      ? "border border-line bg-paper text-mute line-through opacity-60"
+                      : active
+                        ? "bg-teal text-paper"
+                        : "border border-line bg-paper text-ink-soft"
                   }`}
-                  onClick={() => patchStudy({ side: id })}
+                  onClick={() => {
+                    if (!active && !hidden) {
+                      patchStudy({ side: id });
+                      return;
+                    }
+                    const next = hidden
+                      ? (entry.hiddenSides || []).filter((s) => s !== id)
+                      : [...(entry.hiddenSides || []), id];
+                    patchStudy({ side: id, hiddenSides: next });
+                  }}
                 >
                   {label}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
           {(needsSex || needsAge) && (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
               <span>референс</span>
-              {needsSex &&
+              {(needsSex || (needsAge && !(patient?.sex || entry.refSex))) &&
                 ([
                   ["m", "муж"],
                   ["f", "жен"],
-                ] as const).map(([id, label]) => (
+                ] as const).map(([id, label]) => {
+                  const on = (patient?.sex || entry.refSex) === id;
+                  return (
                   <button
                     key={id}
                     type="button"
-                    disabled={!patient}
-                    title={patient ? "Пол для норм этого исследования" : "Сначала выбери пациента"}
+                    title="Пол для норм этого исследования"
                     className={`rounded-full px-2 py-0.5 ${
-                      patient?.sex === id ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+                      on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
                     }`}
-                    onClick={() => patient && updatePatient(patient.id, { sex: patient.sex === id ? undefined : id })}
+                    onClick={() => {
+                      if (patient) updatePatient(patient.id, { sex: patient.sex === id ? undefined : id });
+                      else patchStudy({ refSex: entry.refSex === id ? undefined : id });
+                    }}
                   >
                     {label}
                   </button>
-                ))}
-              {needsAge && <span>возраст {patient?.age || "—"}</span>}
+                  );
+                })}
+              {needsAge && String(patient?.age || "").trim() ? (
+                <span>возраст {patient?.age}</span>
+              ) : needsAge ? (
+                <label className="flex items-center gap-1">
+                  возраст
+                  <input
+                    value={patient ? patient.age || "" : entry.refAge || ""}
+                    onChange={(e) => {
+                      const age = e.target.value;
+                      if (patient) updatePatient(patient.id, { age });
+                      else patchStudy({ refAge: age });
+                    }}
+                    inputMode="decimal"
+                    placeholder="лет"
+                    className="w-14 rounded border border-line bg-paper px-1 py-0.5 text-xs text-ink"
+                  />
+                </label>
+              ) : null}
             </div>
           )}
           {def.category === "questionnaire" ? (
