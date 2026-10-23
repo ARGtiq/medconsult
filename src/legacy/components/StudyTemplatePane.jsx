@@ -1,11 +1,13 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { createPortal } from 'react-dom'
 import { formatStudyDate } from '../../medconsult/data/studies'
 import { autoFieldLine } from '../lib/studyLine'
 import { SIDE_FORMS } from '../../medconsult/data/studies'
 import {
   AUTO_TAGS, fieldKeyOf, slugifyFieldKey, blankField, splitTemplate,
   serializeMark, markCaret, placeMarkCaret,
+  isSideTokenKey, sideTokenLabel, nextSideKey,
 } from './studyEditorLib'
 
 const SYSTEM_TAGS = new Set(['date', 'name', 'summary', 'lines', 'abnormal', 'allergy', 'meds'])
@@ -34,7 +36,96 @@ function uniqueFieldKey(fields, base, stamp) {
   return key
 }
 
-function paintMark(el, template, fields) {
+function sideSig(words) {
+  return Object.entries(words || {}).map(([k, v]) => `${k}\u0001${v?.r || ''}\u0001${v?.l || ''}`).join('\u0002')
+}
+
+function applyCap(text, mode) {
+  const s = String(text || '')
+  if (!s) return ''
+  if (mode === 'upper') return s.toLocaleUpperCase('ru-RU')
+  if (mode === 'title') {
+    const lower = s.toLocaleLowerCase('ru-RU')
+    return lower.charAt(0).toLocaleUpperCase('ru-RU') + lower.slice(1)
+  }
+  return s.toLocaleLowerCase('ru-RU')
+}
+
+function detectCap(text) {
+  const s = String(text || '')
+  if (!s) return 'lower'
+  const lower = s.toLocaleLowerCase('ru-RU')
+  const upper = s.toLocaleUpperCase('ru-RU')
+  if (s === upper && s !== lower) return 'upper'
+  const title = lower.charAt(0).toLocaleUpperCase('ru-RU') + lower.slice(1)
+  if (s === title && s !== lower) return 'title'
+  return 'lower'
+}
+
+function SideWordModal({ edit, onSave, onCancel }) {
+  const [r, setR] = useState(edit.r || 'справа')
+  const [l, setL] = useState(edit.l || 'слева')
+  const [cap, setCap] = useState(() => detectCap(edit.r || ''))
+  useEffect(() => {
+    setR(edit.r || 'справа')
+    setL(edit.l || 'слева')
+    setCap(detectCap(edit.r || ''))
+  }, [edit.key, edit.r, edit.l])
+  function useCap(mode) {
+    setCap(mode)
+    setR((v) => applyCap(v, mode))
+    setL((v) => applyCap(v, mode))
+  }
+  const host = document.querySelector('.legacy-surface') || document.body
+  return createPortal(
+    <div className="study-side-modal" onMouseDown={onCancel}>
+      <div className="study-side-modal-card" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Сторона {`{${edit.key}}`}</h3>
+          <button type="button" className="modal-close" onClick={onCancel}>×</button>
+        </div>
+        <div className="study-side-cap" role="group" aria-label="Регистр">
+          <button type="button" className={`btn-secondary btn-small${cap === 'lower' ? ' is-on' : ''}`} onClick={() => useCap('lower')}>строчные</button>
+          <button type="button" className={`btn-secondary btn-small${cap === 'title' ? ' is-on' : ''}`} onClick={() => useCap('title')}>С заглавной</button>
+          <button type="button" className={`btn-secondary btn-small${cap === 'upper' ? ' is-on' : ''}`} onClick={() => useCap('upper')}>КАПС</button>
+        </div>
+        <div className="study-side-pair">
+          <label>
+            справа
+            <input value={r} spellCheck={false} onChange={(e) => setR(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} />
+          </label>
+          <label>
+            слева
+            <input value={l} spellCheck={false} onChange={(e) => setL(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} />
+          </label>
+        </div>
+        <div className="study-side-presets">
+          {SIDE_FORMS.map((p) => {
+            const pr = applyCap(p.r, cap)
+            const pl = applyCap(p.l, cap)
+            const on = r === pr && l === pl
+            return (
+              <button
+                type="button"
+                key={p.token}
+                className={`btn-secondary btn-small${on ? ' is-on' : ''}`}
+                onClick={() => { setR(pr); setL(pl) }}
+              >
+                {pr} / {pl}
+              </button>
+            )
+          })}
+        </div>
+        <div className="drug-form-actions">
+          <button type="button" className="btn-primary" onClick={() => onSave((r || '').trim(), (l || '').trim())}>Готово</button>
+        </div>
+      </div>
+    </div>,
+    host,
+  )
+}
+
+function paintMark(el, template, fields, sideWords) {
   const parts = splitTemplate(String(template || ''))
   const byKey = new Map((fields || []).map((f) => [fieldKeyOf(f), f]))
   el.replaceChildren()
@@ -58,7 +149,13 @@ function paintMark(el, template, fields) {
     btn.contentEditable = 'false'
     btn.dataset.tag = p.key
     btn.dataset.raw = p.raw
-    btn.textContent = byKey.get(p.key)?.label || p.raw
+    if (isSideTokenKey(p.key)) {
+      btn.className = 'study-inline-tag is-side'
+      btn.textContent = sideTokenLabel(p.key, sideWords) || p.raw
+      btn.title = 'Сторона: нажми и задай слова справа и слева'
+    } else {
+      btn.textContent = byKey.get(p.key)?.label || p.raw
+    }
     el.append(btn)
   }
 }
@@ -85,24 +182,24 @@ function placeDropCaret(el, x, y) {
   sel.addRange(range)
 }
 
-function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, onFormatKey, onTokenDrop }) {
+function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, markRef, onFormatKey, onTokenDrop }) {
   const skip = useRef(null)
   const paintedSig = useRef('')
   const painting = useRef(false)
   const localRef = useRef(null)
   const ref = markRef || localRef
-  const sig = fieldSig(fields)
+  const sig = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
   useLayoutEffect(() => {
     const el = ref.current
     if (!el || (skip.current === template && paintedSig.current === sig)) return
     const caret = document.activeElement === el ? markCaret(el) : null
     painting.current = true
-    paintMark(el, template, fields)
+    paintMark(el, template, fields, sideWords)
     skip.current = template
     paintedSig.current = sig
     if (caret) placeMarkCaret(el, caret.start)
     painting.current = false
-  }, [template, sig, ref])
+  }, [template, sig, ref, sideWords])
   return (
     <div
       ref={ref}
@@ -143,9 +240,9 @@ function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, on
         if (onChange(next) === false) {
           const pos = markCaret(el)?.start ?? 0
           painting.current = true
-          paintMark(el, template, fields)
+          paintMark(el, template, fields, sideWords)
           skip.current = template
-          paintedSig.current = fieldSig(fields)
+          paintedSig.current = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
           if (document.activeElement === el) placeMarkCaret(el, pos)
           painting.current = false
           return
@@ -154,8 +251,8 @@ function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, on
         if (markDirty(el)) {
           const pos = markCaret(el)?.start ?? next.length
           painting.current = true
-          paintMark(el, next, fields)
-          paintedSig.current = fieldSig(fields)
+          paintMark(el, next, fields, sideWords)
+          paintedSig.current = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
           placeMarkCaret(el, pos)
           painting.current = false
         }
@@ -184,6 +281,48 @@ function TemplateMark({ template, fields, onChange, onTag, onSelect, markRef, on
 export function StudyTemplatePane(props) {
   const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickFold, pickNamed, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown } = props
   const tagLock = useRef(false)
+  const [sideEdit, setSideEdit] = useState(null)
+  function openSide(key) {
+    const cur = (form.sideWords || {})[key]
+    const legacy = SIDE_FORMS.find((f) => f.token === `{${key}}`)
+    const freshSide = key === 'side' || /^side_\d+$/.test(key || '')
+    setSideEdit({
+      key,
+      fresh: false,
+      r: cur?.r || legacy?.r || (freshSide ? 'справа' : ''),
+      l: cur?.l || legacy?.l || (freshSide ? 'слева' : ''),
+    })
+  }
+  function beginSide() {
+    const key = nextSideKey(form.template, form.sideWords, form.fields)
+    insertToken(`{${key}}`)
+    setForm((prev) => ({
+      ...prev,
+      sideWords: { ...(prev.sideWords || {}), [key]: { r: 'справа', l: 'слева' } },
+    }))
+    setSideEdit({ key, fresh: true, r: 'справа', l: 'слева' })
+  }
+  function saveSide(r, l) {
+    if (!sideEdit) return
+    const key = sideEdit.key
+    setForm((prev) => ({
+      ...prev,
+      sideWords: { ...(prev.sideWords || {}), [key]: { r: r || 'справа', l: l || 'слева' } },
+    }))
+    setSideEdit(null)
+  }
+  function cancelSide() {
+    if (!sideEdit) return
+    const key = sideEdit.key
+    if (sideEdit.fresh) {
+      setForm((prev) => {
+        const sideWords = { ...(prev.sideWords || {}) }
+        delete sideWords[key]
+        return { ...prev, sideWords, template: String(prev.template || '').split(`{${key}}`).join('') }
+      })
+    }
+    setSideEdit(null)
+  }
   function onFormatKey(e) {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return false
     const code = e.code
@@ -197,6 +336,10 @@ export function StudyTemplatePane(props) {
   }
   function openTag(key) {
     if (!key || SYSTEM_TAGS.has(key)) return
+    if (isSideTokenKey(key)) {
+      openSide(key)
+      return
+    }
     const idx = (form.fields || []).findIndex((f) => fieldKeyOf(f) === key || f.key === key)
     if (idx >= 0) {
       setTagEdit({ isNew: false, index: idx, key: form.fields[idx].key || key, originKey: form.fields[idx].key || key, seenKeys: [form.fields[idx].key || key].filter(Boolean) })
@@ -353,23 +496,19 @@ export function StudyTemplatePane(props) {
                   </button>
                   )
                 })}
-                {form.lateral && SIDE_FORMS.map((tag) => {
-                  const used = (form.template || '').includes(tag.token)
-                  return (
-                    <button
-                      type="button"
-                      key={tag.token}
-                      className={`study-template-chip is-auto${used ? ' is-used' : ''}`}
-                      draggable
-                      onDragStart={(e) => onChipDragStart(e, tag.token)}
-                      onClick={() => insertToken(tag.token)}
-                      title={used ? `${tag.group} ${tag.r} / ${tag.l} · уже в тексте` : `${tag.group} справа «${tag.r}», слева «${tag.l}»`}
-                    >
-                      <code>{tag.token}</code>
-                      <span>{tag.group} {tag.l}</span>
-                    </button>
-                  )
-                })}
+                {form.lateral && (
+                  <button
+                    type="button"
+                    className={`study-template-chip is-auto${/\{side(?:_\d+)?\}/.test(form.template || '') ? ' is-used' : ''}`}
+                    draggable
+                    onDragStart={(e) => onChipDragStart(e, '{side}')}
+                    onClick={beginSide}
+                    title="Один тег стороны. В модалке задаётся слово справа и слева: правой / левой, Справа / Слева, КАПС"
+                  >
+                    <code>{'{side}'}</code>
+                    <span>сторона</span>
+                  </button>
+                )}
                 {vitae && [
                   { token: '{allergy}', hint: 'аллергия из карточки' },
                   { token: '{meds}', hint: 'постоянные препараты из карточки' },
@@ -459,11 +598,12 @@ export function StudyTemplatePane(props) {
                   markRef={templateRef}
                   template={form.template || ''}
                   fields={form.fields}
+                  sideWords={form.sideWords}
                   onChange={commitTemplate}
                   onTag={openTag}
                   onSelect={setSelAsk}
                   onFormatKey={onFormatKey}
-                  onTokenDrop={insertToken}
+                  onTokenDrop={(token) => (token === '{side}' ? beginSide() : insertToken(token))}
                 />
               ) : (
               <textarea
@@ -510,6 +650,7 @@ export function StudyTemplatePane(props) {
                   {foldIdle ? 'спойлер вкл' : 'спойлер'}
                 </button>
               </div>
+              {sideEdit && <SideWordModal edit={sideEdit} onSave={saveSide} onCancel={cancelSide} />}
               </div>
   )
 }

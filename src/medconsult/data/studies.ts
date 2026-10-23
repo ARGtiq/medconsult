@@ -696,6 +696,18 @@ export function fieldShown(field: StudyField, values: Record<string, string>): b
   return rule.values.some((v) => parts.includes(v.trim().toLowerCase()));
 }
 
+/** Пустые (ещё не заданные) поля получают фразу из шаблона. Уже стёртое (`""`) не возвращается. */
+export function seedDefaultValues(def: StudyDef, fields?: Record<string, string> | null): Record<string, string> {
+  const next = { ...(fields || {}) };
+  for (const f of def.fields) {
+    if (f.computed || f.kind === "heading") continue;
+    const preset = (f.defaultValue || "").trim();
+    if (!preset) continue;
+    if (next[f.key] == null) next[f.key] = preset;
+  }
+  return next;
+}
+
 /** Fill an empty sub-item with its default phrase while the condition holds; clear that phrase when it does not. */
 export function applyConditionalDefaults(def: StudyDef, fields: Record<string, string>): Record<string, string> {
   let next = fields;
@@ -1130,10 +1142,24 @@ export function sideView(
   return { fields: {}, omit: [] };
 }
 
-function applySideWords(text: string, side: StudySide): string {
-  let next = text;
-  for (const form of SIDE_FORMS) next = next.replaceAll(form.token, side === "r" ? form.r : form.l);
-  return next;
+function pairForSide(key: string, words?: Record<string, { r: string; l: string }>) {
+  const custom = words?.[key];
+  const r = (custom?.r || "").trim();
+  const l = (custom?.l || "").trim();
+  if (r || l) return { r, l };
+  const legacy = SIDE_FORMS.find((f) => f.token === `{${key}}`);
+  if (legacy) return { r: legacy.r, l: legacy.l };
+  if (key === "side" || /^side_\d+$/.test(key)) return { r: "справа", l: "слева" };
+  return null;
+}
+
+function applySideWords(text: string, side: StudySide, words?: Record<string, { r: string; l: string }>): string {
+  const re = /\{(side(?:_\d+)?|правая|правой|правую|правый|правого|правому|правым|правом|правое|справа)\}/g;
+  return text.replace(re, (raw, key: string) => {
+    const pair = pairForSide(key, words);
+    if (!pair) return raw;
+    return side === "r" ? pair.r : pair.l;
+  });
 }
 
 function sideHasValues(fields?: Record<string, string>) {
@@ -1156,12 +1182,17 @@ export function fillStudyTemplate(
   const parts = (["r", "l"] as const)
     .map((side) => {
       const cur = sideView(instance, side);
-      if (!sideHasValues(cur.fields)) return "";
+      const fields = seedDefaultValues(def, cur.fields);
+      if (!sideHasValues(fields)) return "";
       const prev = previous
-        ? { ...previous, fields: sideView(previous, side).fields, omit: sideView(previous, side).omit }
+        ? {
+            ...previous,
+            fields: seedDefaultValues(def, sideView(previous, side).fields),
+            omit: sideView(previous, side).omit,
+          }
         : undefined;
-      const text = fillStudyBody(def, { ...instance, fields: cur.fields, omit: cur.omit }, prev, who);
-      return applySideWords(text, side).trim();
+      const text = fillStudyBody(def, { ...instance, fields, omit: cur.omit }, prev, who);
+      return applySideWords(text, side, def.sideWords).trim();
     })
     .filter(Boolean);
   return parts.join("\n");

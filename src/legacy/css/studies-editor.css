@@ -428,23 +428,67 @@
   inset: 0;
   z-index: 240;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.28);
-  padding: 16px;
+  align-items: stretch;
+  justify-content: stretch;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0;
 }
 .legacy-surface .study-tag-modal-card {
-  width: min(1100px, calc(100vw - 24px));
-  height: calc(100vh - 24px);
-  max-height: calc(100vh - 24px);
+  width: 100%;
+  height: 100%;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px 16px;
+  border-radius: 0;
+  background: var(--panel);
+  border: 0;
+  overflow: hidden;
+}
+.legacy-surface .study-side-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 16px;
+}
+.legacy-surface .study-side-modal-card {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 12px;
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  overflow: hidden;
+}
+.legacy-surface .study-side-cap,
+.legacy-surface .study-side-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.legacy-surface .study-side-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.legacy-surface .study-side-pair label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft, #667);
+}
+.legacy-surface .study-side-pair input {
+  width: 100%;
+  font-size: 14px;
 }
 .legacy-surface .study-tag-modal-body {
   overflow: auto;

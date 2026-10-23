@@ -73,6 +73,8 @@ export type StudyDef = {
   templateEdited?: boolean;
   /** Одно и то же исследование для правой и левой стороны. */
   lateral?: boolean;
+  /** Слова стороны: ключ тега `{side}` → что писать справа и слева. */
+  sideWords?: Record<string, { r: string; l: string }>;
   /** Готовые наборы значений, например по диагнозу. */
   presets?: StudyPreset[];
 };

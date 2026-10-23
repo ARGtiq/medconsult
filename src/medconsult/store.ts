@@ -582,7 +582,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const fields = def ? applyComputed(def, seeded) : seeded;
     const entry: StudyEntry = {
       key,
-      instances: [{ id: uid("i"), date: todayISO(), fields }],
+      instances: [
+        {
+          id: uid("i"),
+          date: todayISO(),
+          fields,
+          ...(def?.lateral
+            ? {
+                bySide: {
+                  r: { fields: { ...fields }, omit: [] },
+                  l: { fields: { ...fields }, omit: [] },
+                },
+              }
+            : {}),
+        },
+      ],
       previous: prevInst ? { ...prevInst, fields: { ...prevInst.fields } } : undefined,
     };
     const studies = [...session.studies, entry];

@@ -26,6 +26,7 @@ import {
   PRESET_STUDIES,
   presetByKey,
   listedStudies,
+  normalizeSideWords,
 } from './studyEditorLib'
 import { StudyFieldList } from './StudyFieldList'
 import { StudyTemplatePane } from './StudyTemplatePane'
@@ -64,8 +65,8 @@ export default function StudiesTab({ scope = 'studies' }) {
       return false
     }
   })
-  const [markMode, setMarkMode] = useState(false)
-  const [templateMax, setTemplateMax] = useState(false)
+  const [markMode, setMarkMode] = useState(true)
+  const [templateMax, setTemplateMax] = useState(true)
   const [tagsFold, setTagsFold] = useState(false)
   const [selAsk, setSelAsk] = useState(null)
   const [tagEdit, setTagEdit] = useState(null)
@@ -123,6 +124,10 @@ export default function StudiesTab({ scope = 'studies' }) {
     setForm(next)
     setOpenField(null)
     setActivePreset('')
+    setMarkMode(true)
+    setTemplateMax(true)
+    setSelAsk(null)
+    setTagEdit(null)
     setFormOpen(true)
   }
 
@@ -141,6 +146,7 @@ export default function StudiesTab({ scope = 'studies' }) {
       templateEdited: merged.templateEdited === true,
       isDefault: !!merged.isDefault,
       lateral: !!merged.lateral,
+      sideWords: normalizeSideWords(merged.sideWords),
       presets: Array.isArray(merged.presets)
         ? merged.presets.map((p) => ({
             id: String(p?.id || `p_${Math.random().toString(36).slice(2, 8)}`),
@@ -151,6 +157,10 @@ export default function StudiesTab({ scope = 'studies' }) {
     })
     setOpenField(null)
     setActivePreset('')
+    setMarkMode(true)
+    setTemplateMax(true)
+    setSelAsk(null)
+    setTagEdit(null)
     setFormOpen(true)
   }
 
@@ -173,8 +183,16 @@ export default function StudiesTab({ scope = 'studies' }) {
           while (used.has(auto)) auto = `${base}_${n++}`
           let from = oldKey
           if (!from && tagEdit) {
-            const seen = [...(tagEdit.seenKeys || []), tagEdit.originKey, tagEdit.key].filter(Boolean)
-            from = [...seen].reverse().find((k) => k !== auto && (template.includes(`{${k}}`) || template.includes(`{+${k}}`))) || ''
+            const modalKey = (tagEdit.key || tagEdit.originKey || '').trim()
+            const modalIdx = modalKey
+              ? prev.fields.findIndex((f) => (f.key || '').trim() === modalKey || fieldKeyOf(f) === modalKey)
+              : typeof tagEdit.index === 'number'
+                ? tagEdit.index
+                : -1
+            if (modalIdx === idx) {
+              const seen = [...(tagEdit.seenKeys || []), tagEdit.originKey, tagEdit.key].filter(Boolean)
+              from = [...seen].reverse().find((k) => k !== auto && (template.includes(`{${k}}`) || template.includes(`{+${k}}`))) || ''
+            }
           }
           if (from && from !== auto) {
             template = retargetToken(template, from, auto)
@@ -678,7 +696,8 @@ export default function StudiesTab({ scope = 'studies' }) {
         return { id: p.id, name: String(p.name || '').trim(), values }
       })
       .filter((p) => p.name || Object.keys(p.values).length)
-    const payload = { ...form, key, fields, presets, sparse: form.sparse, hint: form.hint }
+    const sideWords = normalizeSideWords(form.sideWords)
+    const payload = { ...form, key, fields, presets, sideWords, sparse: form.sparse, hint: form.hint }
     if (vitae) store.saveVitaeTemplate({ ...payload, category: 'vitae' })
     else store.saveCustomStudy(payload)
     refresh()

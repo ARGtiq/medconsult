@@ -8,6 +8,7 @@ import {
   fieldAbnormal,
   fieldShown,
   fillStudyTemplate,
+  seedDefaultValues,
   formatRefHint,
   groupDeviations,
   patientRefWho,
@@ -369,7 +370,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const open = !blocksAsSpoiler || selected;
   const customTitle = studyKey === "custom_lab" ? (entry.instances[0]?.fields.title || "").trim() : "";
   const previous = entry.previous;
-  const prevRaw = previous ? (lateral ? sideView(previous, side).fields : previous.fields) : null;
+  const prevRaw0 = previous ? (lateral ? sideView(previous, side).fields : previous.fields) : null;
+  const prevRaw = prevRaw0 && lateral ? seedDefaultValues(def, prevRaw0) : prevRaw0;
   const prevFields = prevRaw ? applyComputed(def, applyConditionalDefaults(def, prevRaw)) : null;
   const patchStudy = (patch: Partial<StudyEntry>) => {
     const studies = useAppStore.getState().session.studies;
@@ -444,7 +446,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                   const preset = (def.presets || []).find((p) => p.id === id);
                   const inst = entry.instances[0];
                   if (!preset || !inst) return;
-                  const shown = lateral ? sideView(inst, side).fields : inst.fields;
+                  const shown = lateral ? seedDefaultValues(def, sideView(inst, side).fields) : inst.fields;
                   updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date);
                 }}
                 className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
@@ -517,7 +519,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
           ) : (
           <>
           {entry.instances.map((inst, idx) => {
-            const shown = lateral ? sideView(inst, side) : { fields: inst.fields, omit: inst.omit || [] };
+            const rawShown = lateral ? sideView(inst, side) : { fields: inst.fields, omit: inst.omit || [] };
+            const shown = lateral ? { ...rawShown, fields: seedDefaultValues(def, rawShown.fields) } : rawShown;
             const baseFields = applyConditionalDefaults(def, shown.fields);
             const fields = applyComputed(def, baseFields);
             const visible = def.fields.filter((f) => fieldShown(f, baseFields));

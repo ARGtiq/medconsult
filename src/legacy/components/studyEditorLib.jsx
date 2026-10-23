@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { store } from '../lib/store'
 import { BUILTIN_STUDIES } from '../data/studyProtocols'
-import { STUDIES } from '../../medconsult/data/studies'
+import { STUDIES, SIDE_FORMS } from '../../medconsult/data/studies'
 import { autoFieldLine, replaceWholeLine, syncFieldLine } from '../lib/studyLine'
 
 export const KIND_OPTIONS = [
@@ -71,6 +71,7 @@ export function blankForm() {
     templateEdited: false,
     lateral: false,
     presets: [],
+    sideWords: {},
   }
 }
 
@@ -486,7 +487,75 @@ export function splitTemplate(template) {
     last = m.index + m[0].length
   }
   if (last < template.length || !parts.length) parts.push({ type: 'text', text: template.slice(last), start: last })
-  return parts
+  return explodeLegacySides(parts)
+}
+
+const LEGACY_SIDE = new Map(SIDE_FORMS.map((f) => [f.token.slice(1, -1), f]))
+
+export function isSideTokenKey(key) {
+  return key === 'side' || /^side_\d+$/.test(key || '') || LEGACY_SIDE.has(key)
+}
+
+export function sideTokenLabel(key, words) {
+  const custom = words?.[key]
+  const written = String(custom?.r || '').trim()
+  if (written) return written
+  const legacy = LEGACY_SIDE.get(key)
+  if (legacy) return legacy.r
+  if (key === 'side' || /^side_\d+$/.test(key || '')) return 'справа'
+  return ''
+}
+
+export function nextSideKey(template, words, fields) {
+  const used = new Set(Object.keys(words || {}))
+  for (const f of fields || []) {
+    const k = String(f?.key || '').trim()
+    if (k) used.add(k)
+  }
+  const re = /\{(side(?:_\d+)?)\}/g
+  let m
+  while ((m = re.exec(template || ''))) used.add(m[1])
+  if (!used.has('side')) return 'side'
+  let n = 2
+  while (used.has(`side_${n}`)) n += 1
+  return `side_${n}`
+}
+
+export function normalizeSideWords(raw) {
+  const out = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [k, v] of Object.entries(raw)) {
+    if (!k || !v || typeof v !== 'object') continue
+    const r = String(v.r || '').trim()
+    const l = String(v.l || '').trim()
+    if (r || l) out[k] = { r, l }
+  }
+  return out
+}
+
+function explodeLegacySides(parts) {
+  const keys = SIDE_FORMS.map((f) => f.token.slice(1, -1)).join('|')
+  const re = new RegExp(`\\{(${keys})\\}`, 'g')
+  const out = []
+  for (const p of parts) {
+    if (p.type !== 'text' || !p.text || !p.text.includes('{')) {
+      out.push(p)
+      continue
+    }
+    let last = 0
+    let m
+    let any = false
+    while ((m = re.exec(p.text))) {
+      any = true
+      if (m.index > last) out.push({ type: 'text', text: p.text.slice(last, m.index), start: (p.start || 0) + last })
+      out.push({ type: 'tag', raw: m[0], key: m[1], start: (p.start || 0) + m.index })
+      last = m.index + m[0].length
+    }
+    re.lastIndex = 0
+    if (!any) out.push(p)
+    else if (last < p.text.length) out.push({ type: 'text', text: p.text.slice(last), start: (p.start || 0) + last })
+  }
+  return out
 }
 
 function markPiece(n, into) {
