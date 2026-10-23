@@ -56,6 +56,13 @@ export function StudyTagModal(props) {
       return { ...cur, key: live, index, originKey: cur.originKey || cur.key, seenKeys: seen }
     })
   }, [field, index, setTagEdit, tagEdit])
+  const focusKey = tagEdit?.focusKey || (field ? (field.key || fieldKeyOf(field) || '').trim() : '')
+  useEffect(() => {
+    if (!focusKey || index < 0) return
+    const root = document.querySelector('.study-tag-modal')
+    const node = root?.querySelector(`[data-field-key="${CSS.escape(focusKey)}"]`)
+    node?.scrollIntoView({ block: 'nearest' })
+  }, [focusKey, index])
   if (!tagEdit || !field || index < 0) return null
   function saveTag() {
     setForm((prev) => {
@@ -117,7 +124,7 @@ export function StudyTagModal(props) {
     saveTag()
     const idx = (form.fields || []).findIndex((f) => (f.key || fieldKeyOf(f)) === nextKey)
     if (idx < 0) return
-    setTagEdit({ isNew: false, index: idx, key: nextKey, originKey: nextKey, seenKeys: [nextKey] })
+    setTagEdit({ isNew: false, index: idx, key: nextKey, originKey: nextKey, seenKeys: [nextKey], focusKey: nextKey })
   }
   const host = document.querySelector('.legacy-surface') || document.body
   return createPortal(
@@ -139,7 +146,7 @@ export function StudyTagModal(props) {
           <button type="button" className="modal-close" onClick={() => close(true)}>×</button>
         </div>
         <div className="drug-form study-tag-modal-body">
-          <StudyFieldList {...fieldProps} form={form} only={index} />
+          <StudyFieldList {...fieldProps} form={form} only={index} focusKey={focusKey} />
           <div className="drug-form-actions">
             <button type="button" className="btn-primary" onClick={() => close(false)}>Готово</button>
           </div>

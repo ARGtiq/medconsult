@@ -20,7 +20,7 @@ function fieldInFamily(fields, root, idx) {
 }
 
 export function StudyFieldList(props) {
-  const { form, dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions, applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle, insertFormulaToken, moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption, renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef, toggleShowValue, updateField, only } = props
+  const { form, dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions, applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle, insertFormulaToken, moveField, openField, parentChoices, removeField, removeGroup, removeGroupOpt, removeOption, renameGroupOpt, renameOption, setDragKids, setGroupDraft, setOpenField, setOverField, toggleRef, toggleShowValue, updateField, only, focusKey } = props
   return (
               <div className="study-editor-fields">
               <div className="scenarios-block">
@@ -88,10 +88,12 @@ export function StudyFieldList(props) {
                     .split(/[,;/|]+/)
                     .map((s) => s.trim().toLowerCase())
                     .filter(Boolean)
+                  const focused = focusKey && (fieldKeyOf(f) === focusKey || f.key === focusKey)
                   return (
                     <div
                       key={idx}
-                      className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}`}
+                      data-field-key={fieldKeyOf(f) || f.key || ''}
+                      className={`study-field-block${overField === idx ? ' is-over' : ''}${f.showIf?.field ? ' is-sub' : ''}${f.kind === 'heading' ? ' is-heading' : ''}${focused ? ' is-focus' : ''}`}
                       onDragOver={(e) => {
                         e.preventDefault()
                         setOverField(idx)

@@ -123,7 +123,7 @@ function SideWordModal({ edit, onSave, onCancel }) {
   )
 }
 
-function paintMark(el, template, fields, sideWords) {
+function paintMark(el, template, fields, sideWords, open) {
   const parts = splitTemplate(String(template || ''))
   const byKey = new Map((fields || []).map((f) => [fieldKeyOf(f), f]))
   el.replaceChildren()
@@ -132,7 +132,8 @@ function paintMark(el, template, fields, sideWords) {
       el.append(document.createTextNode(p.text || ''))
       continue
     }
-    if (SYSTEM_TAGS.has(p.key)) {
+    const field = byKey.get(p.key)
+    if (SYSTEM_TAGS.has(p.key) && !field) {
       const sys = document.createElement('span')
       sys.className = 'study-inline-sys'
       sys.contentEditable = 'false'
@@ -141,21 +142,39 @@ function paintMark(el, template, fields, sideWords) {
       el.append(sys)
       continue
     }
-    const btn = document.createElement('button')
-    btn.type = 'button'
+    const btn = document.createElement('span')
+    btn.setAttribute('role', 'button')
+    btn.tabIndex = -1
     btn.className = 'study-inline-tag'
     btn.contentEditable = 'false'
     btn.dataset.tag = p.key
     btn.dataset.raw = p.raw
-    if (isSideTokenKey(p.key)) {
+    if (isSideTokenKey(p.key) && !field) {
       btn.className = 'study-inline-tag is-side'
       btn.textContent = sideTokenLabel(p.key, sideWords) || p.raw
       btn.title = 'Сторона: нажми и задай слова справа и слева'
     } else {
-      btn.textContent = byKey.get(p.key)?.label || p.raw
+      btn.textContent = field?.label || p.raw
     }
+    btn.addEventListener('mousedown', (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      open?.(p.key)
+    })
     el.append(btn)
   }
+}
+
+function tagFromEvent(e) {
+  const raw = e.target?.nodeType === 1 ? e.target : e.target?.parentElement
+  const direct = raw?.closest?.('.study-inline-tag')
+  if (direct) return direct
+  const stack = document.elementsFromPoint?.(e.clientX, e.clientY) || []
+  for (const el of stack) {
+    const btn = el?.closest?.('.study-inline-tag')
+    if (btn) return btn
+  }
+  return null
 }
 
 function markDirty(el) {
@@ -187,12 +206,15 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
   const localRef = useRef(null)
   const ref = markRef || localRef
   const sig = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
+  const onTagRef = useRef(onTag)
+  onTagRef.current = onTag
+  const openPainted = (key) => onTagRef.current?.(key)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el || (skip.current === template && paintedSig.current === sig)) return
     const caret = document.activeElement === el ? markCaret(el) : null
     painting.current = true
-    paintMark(el, template, fields, sideWords)
+    paintMark(el, template, fields, sideWords, openPainted)
     skip.current = template
     paintedSig.current = sig
     if (caret) placeMarkCaret(el, caret.start)
@@ -216,8 +238,8 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
         onTokenDrop(token)
       }}
       onMouseDown={(e) => {
-        const btn = e.target.closest?.('.study-inline-tag')
-        if (!btn) return
+        const btn = tagFromEvent(e)
+        if (!btn || !e.currentTarget.contains(btn)) return
         e.preventDefault()
         onTag(btn.dataset.tag)
       }}
@@ -238,7 +260,7 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
         if (onChange(next) === false) {
           const pos = markCaret(el)?.start ?? 0
           painting.current = true
-          paintMark(el, template, fields, sideWords)
+          paintMark(el, template, fields, sideWords, openPainted)
           skip.current = template
           paintedSig.current = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
           if (document.activeElement === el) placeMarkCaret(el, pos)
@@ -249,14 +271,14 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
         if (markDirty(el)) {
           const pos = markCaret(el)?.start ?? next.length
           painting.current = true
-          paintMark(el, next, fields, sideWords)
+          paintMark(el, next, fields, sideWords, openPainted)
           paintedSig.current = `${fieldSig(fields)}\u0003${sideSig(sideWords)}`
           placeMarkCaret(el, pos)
           painting.current = false
         }
       }}
       onMouseUp={(e) => {
-        if (e.target.closest?.('.study-inline-tag')) return
+        if (tagFromEvent(e)) return
         const picked = markCaret(e.currentTarget)
         if (!picked || picked.end <= picked.start) {
           onSelect(null)
@@ -333,14 +355,18 @@ export function StudyTemplatePane(props) {
     return false
   }
   function openTag(key) {
-    if (!key || SYSTEM_TAGS.has(key)) return
-    if (isSideTokenKey(key)) {
+    if (!key) return
+    const fields = form.fields || []
+    const owned = fields.some((f) => fieldKeyOf(f) === key || f.key === key)
+    if (!owned && SYSTEM_TAGS.has(key)) return
+    if (!owned && isSideTokenKey(key)) {
       openSide(key)
       return
     }
-    const fields = form.fields || []
     let idx = fields.findIndex((f) => fieldKeyOf(f) === key || f.key === key)
     if (idx >= 0) {
+      const focus = fields[idx]
+      const focusKey = focus.key || fieldKeyOf(focus) || key
       const seen = new Set()
       while (fields[idx]?.showIf?.field && !seen.has(idx)) {
         seen.add(idx)
@@ -351,7 +377,7 @@ export function StudyTemplatePane(props) {
       }
       const root = fields[idx]
       const rootKey = root.key || fieldKeyOf(root) || key
-      setTagEdit({ isNew: false, index: idx, key: rootKey, originKey: rootKey, seenKeys: [rootKey].filter(Boolean) })
+      setTagEdit({ isNew: false, index: idx, key: rootKey, originKey: rootKey, seenKeys: [rootKey].filter(Boolean), focusKey })
       return
     }
     setForm((prev) => {

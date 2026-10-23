@@ -435,11 +435,13 @@
   font-weight: 650;
 }
 .legacy-surface .study-inline-tag {
-  display: inline;
+  display: inline-block;
+  position: relative;
+  z-index: 1;
   margin: 0 1px;
-  padding: 0;
+  padding: 0 2px;
   border: 0;
-  border-radius: 0;
+  border-radius: 3px;
   background: none;
   color: var(--teal);
   font: inherit;
@@ -447,6 +449,11 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+.legacy-surface .study-field-block.is-focus {
+  outline: 2px solid var(--teal, #3d6b5e);
 }
 .legacy-surface .study-inline-phrase {
   font-size: 10px;
