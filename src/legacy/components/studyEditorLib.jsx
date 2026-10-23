@@ -485,7 +485,7 @@ export function listedStudies() {
 }
 
 export function splitTemplate(template) {
-  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  const re = /\{[+]?([\p{L}\p{N}_]+)\}/gu
   const parts = []
   let last = 0
   let m
@@ -542,7 +542,7 @@ export function normalizeSideWords(raw) {
 }
 
 export function topTemplateTags(template, fields) {
-  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  const re = /\{[+]?([\p{L}\p{N}_]+)\}/gu
   const byKey = new Map((fields || []).map((f) => [fieldKeyOf(f), f]))
   const out = []
   let m
@@ -680,7 +680,7 @@ export function tagTip(f) {
 
 export function tagsInTemplate(template, fields) {
   const keys = []
-  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  const re = /\{[+]?([\p{L}\p{N}_]+)\}/gu
   let m
   while ((m = re.exec(template || ''))) {
     if (!keys.includes(m[1])) keys.push(m[1])

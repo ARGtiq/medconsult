@@ -26,7 +26,7 @@ export function fillTemplate(template, date, fieldValues, dateFormat, fields) {
     const unit = f.unit ? ` ${f.unit}` : ''
     text = text.split(token).join(`${String(f.label || f.key).trim()} - ${v}${unit}`)
   }
-  text = text.replace(/\{(\w+)\}/g, (_, key) => (fieldValues?.[key]?.trim() ? fieldValues[key].trim() : '__'))
+  text = text.replace(/\{([\p{L}\p{N}_]+)\}/gu, (_, key) => (fieldValues?.[key]?.trim() ? fieldValues[key].trim() : '__'))
   if (!named) return text
   return text
     .split('\n')

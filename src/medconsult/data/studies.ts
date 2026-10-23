@@ -539,14 +539,14 @@ export function evalFormula(expr: string, fields: Record<string, string>): strin
   if (!raw) return "";
   if (raw === "prostate_volume") return prostateVolume(fields.length || "", fields.width || "", fields.height || "");
   if (raw === "sperm_total") return spermTotal(fields.volume || "", fields.concentration || "");
-  const refs = [...raw.matchAll(/\{([a-zA-Z0-9_]+)\}/g)].map((m) => m[1]);
+  const refs = [...raw.matchAll(/\{([\p{L}\p{N}_]+)\}/gu)].map((m) => m[1]);
   if (refs.some((k) => parseNumLoose(fields[k] || "") == null)) return "";
   let s = raw;
   for (const k of refs.sort((a, b) => b.length - a.length)) {
     const n = parseNumLoose(fields[k] || "");
     s = s.replaceAll(`{${k}}`, n == null ? "NaN" : String(n));
   }
-  s = s.replace(/\{[a-zA-Z0-9_]+\}/g, "NaN");
+  s = s.replace(/\{[\p{L}\p{N}_]+\}/gu, "NaN");
   s = s.replace(/(\d),(\d)/g, "$1.$2");
   if (s.includes("NaN") || !/^[\d.eE\s+\-*/()]+$/.test(s)) return "";
   try {
@@ -1143,7 +1143,7 @@ function withStudyExtras(text: string, extras?: { name?: string; value?: string 
 
 /** Ключи тегов в порядке первого появления в тексте шаблона. */
 export function templateKeyOrder(template?: string): string[] {
-  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g;
+  const re = /\{[+]?([\p{L}\p{N}_]+)\}/gu;
   const out: string[] = [];
   const seen = new Set<string>();
   let m: RegExpExecArray | null;

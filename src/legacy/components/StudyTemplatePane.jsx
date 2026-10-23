@@ -389,7 +389,7 @@ export function StudyTemplatePane(props) {
   const tagEditRef = useRef(null)
   tagEditRef.current = props.tagEdit
   function tokenKeys(text) {
-    return new Set([...String(text || '').matchAll(/\{[+]?([a-zA-Z0-9_]+)\}/g)].map((m) => m[1]))
+    return new Set([...String(text || '').matchAll(/\{[+]?([\p{L}\p{N}_]+)\}/gu)].map((m) => m[1]))
   }
   function commitTemplate(value) {
     const prev = props.form
