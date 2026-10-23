@@ -74,6 +74,10 @@ export function mdToHtml(src) {
   s = s.replace(/(<\/ul>|<\/ol>|<\/h[234]>)\n+/g, '$1')
   s = s.replace(/\n{2,}/g, '</p><p>')
   s = s.replace(/\n/g, '<br/>')
+  s = s.replace(/\[c\]([\s\S]+?)\[\/c\]/g, '<div style="text-align:center">$1</div>')
+  s = s.replace(/\[r\]([\s\S]+?)\[\/r\]/g, '<div style="text-align:right">$1</div>')
+  s = s.replace(/\[j\]([\s\S]+?)\[\/j\]/g, '<div style="text-align:justify">$1</div>')
+  s = s.replace(/\{\.n\}([\s\S]+?)\{\/\.n\}/g, '<span class="study-note">$1</span>')
   s = s.replace(/(^|<br\/>)(Источник: [^<]*)/g, '$1<span class="pack-source">$2</span>')
   return `<p>${s}</p>`.replace(/<p>\s*<\/p>/g, '')
 }

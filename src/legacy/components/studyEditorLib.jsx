@@ -227,6 +227,7 @@ export function toEditorField(f) {
       : [],
     before: sidesOf(f).before,
     after: sidesOf(f).after,
+    note: f.note ? String(f.note) : undefined,
     showHeading: f.showHeading === false ? false : undefined,
   }
 }
@@ -319,6 +320,8 @@ export function serializeField(f) {
   const after = (f.after || '').trim()
   if (before) out.before = before
   if (after) out.after = after
+  const note = (f.note || '').trim()
+  if (note) out.note = note
   const phrase = before || after
     ? [before, '{value}', after].filter(Boolean).join(' ')
     : (f.phrase || '').trim()
@@ -529,6 +532,19 @@ export function normalizeSideWords(raw) {
     const r = String(v.r || '').trim()
     const l = String(v.l || '').trim()
     if (r || l) out[k] = { r, l }
+  }
+  return out
+}
+
+export function topTemplateTags(template, fields) {
+  const re = /\{[+]?([a-zA-Z0-9_]+)\}/g
+  const byKey = new Map((fields || []).map((f) => [fieldKeyOf(f), f]))
+  const out = []
+  let m
+  while ((m = re.exec(template || ''))) {
+    const f = byKey.get(m[1])
+    if (!f || f.kind === 'heading' || f.showIf?.field) continue
+    if (!out.includes(m[1])) out.push(m[1])
   }
   return out
 }

@@ -1,7 +1,7 @@
 import { mdToHtml } from "@/legacy/lib/md";
 
 export function hasMarkup(text: string) {
-  return /\*\*[^*\n]+\*\*|\*[^*\n]+\*|^\s*[-*] |\+\+[^\n]+?\+\+/m.test(text || "");
+  return /\*\*[^*\n]+\*\*|\*[^*\n]+\*|^\s*[-*] |\+\+[^\n]+?\+\+|\[(?:c|r|j)\][\s\S]+?\[\/(?:c|r|j)\]|\{\.n\}/m.test(text || "");
 }
 
 export function plainMarkup(text: string) {
@@ -9,7 +9,9 @@ export function plainMarkup(text: string) {
     .replace(/\*\*([^*\n]+)\*\*/g, "$1")
     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2")
     .replace(/\+\+([^\n]+?)\+\+/g, "$1")
-    .replace(/^\s*[-*] /gm, "• ");
+    .replace(/^\s*[-*] /gm, "• ")
+    .replace(/\[(c|r|j)\]([\s\S]*?)\[\/\1\]/g, "$2")
+    .replace(/\{\.n\}([\s\S]*?)\{\/\.n\}/g, "$1");
 }
 
 export async function copyText(text: string) {

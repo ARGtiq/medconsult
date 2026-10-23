@@ -38,6 +38,8 @@ export type StudyField = {
   before?: string;
   /** Текст после введённого значения в протоколе. */
   after?: string;
+  /** Мелкое пояснение под пунктом в протоколе. */
+  note?: string;
   formula?: string;
   refOp?: "lt" | "lte" | "gt" | "gte" | "range" | "eq";
   refMin?: number;

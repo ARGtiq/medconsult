@@ -62,6 +62,7 @@ export function printHtml(bodyHtml, title = 'Протокол') {
   .print-section h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; color: #4a5c6a; margin: 0 0 4px; }
   .print-section div { white-space: pre-wrap; }
   .pack-source { display: block; margin-top: 4px; font-size: 11px; color: #6b7280; }
+  .study-note { display: block; font-size: 10px; line-height: 1.35; color: #667; }
   .print-footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #777; white-space: pre-wrap; }
   @media print { body { padding: 0; } }
 </style>

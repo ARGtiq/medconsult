@@ -296,6 +296,53 @@
   min-height: 160px;
   height: 100%;
 }
+.legacy-surface .study-template-pane.is-max.is-with-editor {
+  padding-left: min(460px, 48vw);
+  box-sizing: border-box;
+}
+.legacy-surface .study-max-title {
+  flex: 1 1 180px;
+  min-width: 140px;
+  font-weight: 650;
+}
+.legacy-surface .study-field-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 1 1 100%;
+}
+.legacy-surface .study-field-note textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.legacy-surface .study-tag-modal.is-dock {
+  background: transparent;
+  pointer-events: none;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.legacy-surface .study-tag-modal.is-dock .study-tag-modal-card {
+  pointer-events: auto;
+  width: min(460px, 48vw);
+  height: 100%;
+  border-right: 1px solid var(--line);
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.16);
+}
+.legacy-surface .study-tag-modal-card .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.legacy-surface .study-tag-modal-card .modal-header h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.legacy-surface .study-tag-modal-card .btn-small:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .legacy-surface .study-template-pane.is-max {
   position: fixed;
   inset: 0;

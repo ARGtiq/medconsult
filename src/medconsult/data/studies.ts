@@ -1041,6 +1041,29 @@ export function formatDeviations(list: Deviation[]) {
     .join(". ");
 }
 
+function withFieldNote(text: string, note?: string): string {
+  const n = (note || "").trim();
+  const body = (text || "").trim();
+  if (!body || !n) return text;
+  return `${text}{.n}${n}{/.n}`;
+}
+
+/** Пояснение встаёт в конец строки, а не между значением и единицами. */
+function hoistFieldNotes(text: string): string {
+  if (!text || !text.includes("{.n}")) return text;
+  return text.split("\n").map((line) => {
+    if (!line.includes("{.n}")) return line;
+    const notes: string[] = [];
+    const body = line.replace(/\{\.n\}([\s\S]*?)\{\/\.n\}/g, (_, n: string) => {
+      const t = String(n || "").trim();
+      if (t) notes.push(t);
+      return "";
+    }).replace(/[ \t]{2,}/g, " ").replace(/[ \t]+([,.;:])/g, "$1").trim();
+    if (!notes.length) return body;
+    return [body, ...notes.map((n) => `{.n}${n}{/.n}`)].filter(Boolean).join("\n");
+  }).join("\n");
+}
+
 function fieldShownText(f: StudyField, value: string) {
   const before = (f.before || "").trim();
   const after = (f.after || "").trim();
@@ -1063,7 +1086,7 @@ function filledFieldBit(
   const bad = fieldAbnormal(v, f.normal, f, fields, who);
   const value = markDeviant(`${v}${unit}`.trim(), p ? `${p}${unit}`.trim() : "", prevDate, bad);
   const shown = fieldShownText(f, value);
-  return { label: f.showHeading === false ? "" : f.label, shown };
+  return { label: f.showHeading === false ? "" : f.label, shown: withFieldNote(shown, f.note) };
 }
 
 /** `{name}` `{summary}` `{lines}` `{abnormal}` — unless a field already owns that key. */
@@ -1178,7 +1201,7 @@ export function fillStudyTemplate(
   previous?: StudyInstance,
   who?: RefWho | null,
 ) {
-  if (!def.lateral) return fillStudyBody(def, instance, previous, who);
+  if (!def.lateral) return hoistFieldNotes(fillStudyBody(def, instance, previous, who));
   const parts = (["r", "l"] as const)
     .map((side) => {
       const cur = sideView(instance, side);
@@ -1195,7 +1218,27 @@ export function fillStudyTemplate(
       return applySideWords(text, side, def.sideWords).trim();
     })
     .filter(Boolean);
-  return parts.join("\n");
+  return hoistFieldNotes(joinLateralTexts(parts));
+}
+
+/** Общее начало (название, дата) один раз, дальше текст справа и слева отдельно. */
+function joinLateralTexts(parts: string[]): string {
+  if (parts.length < 2) return parts.join("\n");
+  const right = parts[0];
+  const left = parts[1];
+  if (right === left) return right;
+  let i = 0;
+  const n = Math.min(right.length, left.length);
+  while (i < n && right[i] === left[i]) i += 1;
+  let end = i;
+  while (end > 0 && !/[\s:.;,\n)]/.test(right[end - 1])) end -= 1;
+  const boundary = Math.max(right.lastIndexOf(":", end), right.lastIndexOf("\n", end), right.lastIndexOf(".", end));
+  if (boundary < 0) return parts.join("\n");
+  const title = right.slice(0, boundary + 1).trim();
+  const rBody = right.slice(boundary + 1).trim();
+  const lBody = left.slice(boundary + 1).trim();
+  if (title.length < 4 || !rBody || !lBody) return parts.join("\n");
+  return [title, rBody, lBody].join("\n");
 }
 
 function fillStudyBody(
@@ -1270,7 +1313,7 @@ function fillStudyBody(
       const shown = markDeviant(cur, prev, prevDate, bad);
       const text = fieldShownText(f, shown);
       const label = f.showHeading === false ? "" : f.label;
-      bits.push(`${label} ${text}`.trim());
+      bits.push(withFieldNote(`${label} ${text}`.trim(), f.note));
     }
     if (!bits.length) return withStudyExtras("", instance.extras, `${def.label} от ${date}`);
     return withStudyExtras(`${def.label} от ${date}: ${bits.join(", ")}.`, instance.extras);
@@ -1280,7 +1323,7 @@ function fillStudyBody(
   for (const f of def.fields) {
     const named = `{+${f.key}}`;
     if (!text.includes(named)) continue;
-    text = text.split(named).join(namedFieldText(f, fields, prevFields, omit, prevDate, who));
+    text = text.split(named).join(withFieldNote(namedFieldText(f, fields, prevFields, omit, prevDate, who), f.note));
   }
   for (const f of def.fields) {
     const hidden = !fieldShown(f, fields);
@@ -1292,7 +1335,7 @@ function fillStudyBody(
       f.kind === "heading" || omit.has(f.key) || hidden || (!v && f.computed)
         ? ""
         : fieldShownText(f, valueBit);
-    text = text.replaceAll(`{${f.key}}`, replacement);
+    text = text.replaceAll(`{${f.key}}`, withFieldNote(replacement, f.note));
   }
   for (const tag of ["name", "summary", "lines", "abnormal"]) {
     if (!text.includes(`{${tag}}`)) continue;
@@ -1304,7 +1347,7 @@ function fillStudyBody(
     if (!f.showIf?.field || !fieldShown(f, fields) || omit.has(f.key)) continue;
     if (def.template.includes(`{${f.key}}`) || def.template.includes(`{+${f.key}}`)) continue;
     const phrase = (fields[f.key] || "").trim();
-    if (phrase) text = `${text} ${phrase}`;
+    if (phrase) text = `${text} ${withFieldNote(phrase, f.note)}`;
   }
   return withStudyExtras(
     text

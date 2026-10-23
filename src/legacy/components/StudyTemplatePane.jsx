@@ -279,7 +279,7 @@ function TemplateMark({ template, fields, sideWords, onChange, onTag, onSelect, 
 }
 
 export function StudyTemplatePane(props) {
-  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickFold, pickNamed, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown } = props
+  const { form, fieldTags, foldIdle, insertToken, markMode, markupTemplate, namedTag, onChipDragStart, pickFold, pickNamed, pickSide, selAsk, setForm, setMarkMode, setSelAsk, setTagEdit, setTagsFold, setTemplateMax, tagH, tagsFold, templateMax, templateRef, templateSide, vitae, onTagSplitDown, addPreset, activePreset, setActivePreset, patchPreset, removePreset } = props
   const tagLock = useRef(false)
   const [sideEdit, setSideEdit] = useState(null)
   function openSide(key) {
@@ -340,9 +340,20 @@ export function StudyTemplatePane(props) {
       openSide(key)
       return
     }
-    const idx = (form.fields || []).findIndex((f) => fieldKeyOf(f) === key || f.key === key)
+    const fields = form.fields || []
+    let idx = fields.findIndex((f) => fieldKeyOf(f) === key || f.key === key)
     if (idx >= 0) {
-      setTagEdit({ isNew: false, index: idx, key: form.fields[idx].key || key, originKey: form.fields[idx].key || key, seenKeys: [form.fields[idx].key || key].filter(Boolean) })
+      const seen = new Set()
+      while (fields[idx]?.showIf?.field && !seen.has(idx)) {
+        seen.add(idx)
+        const parentKey = fields[idx].showIf.field
+        const parent = fields.findIndex((f) => fieldKeyOf(f) === parentKey || f.key === parentKey)
+        if (parent < 0 || parent === idx) break
+        idx = parent
+      }
+      const root = fields[idx]
+      const rootKey = root.key || fieldKeyOf(root) || key
+      setTagEdit({ isNew: false, index: idx, key: rootKey, originKey: rootKey, seenKeys: [rootKey].filter(Boolean) })
       return
     }
     setForm((prev) => {
@@ -411,9 +422,48 @@ export function StudyTemplatePane(props) {
   const pattern = datePattern(form.dateFormat)
   const datePreview = formatStudyDate('2026-09-25', form.dateFormat || 'ДД.ММ.ГГГГ')
   return (
-              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}`}>
+              <div className={`study-template-pane${templateSide === 'below' ? '' : ' is-float'}${templateSide === 'below' ? '' : ' is-resizable'}${templateMax ? ' is-max' : ''}${templateMax && props.tagEdit ? ' is-with-editor' : ''}`}>
               {templateMax && (
-                <div className="study-date-format">
+                <div className="study-date-format study-max-head">
+                  <input
+                    className="study-max-title"
+                    value={form.label}
+                    placeholder={vitae ? 'Название шаблона' : 'Название исследования'}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({ ...prev, label: value }))
+                    }}
+                  />
+                  {!vitae && (
+                    <button type="button" className="btn-secondary btn-small" onClick={addPreset}>
+                      + подшаблон
+                    </button>
+                  )}
+                  {!vitae && (form.presets || []).length > 0 && (
+                    <select
+                      aria-label="Подшаблон"
+                      value={activePreset || ''}
+                      onChange={(e) => setActivePreset(e.target.value)}
+                    >
+                      <option value="">не выбран</option>
+                      {(form.presets || []).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name || 'без названия'}</option>
+                      ))}
+                    </select>
+                  )}
+                  {!vitae && (form.presets || []).some((p) => p.id === activePreset) && (
+                    <>
+                      <input
+                        className="study-preset-name"
+                        value={(form.presets || []).find((p) => p.id === activePreset)?.name || ''}
+                        placeholder="название, например диагноз"
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                        onChange={(e) => patchPreset(activePreset, { name: e.target.value })}
+                      />
+                      <button type="button" className="study-preset-x" title="Убрать подшаблон" onClick={() => removePreset(activePreset)}>×</button>
+                    </>
+                  )}
                   <button type="submit" className="btn-primary btn-small">
                     сохранить
                   </button>
@@ -579,6 +629,9 @@ export function StudyTemplatePane(props) {
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('**')} title="Полужирный (Ctrl+B)">Ж</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('*')} title="Курсив (Ctrl+I)">К</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('++')} title="Подчёркивание (Ctrl+U)">Ч</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('[c]', '[/c]')} title="По центру">центр</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('[r]', '[/r]')} title="По правому краю">вправо</button>
+                <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('[j]', '[/j]')} title="По ширине">ширина</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n- ', '')} title="Маркированный список (Ctrl+Shift+8)">• список</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n1. ', '')} title="Нумерованный список (Ctrl+Shift+7)">1. список</button>
                 <button type="button" className="btn-secondary btn-small" onClick={() => markupTemplate('\n- [ ] ', '')} title="Чеклист (Ctrl+Shift+9)">☐ список</button>

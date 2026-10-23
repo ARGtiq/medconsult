@@ -1560,7 +1560,7 @@ function ProtocolText({ text }: { text: string }) {
   }
   return (
     <div
-      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_.pack-source]:mt-1 [&_.pack-source]:block [&_.pack-source]:text-[11px] [&_.pack-source]:text-mute [&_strong]:font-semibold [&_u]:underline [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+      className="text-sm leading-relaxed [&_em]:italic [&_p]:m-0 [&_.pack-source]:mt-1 [&_.pack-source]:block [&_.pack-source]:text-[11px] [&_.pack-source]:text-mute [&_.study-note]:mt-0.5 [&_.study-note]:block [&_.study-note]:text-[10px] [&_.study-note]:leading-snug [&_.study-note]:text-mute [&_strong]:font-semibold [&_u]:underline [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
       dangerouslySetInnerHTML={{ __html: mdToHtml(text) }}
     />
   );

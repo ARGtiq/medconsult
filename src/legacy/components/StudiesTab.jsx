@@ -898,7 +898,7 @@ export default function StudiesTab({ scope = 'studies' }) {
               <div className={`study-editor-split is-${templateSide}`}>
               <StudyFieldList form={form} dragKids={dragKids} overField={overField} addChild={addChild} addField={addField} addGroup={addGroup} addGroupOpt={addGroupOpt} addHeading={addHeading} addOptions={addOptions} applyFormulaPreset={applyFormulaPreset} descendantIdxs={descendantIdxs} dragFrom={dragFrom} duplicateField={duplicateField} foldIdle={foldIdle} insertFormulaToken={insertFormulaToken} moveField={moveField} openField={openField} parentChoices={parentChoices} removeField={removeField} removeGroup={removeGroup} removeGroupOpt={removeGroupOpt} removeOption={removeOption} renameGroupOpt={renameGroupOpt} renameOption={renameOption} setDragKids={setDragKids} setGroupDraft={setGroupDraft} setOpenField={setOpenField} setOverField={setOverField} toggleRef={toggleRef} toggleShowValue={toggleShowValue} updateField={updateField} />
 
-              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} />
+              <StudyTemplatePane form={form} fieldTags={fieldTags} foldIdle={foldIdle} insertToken={insertToken} markMode={markMode} markupTemplate={markupTemplate} namedTag={namedTag} onChipDragStart={onChipDragStart} onTagSplitDown={onTagSplitDown} pickFold={pickFold} pickNamed={pickNamed} pickSide={pickSide} selAsk={selAsk} setForm={setForm} setMarkMode={setMarkMode} setSelAsk={setSelAsk} setTagEdit={setTagEdit} setTagsFold={setTagsFold} setTemplateMax={setTemplateMax} tagEdit={tagEdit} tagH={tagH} tagsFold={tagsFold} templateMax={templateMax} templateRef={templateRef} templateSide={templateSide} vitae={vitae} addPreset={addPreset} activePreset={activePreset} setActivePreset={setActivePreset} patchPreset={patchPreset} removePreset={removePreset} />
               </div>
 
               <AutoResizeTextarea
@@ -915,6 +915,7 @@ export default function StudiesTab({ scope = 'studies' }) {
                 setForm={setForm}
                 setTagEdit={setTagEdit}
                 tagEdit={tagEdit}
+                dockLeft={templateMax}
                 fieldProps={{
                   dragKids, overField, addChild, addField, addGroup, addGroupOpt, addHeading, addOptions,
                   applyFormulaPreset, descendantIdxs, dragFrom, duplicateField, foldIdle: false, insertFormulaToken,

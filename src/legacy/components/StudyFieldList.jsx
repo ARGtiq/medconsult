@@ -132,19 +132,6 @@ export function StudyFieldList(props) {
                           onChange={(e) => updateField(idx, { label: e.target.value })}
                         />
                         {f.kind !== 'heading' && (
-                          <label className="study-field-check" title="Если выключено, в тексте исследования остаётся только значение">
-                            <input
-                              type="checkbox"
-                              checked={f.showHeading !== false}
-                              onChange={(e) => updateField(idx, { showHeading: e.target.checked ? undefined : false })}
-                            />
-                            заголовок
-                          </label>
-                        )}
-                        {f.kind !== 'heading' && (
-                          <input placeholder="ед. изм." value={f.unit} onChange={(e) => updateField(idx, { unit: e.target.value })} />
-                        )}
-                        {f.kind !== 'heading' && (
                         <input
                           placeholder="тег"
                           value={f.key}
@@ -182,6 +169,22 @@ export function StudyFieldList(props) {
                             value={f.after || ''}
                             onChange={(e) => updateField(idx, { after: e.target.value })}
                           />
+                          {f.note == null ? (
+                            <button type="button" className="btn-secondary btn-small" onClick={() => updateField(idx, { note: '' })}>
+                              + пояснение
+                            </button>
+                          ) : (
+                            <span className="study-field-note">
+                              <AutoResizeTextarea
+                                compact
+                                minRows={1}
+                                placeholder="пояснение под пунктом, мелким шрифтом"
+                                value={f.note}
+                                onChange={(e) => updateField(idx, { note: e.target.value })}
+                              />
+                              <button type="button" className="study-preset-x" title="Убрать пояснение" onClick={() => updateField(idx, { note: undefined })}>×</button>
+                            </span>
+                          )}
                         </div>
                       )}
 
