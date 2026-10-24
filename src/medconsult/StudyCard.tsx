@@ -24,6 +24,7 @@ import {
 import type { StudyDef, StudyEntry, StudyExtra, StudyField } from "./types";
 import { useTemplates } from "./data/templates";
 import { allStudiesLive, getStudyLive, icdMatches } from "./live";
+import { store as legacyStore } from "@/legacy/lib/store";
 import { scaleFromStudyKey, studyKeyForScale } from "./data/questionnaires";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { useAppStore } from "./store";
@@ -364,6 +365,8 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const lateral = !!def?.lateral;
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   const [presetPick, setPresetPick] = useState("");
+  const [presetName, setPresetName] = useState<string | null>(null);
+  const presetCommit = useRef(false);
   if (!def || !entry) return null;
   const who = mergeRefWho(patientRefWho(patient), entry);
   const side = entry.side === "l" ? "l" : "r";
@@ -391,6 +394,22 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
   const asText = () => {
     const text = studyProtocolText(def, entry, who, "\n");
     patchStudy({ textMode: true, text: text || entry.text || "" });
+  };
+  const savePreset = () => {
+    const name = (presetName || "").trim();
+    setPresetName(null);
+    if (!name) return;
+    const inst = entry.instances[0];
+    if (!inst) return;
+    const shown = lateral ? sideView(inst, side).fields : inst.fields;
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(shown || {})) {
+      if (String(v || "").trim()) values[k] = String(v);
+    }
+    const raw = ((legacyStore.getAllStudies() as StudyDef[]) || []).find((s) => s.key === studyKey) || def;
+    const preset = { id: `sp_${Date.now().toString(36)}`, name, values };
+    legacyStore.saveCustomStudy({ ...raw, presets: [...(raw.presets || []), preset] });
+    setPresetPick(preset.id);
   };
 
   return (
@@ -432,34 +451,60 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
       ) : null}
       {open && !entry.textMode && (
         <div className="mt-2 space-y-2">
-          {(def.presets || []).some((p) => p.name || Object.keys(p.values || {}).length) && (
-            <label className="flex items-center gap-2 text-[11px] text-ink-soft">
-              подшаблон
-              <select
-                aria-label="Подшаблон значений"
-                value={presetPick}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setPresetPick(id);
-                  const preset = (def.presets || []).find((p) => p.id === id);
-                  const inst = entry.instances[0];
-                  if (!preset || !inst) return;
-                  const shown = lateral ? seedDefaultValues(def, sideView(inst, side).fields) : inst.fields;
-                  updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date);
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
+            <select
+              aria-label="Подшаблон значений"
+              value={presetPick}
+              onChange={(e) => {
+                const id = e.target.value;
+                setPresetPick(id);
+                const preset = (def.presets || []).find((p) => p.id === id);
+                const inst = entry.instances[0];
+                if (!preset || !inst) return;
+                const shown = lateral ? seedDefaultValues(def, sideView(inst, side).fields) : inst.fields;
+                updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date);
+              }}
+              className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
+            >
+              <option value="">подшаблон</option>
+              {(def.presets || [])
+                .filter((p) => p.name || Object.keys(p.values || {}).length)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || "без названия"}
+                  </option>
+                ))}
+            </select>
+            {presetName === null ? (
+              <button type="button" className="font-medium text-teal" onClick={() => setPresetName("")}>
+                сохранить подшаблон
+              </button>
+            ) : (
+              <input
+                autoFocus
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    presetCommit.current = true;
+                    savePreset();
+                  }
+                  if (e.key === "Escape") setPresetName(null);
                 }}
-                className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
-              >
-                <option value="">выбрать</option>
-                {(def.presets || [])
-                  .filter((p) => p.name || Object.keys(p.values || {}).length)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || "без названия"}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
+                onBlur={() => {
+                  if (presetCommit.current) {
+                    presetCommit.current = false;
+                    return;
+                  }
+                  if ((presetName || "").trim()) savePreset();
+                  else setPresetName(null);
+                }}
+                placeholder="название + Enter"
+                className="w-36 rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
+              />
+            )}
+          </div>
           {lateral && (
             <div className="flex gap-1" role="tablist" aria-label="Сторона">
               {(

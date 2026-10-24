@@ -61,6 +61,7 @@ declare module "@/legacy/lib/store" {
     getGuidelines: () => Record<string, unknown> | unknown[];
     getGuidelinesForCodes: (codes: string[]) => Record<string, unknown>[];
     getAllStudies: () => unknown[];
+    saveCustomStudy: (study: Record<string, unknown>) => unknown;
     getVitaeTemplates: () => unknown[];
     getVitaeDefault: () => string;
     setVitaeDefault: (key: string) => string;
