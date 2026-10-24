@@ -395,7 +395,7 @@ type AppStore = {
   addStudy: (key: string) => void;
   removeStudy: (key: string) => void;
   addStudyInstance: (key: string) => void;
-  updateInstance: (key: string, instanceId: string, fields: Record<string, string>, date?: string) => void;
+  updateInstance: (key: string, instanceId: string, fields: Record<string, string>, date?: string, omit?: string[]) => void;
   toggleStudyOmit: (key: string, instanceId: string, fieldKey: string) => void;
   removeInstance: (key: string, instanceId: string) => void;
   toggleBlock: (id: string) => void;
@@ -642,7 +642,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (copied) get().setToast("Скопировал предыдущие значения");
   },
 
-  updateInstance(key, instanceId, fields, date) {
+  updateInstance(key, instanceId, fields, date, omit) {
     const def = getStudyLive(key);
     const session = get().session;
     const studies = session.studies.map((s) => {
@@ -654,12 +654,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           if (i.id !== instanceId) return i;
           const raw = def ? applyConditionalDefaults(def, fields) : fields;
           const computed = def ? applyComputed(def, raw) : fields;
-          if (!def?.lateral) return { ...i, fields: computed, date: date ?? i.date };
+          if (!def?.lateral) return { ...i, fields: computed, date: date ?? i.date, ...(omit ? { omit } : {}) };
           const bySide = {
             r: i.bySide?.r || { fields: { ...i.fields }, omit: [...(i.omit || [])] },
             l: i.bySide?.l || { fields: {}, omit: [] as string[] },
           };
-          bySide[side] = { ...(bySide[side] || { fields: {}, omit: [] }), fields: computed };
+          bySide[side] = { ...(bySide[side] || { fields: {}, omit: [] }), fields: computed, ...(omit ? { omit } : {}) };
           return {
             ...i,
             date: date ?? i.date,

@@ -116,17 +116,6 @@ export function SettingsPage() {
               По наведению на «i» показывать краткую карточку
             </label>
             <p className="mt-1 text-xs text-ink-soft">Клик по «i» по-прежнему открывает полное окно. Аллергия, лекарства и болезни.</p>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.diagnosisAbovePreview === true}
-                onChange={(e) => setSettings({ diagnosisAbovePreview: e.target.checked })}
-              />
-              Диагноз над «В Медлок»
-            </label>
-            <p className="mt-1 text-xs text-ink-soft">
-              Поле кода и формулировки переезжает наверх правой колонки. В сборке его нет.
-            </p>
           </Card>
         </div>
         <div className="legacy-surface rounded-xl border border-line bg-surface p-3">

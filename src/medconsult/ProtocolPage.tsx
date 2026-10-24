@@ -745,7 +745,7 @@ export function ProtocolPage() {
         </p>
       )}
 
-      {!settings.diagnosisAbovePreview && <Slot order={slotOf("diagnosis", 10)}>{diagnosisBlock}</Slot>}
+      {diagnosisBlock}
 
       {hubMode === "modal" && guideline && !documentMode && (
         <>
@@ -1362,7 +1362,6 @@ export function ProtocolPage() {
 
   const preview = (
     <div className="flex h-full flex-col gap-1.5 bg-preview p-2.5 md:p-3">
-      {settings.diagnosisAbovePreview && diagnosisBlock}
       <div className="flex flex-wrap items-center gap-1.5">
         <h3 className="min-w-0 flex-1 text-[10px] font-semibold tracking-wide text-ink-soft uppercase">В Медлок / Word</h3>
         <button

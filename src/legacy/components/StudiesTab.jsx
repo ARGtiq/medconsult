@@ -156,6 +156,7 @@ export default function StudiesTab({ scope = 'studies' }) {
             id: String(p?.id || `p_${Math.random().toString(36).slice(2, 8)}`),
             name: String(p?.name || ''),
             values: p?.values && typeof p.values === 'object' ? { ...p.values } : {},
+            omit: Array.isArray(p?.omit) ? p.omit.map((k) => String(k || '')).filter(Boolean) : [],
           }))
         : [],
     })
@@ -729,9 +730,14 @@ export default function StudiesTab({ scope = 'studies' }) {
           const text = String(v ?? '').trim()
           if (k && text) values[k] = text
         })
-        return { id: p.id, name: String(p.name || '').trim(), values }
+        return {
+          id: p.id,
+          name: String(p.name || '').trim(),
+          values,
+          omit: Array.isArray(p.omit) ? p.omit.map((k) => String(k || '')).filter(Boolean) : [],
+        }
       })
-      .filter((p) => p.name || Object.keys(p.values).length)
+      .filter((p) => p.name || Object.keys(p.values).length || p.omit.length)
     const sideWords = normalizeSideWords(form.sideWords)
     const payload = { ...form, key, fields, presets, sideWords, sparse: form.sparse, hint: form.hint }
     if (vitae) store.saveVitaeTemplate({ ...payload, category: 'vitae' })

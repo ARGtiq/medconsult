@@ -85,6 +85,8 @@ export type StudyPreset = {
   id: string;
   name: string;
   values: Record<string, string>;
+  /** Поля, которые не печатаются. */
+  omit?: string[];
 };
 
 export type StudyExtra = {

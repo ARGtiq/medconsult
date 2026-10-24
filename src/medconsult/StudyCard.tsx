@@ -402,12 +402,13 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
     const inst = entry.instances[0];
     if (!inst) return;
     const shown = lateral ? sideView(inst, side).fields : inst.fields;
+    const hidden = lateral ? sideView(inst, side).omit : inst.omit || [];
     const values: Record<string, string> = {};
     for (const [k, v] of Object.entries(shown || {})) {
       if (String(v || "").trim()) values[k] = String(v);
     }
     const raw = ((legacyStore.getAllStudies() as StudyDef[]) || []).find((s) => s.key === studyKey) || def;
-    const preset = { id: `sp_${Date.now().toString(36)}`, name, values };
+    const preset = { id: `sp_${Date.now().toString(36)}`, name, values, omit: [...hidden] };
     legacyStore.saveCustomStudy({ ...raw, presets: [...(raw.presets || []), preset] });
     setPresetPick(preset.id);
   };
@@ -462,7 +463,7 @@ export function StudyCard({ studyKey }: { studyKey: string }) {
                 const inst = entry.instances[0];
                 if (!preset || !inst) return;
                 const shown = lateral ? seedDefaultValues(def, sideView(inst, side).fields) : inst.fields;
-                updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date);
+                updateInstance(studyKey, inst.id, { ...shown, ...(preset.values || {}) }, inst.date, preset.omit || []);
               }}
               className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs text-ink"
             >
