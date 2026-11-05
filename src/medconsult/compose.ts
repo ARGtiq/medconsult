@@ -81,7 +81,9 @@ export function composeBlocks(
     const generated = new Set(localStatusLines(session.localPicks || [], packs, []));
     const free = (session.localStatus || []).filter((x) => !generated.has(x));
     const loc = showLoc
-      ? formatLocalStatus(session.localPicks || [], packs, session.activeLocalPacks || [], free)
+      ? session.localTextMode
+        ? (session.localStatusText || "").trim()
+        : formatLocalStatus(session.localPicks || [], packs, session.activeLocalPacks || [], free)
       : "";
     const title = obj && loc ? "Объективный + локальный статус" : obj ? "Объективный статус" : "Локальный статус";
     push(obj && !loc ? "objective" : "status", title, [obj, loc].filter(Boolean).join("\n"));

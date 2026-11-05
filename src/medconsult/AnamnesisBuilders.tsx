@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { LiveTextarea } from "./StudyCard";
 import {
@@ -30,6 +30,52 @@ import { useAppStore } from "./store";
 import { Typeahead } from "./Typeahead";
 import { FieldControl } from "./StudyCard";
 import { EditableChips } from "./EditableChip";
+
+function QuietInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [text, setText] = useState(value);
+  const focused = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!focused.current) setText(value);
+  }, [value]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return (
+    <input
+      value={text}
+      placeholder={placeholder}
+      className={className}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={() => {
+        focused.current = false;
+        if (timer.current) clearTimeout(timer.current);
+        if (text !== value) onChange(text);
+      }}
+      onChange={(e) => {
+        const next = e.target.value;
+        setText(next);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => onChange(next), 420);
+      }}
+    />
+  );
+}
 import {
   fillVitaeTemplate,
   templateDefaults,
@@ -400,9 +446,9 @@ function PresetPicker({
                   + примечание
                 </button>
                 {s.noteOn && (
-                  <input
+                  <QuietInput
                     value={s.note || ""}
-                    onChange={(e) => onChange(selected.map((x) => (x.id === s.id ? { ...x, note: e.target.value } : x)))}
+                    onChange={(note) => onChange(selected.map((x) => (x.id === s.id ? { ...x, note } : x)))}
                     placeholder="примечание к операции"
                     className={`mt-0.5 w-full rounded-md border border-line bg-paper px-2 py-1 ${size}`}
                   />
@@ -1334,9 +1380,9 @@ export function VitaeChipFields({
               ]}
             />
             {d.smoke === "yes" && (
-              <input
+              <QuietInput
                 value={d.smokePacks}
-                onChange={(e) => patch({ smokePacks: e.target.value, risks: "yes" })}
+                onChange={(smokePacks) => patch({ smokePacks, risks: "yes" })}
                 placeholder="пачек в сутки"
                 className="mt-1 w-full rounded-md border border-line bg-paper px-2 py-1 text-[10px]"
               />

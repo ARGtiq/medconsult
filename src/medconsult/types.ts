@@ -206,6 +206,9 @@ export type SessionState = {
   objective: string;
   localStatus: string[];
   localStatusAutoFor?: string;
+  /** Свой текст локального статуса вместо чипов. */
+  localTextMode?: boolean;
+  localStatusText?: string;
   activeLocalPacks?: string[];
   localPicks?: LocalPick[];
   studies: StudyEntry[];

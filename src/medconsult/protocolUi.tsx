@@ -140,6 +140,50 @@ function noteFor(name: string, dosage: string, frequency: string, duration: stri
   return "";
 }
 
+function schemeText(v: { dosage: string; frequency: string; duration: string; label?: string }) {
+  return [v.dosage, v.frequency, v.duration].map((s) => (s || "").trim()).filter(Boolean).join(" · ") || (v.label || "").trim() || "схема";
+}
+
+function SchemeChips({
+  name,
+  dosage,
+  frequency,
+  days,
+  onPick,
+}: {
+  name: string;
+  dosage: string;
+  frequency: string;
+  days: string;
+  onPick: (v: { dosage: string; frequency: string; duration: string }) => void;
+}) {
+  const schemes = variantsOf(name);
+  if (schemes.length < 2) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {schemes.map((v, i) => {
+        const label = schemeText(v);
+        const on =
+          dosage.trim() === (v.dosage || "").trim() &&
+          frequency.trim() === (v.frequency || "").trim() &&
+          days.trim() === (v.duration || "").trim();
+        return (
+          <button
+            key={`${label}-${i}`}
+            type="button"
+            onClick={() => onPick({ dosage: v.dosage, frequency: v.frequency, duration: v.duration })}
+            className={`rounded-full px-2 py-0.5 text-[11px] ${
+              on ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function DrugSearch({
   diagnosisCode,
   diagnosisTitle,
@@ -209,7 +253,7 @@ function DrugSearch({
         label: mention.text,
         detail:
           vars.length > 1
-            ? "несколько доз"
+            ? vars.map((v) => schemeText(v)).join(" | ")
             : [primary?.dosage, primary?.frequency, primary?.duration].filter(Boolean).join(" · ") || undefined,
         hint: h.via,
         note: (rec?.extra || "").trim() || undefined,
@@ -452,21 +496,18 @@ function DrugSearch({
           ))}
         </datalist>
       )}
-      {name && doses.length > 1 && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {doses.map((d) => (
-            <button
-              key={d.value}
-              type="button"
-              onClick={() => onDose(d.value)}
-              className={`rounded-full px-2 py-0.5 text-[11px] ${
-                dosage === d.value ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
-              }`}
-            >
-              {d.value}
-            </button>
-          ))}
-        </div>
+      {name && (
+        <SchemeChips
+          name={name}
+          dosage={dosage}
+          frequency={frequency}
+          days={days}
+          onPick={(v) => {
+            setDosage(v.dosage);
+            setFrequency(v.frequency);
+            setDays(v.duration);
+          }}
+        />
       )}
       {name && brandOptions.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
@@ -516,7 +557,7 @@ function DrugSearch({
       )}
       {!name && (
         <p className="mt-1.5 text-xs text-mute">
-          Общая фраза — напишите и Enter, поле останется одним. Лекарство из списка: клик или Tab — доза, торговое, кратность и курс. Пустое торговое — все названия в скобках.
+          Общая фраза — напишите и Enter, поле останется одним. Лекарство из списка: клик или Tab — доза, торговое, кратность и курс. Если схем несколько, чип показывает дозу, кратность и длительность. Пустое торговое — все названия в скобках.
         </p>
       )}
       {!q.trim() && !!diagnosisCode && hits.length > 0 && (
@@ -651,22 +692,17 @@ function DrugLineEditor({
           ))}
         </datalist>
       )}
-      {doses.length > 1 && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {doses.map((d) => (
-            <button
-              key={d.value}
-              type="button"
-              onClick={() => onDose(d.value)}
-              className={`rounded-full px-2 py-0.5 text-[11px] ${
-                dosage === d.value ? "bg-teal-soft font-medium text-teal" : "border border-line bg-paper"
-              }`}
-            >
-              {d.value}
-            </button>
-          ))}
-        </div>
-      )}
+      <SchemeChips
+        name={name}
+        dosage={dosage}
+        frequency={frequency}
+        days={days}
+        onPick={(v) => {
+          setDosage(v.dosage);
+          setFrequency(v.frequency);
+          setDays(v.duration);
+        }}
+      />
       {brandOptions.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {brandOptions.map((b) => (

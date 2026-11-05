@@ -333,6 +333,10 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
   const q = query.trim().toLowerCase();
   if (q.length < 2) return [];
   const last = lastQueryToken(query);
+  const templates = liveComplaintTemplates();
+  const withOptions = new Set(
+    templates.filter((c) => (c.options || []).length).map((c) => c.text.toLowerCase()),
+  );
   const seen = new Set<string>();
   const words: SuggestHit[] = [];
   const combo: SuggestHit[] = [];
@@ -345,7 +349,7 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
         words.push({
           id: "w-" + w,
           label: w,
-          hint: optionsForComplaint(w).length ? "опции" : "слово",
+          hint: withOptions.has(w) ? "опции" : "слово",
         });
       }
     }
@@ -357,11 +361,10 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
     if (!matchPhraseOrWord(t, query)) continue;
     seen.add(low);
     const multi = tokensOf(t).length > 1;
-    const hasOpts = optionsForComplaint(t).length > 0;
     combo.push({
       id: "p-" + t,
       label: t,
-      hint: hasOpts ? "опции" : multi ? "фраза" : undefined,
+      hint: withOptions.has(low) ? "опции" : multi ? "фраза" : undefined,
     });
   }
 
@@ -376,16 +379,98 @@ export function suggestFromPhrases(query: string, phrases: string[], limit = 12)
   return [...words, ...combo].slice(0, limit);
 }
 
-export function suggestComplaints(query: string, limit = 12): SuggestHit[] {
-  const hits = suggestFromPhrases(query, liveComplaints(), limit);
+type ComplaintCatalog = {
+  stamp: string;
+  rows: { text: string; low: string; tokens: string[]; hint?: string }[];
+  counts: Map<string, number>;
+  withOptions: Set<string>;
+};
+
+let complaintCatalogCache: ComplaintCatalog | null = null;
+
+function storageRaw(key: string) {
+  try {
+    if (typeof localStorage === "undefined") return "";
+    return localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storageStamp(raw: string) {
+  let h = raw.length;
+  const step = Math.max(1, Math.floor(raw.length / 48));
+  for (let i = 0; i < raw.length; i += step) h = (Math.imul(h, 33) + raw.charCodeAt(i)) >>> 0;
+  return `${raw.length}:${h}`;
+}
+
+/** Словарь жалоб разбирается один раз, пока справочник в localStorage не изменился. */
+function complaintCatalog(): ComplaintCatalog {
+  const stamp = `${storageStamp(storageRaw("medconsult_v2_templates"))}|${storageStamp(storageRaw("medconsult_ns_reference"))}`;
+  if (complaintCatalogCache && complaintCatalogCache.stamp === stamp) return complaintCatalogCache;
+  const templates = liveComplaintTemplates();
+  const withOptions = new Set(
+    templates.filter((c) => (c.options || []).length).map((c) => c.text.toLowerCase()),
+  );
   const counts = new Map<string, number>();
+  let learned: string[] = [];
   try {
     for (const s of store.getComplaintSuggestions("") as { text: string; count: number }[]) {
+      learned.push(s.text);
       counts.set(s.text.toLowerCase(), s.count || 0);
     }
   } catch {
-    /* */
+    learned = [];
   }
+  const phrases = Array.from(
+    new Set(
+      [...templates.map((c) => c.text), ...learned, ...COMPLAINTS.map((c) => c.text)]
+        .map((t) => t.trim())
+        .filter(Boolean),
+    ),
+  );
+  const rows = phrases.map((text) => {
+    const low = text.toLowerCase();
+    const tokens = tokensOf(text);
+    const hint = withOptions.has(low) ? "опции" : tokens.length > 1 ? "фраза" : undefined;
+    return { text, low, tokens, hint };
+  });
+  complaintCatalogCache = { stamp, rows, counts, withOptions };
+  return complaintCatalogCache;
+}
+
+export function suggestComplaints(query: string, limit = 12): SuggestHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const last = lastQueryToken(query);
+  const { rows, counts, withOptions } = complaintCatalog();
+  const seen = new Set<string>();
+  const words: SuggestHit[] = [];
+  const combo: SuggestHit[] = [];
+  if (last.length >= 2) {
+    for (const row of rows) {
+      for (const w of row.tokens) {
+        if (!w.startsWith(last) || seen.has(w)) continue;
+        seen.add(w);
+        words.push({ id: "w-" + w, label: w, hint: withOptions.has(w) ? "опции" : "слово" });
+      }
+    }
+  }
+  for (const row of rows) {
+    if (seen.has(row.low)) continue;
+    const hit = row.low.includes(q) || (last.length >= 2 && row.tokens.some((w) => w.startsWith(last)));
+    if (!hit) continue;
+    seen.add(row.low);
+    combo.push({ id: "p-" + row.text, label: row.text, hint: row.hint });
+  }
+  words.sort((a, b) => a.label.length - b.label.length || a.label.localeCompare(b.label, "ru"));
+  combo.sort((a, b) => {
+    const as = a.label.toLowerCase().startsWith(q) ? 0 : 1;
+    const bs = b.label.toLowerCase().startsWith(q) ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return a.label.localeCompare(b.label, "ru");
+  });
+  const hits = [...words, ...combo].slice(0, limit);
   hits.sort((a, b) => (counts.get(b.label.toLowerCase()) || 0) - (counts.get(a.label.toLowerCase()) || 0));
   return hits;
 }
@@ -396,21 +481,12 @@ export function complaintsForSession(code: string) {
     ...(compactGuideline(code)?.complaints || []),
   ];
   const uniqueCode = Array.from(new Set(fromCode));
-  const rest = liveComplaints()
+  const { rows, counts } = complaintCatalog();
+  const rest = rows
+    .map((row) => row.text)
     .filter((t) => !uniqueCode.includes(t))
-    .sort((a, b) => (complaintCount(b) || 0) - (complaintCount(a) || 0));
+    .sort((a, b) => (counts.get(b.toLowerCase()) || 0) - (counts.get(a.toLowerCase()) || 0));
   return { fromCode: uniqueCode, rest };
-}
-
-function complaintCount(text: string) {
-  try {
-    const hit = (store.getComplaintSuggestions(text) as { text: string; count: number }[]).find(
-      (s) => s.text.toLowerCase() === text.toLowerCase(),
-    );
-    return hit?.count || 0;
-  } catch {
-    return 0;
-  }
 }
 
 export function allStudiesLive(): StudyDef[] {

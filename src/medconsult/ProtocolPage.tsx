@@ -8,7 +8,7 @@ import { mdToHtml } from "@/legacy/lib/md";
 import { getGuidelineHubMode } from "@/legacy/lib/uiPrefs";
 import { PlusDocBlockButton, PlusGlobalButton, PlusPackButton, SaveGlobalButton } from "./DocBlocks";
 import { ComplaintChips, ComplaintOptionMenu, EditableChips, type OptionMenuState } from "./EditableChip";
-import { localItems, localStatusLines, protocolBlockOrder, useTemplates, addObjectiveTemplate, defaultLocalValue, getVitaeChipTemplates, type ObjectiveTemplate } from "./data/templates";
+import { localItems, localStatusLines, formatLocalStatus, protocolBlockOrder, useTemplates, addObjectiveTemplate, defaultLocalValue, getVitaeChipTemplates, type ObjectiveTemplate } from "./data/templates";
 import { AppShell } from "./AppShell";
 import { complaintsTextOf, composeAll, composeBlocks, composeHeader, composeHeaderLine } from "./compose";
 import { copyText, hasMarkup, polishLocal } from "./copy";
@@ -229,6 +229,96 @@ function LocalOptionRow({
   );
 }
 
+function ComplaintFinder({
+  complaints,
+  rest,
+  recent,
+  fromCode,
+  codeLabel,
+  dictOpen,
+  setDictOpen,
+  onToggle,
+  onApplyOption,
+  onApplySub,
+  setOptionMenu,
+}: {
+  complaints: string[];
+  rest: string[];
+  recent: string[];
+  fromCode: string[];
+  codeLabel: string;
+  dictOpen: boolean;
+  setDictOpen: (v: boolean | ((p: boolean) => boolean)) => void;
+  onToggle: (text: string) => void;
+  onApplyOption: (base: string, option: string) => void;
+  onApplySub: (base: string, option: string, child: string) => void;
+  setOptionMenu: (menu: OptionMenuState | null) => void;
+}) {
+  const [complaintQ, setComplaintQ] = useState("");
+  const [lookupQ, setLookupQ] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setLookupQ(complaintQ), 40);
+    return () => clearTimeout(t);
+  }, [complaintQ]);
+  const q = lookupQ.trim();
+  const items = useMemo(() => {
+    if (q.length < 2) return [];
+    const hits = suggestComplaints(q, 12);
+    if (hits.some((h) => h.label.toLowerCase() === q.toLowerCase())) return hits;
+    return [...hits, { id: "__as_is__", label: q, hint: "как есть" }];
+  }, [q]);
+  return (
+    <>
+      <div ref={box}>
+        <Typeahead
+          value={complaintQ}
+          onChange={setComplaintQ}
+          items={items}
+          onPick={(it) => {
+            const has = !!findComplaintVariant(complaints, it.label) || complaints.includes(it.label);
+            if (!has) onToggle(it.label);
+            if (optionsForComplaint(it.label).length) {
+              const r = box.current?.getBoundingClientRect();
+              if (r) setOptionMenu({ base: it.label, rect: { top: r.top, left: r.left, bottom: r.bottom, width: r.width } });
+            } else setOptionMenu(null);
+          }}
+          onSubmitCustom={(raw) => onToggle(raw)}
+          placeholder="Начать вводить жалобу…  ↑↓ Enter"
+          emptyHint={q.length >= 2 ? "Enter — добавить свою формулировку" : undefined}
+        />
+      </div>
+      <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
+      <ComplaintChips texts={recent} onToggle={onToggle} selected={complaints} onApplyOption={onApplyOption} onApplySub={onApplySub} setOptionMenu={setOptionMenu} />
+      <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {codeLabel}</div>
+      <ComplaintChips texts={fromCode} onToggle={onToggle} selected={complaints} dashed onApplyOption={onApplyOption} onApplySub={onApplySub} setOptionMenu={setOptionMenu} />
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${dictOpen ? "bg-teal text-paper" : "border border-dashed border-teal/50 text-teal"}`}
+          onClick={() => setDictOpen((v) => !v)}
+        >
+          {dictOpen ? "скрыть словарь" : "+ словарь"}
+        </button>
+        {!dictOpen && q.length < 2 ? <span className="text-[10px] text-mute">или две буквы</span> : null}
+      </div>
+      {dictOpen || q.length >= 2 ? (
+        <>
+          <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
+          <ComplaintChips
+            texts={q.length >= 2 ? rest.filter((t) => matchPhraseOrWord(t, lookupQ)).slice(0, 24) : rest}
+            onToggle={onToggle}
+            selected={complaints}
+            onApplyOption={onApplyOption}
+            onApplySub={onApplySub}
+            setOptionMenu={setOptionMenu}
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function ProtocolPage() {
   const store = useAppStore();
   const { session, settings, patients, setSession, toggleBlock, toggleComplaint, addRecommendation, applyComplaintOption, applyComplaintSub, addStudy } =
@@ -242,10 +332,8 @@ export function ProtocolPage() {
   const [ixBusy, setIxBusy] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [hubTab, setHubTab] = useState<"complaints" | "diagnosis" | "studies" | "recs" | "sheet">("diagnosis");
-  const [complaintQ, setComplaintQ] = useState("");
   const [dictOpen, setDictOpen] = useState(false);
   const [optMenu, setOptMenu] = useState<OptionMenuState | null>(null);
-  const complaintTa = useRef<HTMLDivElement>(null);
   const [localQ, setLocalQ] = useState("");
   const [localAdd, setLocalAdd] = useState(false);
   const [studyOver, setStudyOver] = useState<number | null>(null);
@@ -551,9 +639,43 @@ export function ProtocolPage() {
     setLocalAdd(false);
   };
 
-  const localFree = () => {
-    const generated = new Set(localStatusLines(session.localPicks || [], templates.localPacks, []));
-    return session.localStatus.filter((x) => !generated.has(x));
+  const localFreeOf = (s: SessionState) => {
+    const generated = new Set(localStatusLines(s.localPicks || [], templates.localPacks, []));
+    return (s.localStatus || []).filter((x) => !generated.has(x));
+  };
+
+  const localFree = () => localFreeOf(session);
+
+  const localComposedOf = (s: SessionState) =>
+    formatLocalStatus(s.localPicks || [], templates.localPacks, s.activeLocalPacks || [], localFreeOf(s));
+
+  const enterLocalText = () => {
+    flushLiveText();
+    const s = useAppStore.getState().session;
+    setSession({ localTextMode: true, localStatusText: localComposedOf(s) });
+  };
+
+  const leaveLocalText = () => {
+    flushLiveText();
+    const s = useAppStore.getState().session;
+    const composed = localComposedOf(s).trim();
+    const text = (s.localStatusText ?? composed).trim();
+    if (text === composed) {
+      setSession({ localTextMode: false, localStatusText: undefined });
+      return;
+    }
+    const parts = text
+      .split(/\n+/)
+      .flatMap((line) => line.split(/;\s*/))
+      .map((x) => x.trim())
+      .filter(Boolean);
+    setSession({
+      localTextMode: false,
+      localStatusText: undefined,
+      activeLocalPacks: [],
+      localPicks: [],
+      localStatus: parts,
+    });
   };
 
   const writeLocal = (active: string[], picks: LocalPick[], free: string[]) => {
@@ -806,33 +928,19 @@ export function ProtocolPage() {
             ai={showAi("complaints") ? () => polish("complaints") : undefined}
             voice={(t) => toggleComplaint(t)}
           >
-            <div ref={complaintTa}>
-            <Typeahead
-              value={complaintQ}
-              onChange={setComplaintQ}
-              items={(() => {
-                const q = complaintQ.trim();
-                if (q.length < 2) return [];
-                const hits = suggestComplaints(q, 12);
-                const exact = hits.some((h) => h.label.toLowerCase() === q.toLowerCase());
-                if (exact) return hits;
-                return [...hits, { id: "__as_is__", label: q, hint: "как есть" }];
-              })()}
-              onPick={(it) => {
-                const has = !!findComplaintVariant(session.complaints, it.label) || session.complaints.includes(it.label);
-                if (!has) toggleComplaint(it.label);
-                if (optionsForComplaint(it.label).length) {
-                  const r = complaintTa.current?.getBoundingClientRect();
-                  if (r) setOptMenu({ base: it.label, rect: { top: r.top, left: r.left, bottom: r.bottom, width: r.width } });
-                } else {
-                  setOptMenu(null);
-                }
-              }}
-              onSubmitCustom={(raw) => toggleComplaint(raw)}
-              placeholder="Начать вводить жалобу…  ↑↓ Enter"
-              emptyHint={complaintQ.trim().length >= 2 ? "Enter — добавить свою формулировку" : undefined}
+            <ComplaintFinder
+              complaints={session.complaints}
+              rest={chips.rest}
+              recent={store.recentChips}
+              fromCode={chips.fromCode}
+              codeLabel={session.diagnosisCode || "коду"}
+              dictOpen={dictOpen}
+              setDictOpen={setDictOpen}
+              onToggle={toggleComplaint}
+              onApplyOption={applyComplaintOption}
+              onApplySub={applyComplaintSub}
+              setOptionMenu={setOptMenu}
             />
-            </div>
             {optMenu ? (
               <ComplaintOptionMenu
                 state={optMenu}
@@ -843,56 +951,6 @@ export function ProtocolPage() {
                 onPickSub={(opt, child) => applyComplaintSub(optMenu.base, opt, child)}
                 onClose={() => setOptMenu(null)}
               />
-            ) : null}
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">вчерашние</div>
-            <ComplaintChips
-              texts={store.recentChips}
-              onToggle={toggleComplaint}
-              selected={session.complaints}
-              onApplyOption={applyComplaintOption}
-              onApplySub={applyComplaintSub}
-              setOptionMenu={setOptMenu}
-            />
-            <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">по {session.diagnosisCode || "коду"}</div>
-            <ComplaintChips
-              texts={chips.fromCode}
-              onToggle={toggleComplaint}
-              selected={session.complaints}
-              dashed
-              onApplyOption={applyComplaintOption}
-              onApplySub={applyComplaintSub}
-              setOptionMenu={setOptMenu}
-            />
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  dictOpen ? "bg-teal text-paper" : "border border-dashed border-teal/50 text-teal"
-                }`}
-                onClick={() => setDictOpen((v) => !v)}
-              >
-                {dictOpen ? "скрыть словарь" : "+ словарь"}
-              </button>
-              {!dictOpen && complaintQ.trim().length < 2 ? (
-                <span className="text-[10px] text-mute">или две буквы</span>
-              ) : null}
-            </div>
-            {dictOpen || complaintQ.trim().length >= 2 ? (
-              <>
-                <div className="mt-1 text-[10px] tracking-wide text-mute uppercase">весь словарь</div>
-                <ComplaintChips
-                  texts={
-                    complaintQ.trim().length >= 2
-                      ? chips.rest.filter((t) => matchPhraseOrWord(t, complaintQ)).slice(0, 24)
-                      : chips.rest
-                  }
-                  onToggle={toggleComplaint}
-                  selected={session.complaints}
-                  onApplyOption={applyComplaintOption}
-              onApplySub={applyComplaintSub}
-                  setOptionMenu={setOptMenu}
-                />
-              </>
             ) : null}
             {session.complaintsChipMode ? (
               <>
@@ -1130,6 +1188,21 @@ export function ProtocolPage() {
             onOpen={() => setSession({ openSection: session.openSection === "status" ? null : "status" })}
             onRemove={() => toggleBlock("status")}
           >
+            {session.localTextMode ? (
+              <>
+                <LiveTextarea
+                  value={session.localStatusText ?? localComposedOf(session)}
+                  onChange={(localStatusText) => setSession({ localStatusText, localTextMode: true })}
+                  rows={4}
+                  placeholder="Локальный статус в протоколе"
+                  className="w-full rounded-md border border-line bg-paper px-2 py-1.5 text-sm"
+                />
+                <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={leaveLocalText}>
+                  вернуть чипы
+                </button>
+              </>
+            ) : (
+              <>
             <div className="flex flex-wrap gap-1">
               {packs.map((p) => {
                 const code = session.diagnosisCode.trim().toUpperCase();
@@ -1218,6 +1291,11 @@ export function ProtocolPage() {
                   items={localFree()}
                   onChange={(next) => writeLocal(session.activeLocalPacks || [], session.localPicks || [], next)}
                 />
+              </>
+            )}
+                <button type="button" className="mt-1 text-[11px] font-medium text-teal" onClick={enterLocalText}>
+                  как текст
+                </button>
               </>
             )}
           </Sec>

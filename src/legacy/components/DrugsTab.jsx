@@ -89,7 +89,7 @@ function blankTrigger() {
   return { studyKeys: [], fieldKeys: [], timesPerDay: '', days: '', note: '' }
 }
 
-export function StudyDepends({ triggers, onChange, quiet = false, light = false }) {
+export function StudyDepends({ triggers, onChange, quiet = false, light = false, brief = false }) {
   const studies = catalogStudies()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -128,7 +128,7 @@ export function StudyDepends({ triggers, onChange, quiet = false, light = false 
   return (
     <div className="drug-trigger-block">
       {!quiet && <div className="scenarios-block-label">Зависимость от исследования</div>}
-      {!quiet && <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>}
+      {!quiet && !brief && <p className="settings-note-inline">Если в выбранном исследовании показатель положительный, рядом с назначениями появится подсказка. В протокол сама не вставляется.</p>}
       {light && (
         <p className="settings-note-inline">
           Достаточно самого исследования: если оно есть в протоколе, покажутся рекомендации пакета. Показатель — только чтобы сузить.
@@ -290,15 +290,30 @@ function normalizeQuickLine(raw) {
     .replace(/[«»“”„]/g, '"')
 }
 
-/** "название" дозировка - кратность, дни (примечание). Кавычки «» и "" равнозначны. */
+function peelTail(body, open, close) {
+  const text = String(body || '').trim()
+  if (!text.endsWith(close)) return { body: text, inner: '' }
+  const start = text.lastIndexOf(open)
+  if (start < 0) return { body: text, inner: '' }
+  return {
+    body: text.slice(0, start).trim(),
+    inner: text.slice(start + open.length, text.length - close.length).trim(),
+  }
+}
+
+/** "действующее вещество" дозировка - кратность, дни (примечание) [торговые] {группы}. Кавычки «» и "" равнозначны. */
 export function parseQuickDrug(raw) {
   let body = normalizeQuickLine(raw).trim()
   if (!body) return null
+  const groups = peelTail(body, '{', '}')
+  body = groups.body
+  const brands = peelTail(body, '[', ']')
+  body = brands.body
   let note = ''
-  const noteMatch = body.match(/^(.*)\(([^)]*)\)\s*$/)
-  if (noteMatch) {
-    note = noteMatch[2].trim()
-    body = noteMatch[1].trim()
+  const noted = peelTail(body, '(', ')')
+  if (noted.inner || noted.body !== body) {
+    note = noted.inner
+    body = noted.body
   }
   let split = body.split(/\s+-\s+/)
   if (split.length < 2) {
@@ -331,7 +346,17 @@ export function parseQuickDrug(raw) {
   const comma = right.match(/^(.*?),\s*(.*)$/)
   const frequency = (comma ? comma[1] : right).trim()
   const duration = comma ? comma[2].trim() : ''
-  return { name, dosage, frequency, duration, note, open, close }
+  return {
+    name,
+    dosage,
+    frequency,
+    duration,
+    note,
+    brandNames: brands.inner,
+    group: groups.inner,
+    open,
+    close,
+  }
 }
 
 function composeQuickDrug(p) {
@@ -342,7 +367,14 @@ function composeQuickDrug(p) {
   const freq = (p.frequency || '').trim()
   const days = (p.duration || '').trim()
   const note = (p.note || '').trim()
-  return [name, dose].filter(Boolean).join(' ') + (freq ? ` - ${freq}` : '') + (days ? `, ${days}` : '') + (note ? ` (${note})` : '')
+  const brands = (p.brandNames || '').trim()
+  const groups = (p.group || '').trim()
+  return [name, dose].filter(Boolean).join(' ')
+    + (freq ? ` - ${freq}` : '')
+    + (days ? `, ${days}` : '')
+    + (note ? ` (${note})` : '')
+    + (brands ? ` [${brands}]` : '')
+    + (groups ? ` {${groups}}` : '')
 }
 
 function joinNames(prev, next) {
@@ -356,6 +388,46 @@ function joinNames(prev, next) {
     out.push(name)
   }
   return out.join(', ')
+}
+
+function normBit(v) {
+  return String(v || '').trim().toLowerCase()
+}
+
+function sameRegimen(a, b) {
+  return normBit(a.dosage) === normBit(b.dosage)
+    && normBit(a.frequency) === normBit(b.frequency)
+    && normBit(a.duration) === normBit(b.duration)
+    && normBit(a.label) === normBit(b.label)
+}
+
+function freqDurKnown(regimens, regimen) {
+  return regimens.some(
+    (r) => normBit(r.frequency) === normBit(regimen.frequency) && normBit(r.duration) === normBit(regimen.duration),
+  )
+}
+
+function findDrugByName(name) {
+  const key = bareDrugName(name).toLowerCase()
+  if (!key) return null
+  return Object.values(store.getDrugInfoAll()).find((d) => bareDrugName(d.name).toLowerCase() === key) || null
+}
+
+function writeExistingDrug(existing, regimen, brandNames, group, append) {
+  const regimens = regimensFromDrug(existing)
+  const same = regimens.some((r) => sameRegimen(r, regimen))
+  const next = append && !same ? [...regimens, regimen] : regimens
+  const primary = next[0] || {}
+  store.saveDrugInfo({
+    ...existing,
+    brandNames: joinNames(existing.brandNames, brandNames),
+    group: joinNames(existing.group, group),
+    regimens: next,
+    dosage: primary.dosage || '',
+    frequency: primary.frequency || '',
+    duration: primary.duration || '',
+  })
+  return append && !same
 }
 
 function rawIsDup(text, known) {
@@ -373,14 +445,14 @@ function rawIsDup(text, known) {
 
 function QuickDrugAdd({ onSave, onClose, known }) {
   const [raw, setRaw] = useState('')
-  const [analogs, setAnalogs] = useState([])
   const [hint, setHint] = useState('')
   const rawRef = useRef(null)
   const lines = String(raw || '').split('\n')
+  const emptyRow = { name: '', dosage: '', frequency: '', duration: '', note: '', brandNames: '', group: '', open: '"', close: '"' }
 
   function patchLine(index, patch) {
     const next = lines.slice()
-    const current = parseQuickDrug(next[index]) || { name: '', dosage: '', frequency: '', duration: '', note: '', open: '"', close: '"' }
+    const current = parseQuickDrug(next[index]) || emptyRow
     next[index] = composeQuickDrug({ ...current, ...patch })
     setRaw(next.join('\n'))
   }
@@ -388,19 +460,18 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   function save() {
     const ready = []
     const left = []
-    lines.forEach((line, i) => {
+    lines.forEach((line) => {
       const text = line.trim()
       if (!text) return
       const parsed = parseQuickDrug(text)
-      if (parsed?.name) ready.push({ ...parsed, ok: true, analogs: analogs[i] || '' })
+      if (parsed?.name) ready.push(parsed)
       else left.push(line)
     })
     if (!ready.length) {
-      setHint('Не разобрал. Формат: "название" дозировка - кратность, дни (примечание)')
+      setHint('Не разобрал. Каждый препарат с новой строки: "действующее вещество" дозировка - кратность, дни (примечание) [торговые] {группы}')
       return
     }
     onSave(ready)
-    setAnalogs([])
     setRaw(left.join('\n'))
     setHint(left.length ? 'Это не разобрал — текст остался в поле' : '')
     if (!left.length) requestAnimationFrame(() => rawRef.current?.focus())
@@ -411,14 +482,14 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Строка: "название" дозировка - кратность, дни (примечание). Текст остаётся в поле, его можно править и дополнять. Ниже — что разобралось.
+        Строка на препарат. "действующее вещество" дозировка - кратность, дни (примечание) [торговые названия] {'{группа 1, группа 2}'}
       </p>
       <textarea
         ref={rawRef}
         autoFocus
         className={`drug-quick-input${rawIsDup(raw, known) ? ' is-dup' : ''}`}
         rows={Math.min(8, Math.max(2, lines.length))}
-        placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды)'}
+        placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды) [Омник, Омник Окас] {альфа-адреноблокаторы}'}
         value={raw}
         onChange={(e) => {
           setRaw(e.target.value)
@@ -431,7 +502,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
             <div key={i} className={`drug-quick-line${known(row.name) ? ' is-dup' : ''}`}>
               <span className="drug-quick-punct">{row.open || '"'}</span>
               <span className="drug-quick-bit name">
-                <input value={row.name} aria-label="название" onChange={(e) => patchLine(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
+                <input value={row.name} aria-label="действующее вещество" onChange={(e) => patchLine(i, { name: e.target.value })} size={Math.max(row.name.length, 4)} />
               </span>
               <span className="drug-quick-punct">{row.close || '"'}</span>
               <span className="drug-quick-bit dose">
@@ -450,19 +521,16 @@ function QuickDrugAdd({ onSave, onClose, known }) {
                 <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchLine(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
               </span>
               <span className="drug-quick-punct">)</span>
-              <span className="drug-quick-bit analogs">
-                <input
-                  value={analogs[i] || ''}
-                  aria-label="аналоги"
-                  placeholder="аналоги"
-                  onChange={(e) => setAnalogs((list) => {
-                    const next = list.slice()
-                    next[i] = e.target.value
-                    return next
-                  })}
-                  size={Math.max(String(analogs[i] || '').length, 8)}
-                />
+              <span className="drug-quick-punct">[</span>
+              <span className="drug-quick-bit brands">
+                <input value={row.brandNames || ''} aria-label="торговые названия" placeholder="торговые" onChange={(e) => patchLine(i, { brandNames: e.target.value })} size={Math.max(String(row.brandNames || '').length, 8)} />
               </span>
+              <span className="drug-quick-punct">]</span>
+              <span className="drug-quick-punct">{'{'}</span>
+              <span className="drug-quick-bit groups">
+                <input value={row.group || ''} aria-label="группы" placeholder="группы" onChange={(e) => patchLine(i, { group: e.target.value })} size={Math.max(String(row.group || '').length, 6)} />
+              </span>
+              <span className="drug-quick-punct">{'}'}</span>
               {known(row.name) ? <span className="drug-quick-exists">уже в базе</span> : null}
             </div>
           ))}
@@ -512,6 +580,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   const [filterMkb, setFilterMkb] = useState('')
   const [drugQuery, setDrugQuery] = useState('')
   const [quickOpen, setQuickOpen] = useState(false)
+  const [fullForm, setFullForm] = useState(false)
+  const [schemeAsk, setSchemeAsk] = useState(null)
 
   async function runShorten(field) {
     setShortening(field)
@@ -559,12 +629,14 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
 
   function editExisting(d) {
     setForm({ ...blankForm(), ...d, regimens: regimensFromDrug(d) })
+    setFullForm(false)
     setFormOpen(true)
   }
 
   function duplicate(d) {
     const name = `${d.name} (копия)`
     setForm({ ...blankForm(), ...d, name, regimens: regimensFromDrug(d) })
+    setFullForm(false)
     setFormOpen(true)
   }
 
@@ -582,7 +654,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
 
   async function runBrandNames() {
     if (!form.name.trim()) {
-      setBrandError('Сначала укажи МНН в поле "Название"')
+      setBrandError('Сначала укажи действующее вещество')
       return
     }
     setBrandLoading(true)
@@ -597,60 +669,80 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     }
   }
 
+  function toastQuick(added, extended) {
+    const bits = []
+    if (added.length) bits.push(`добавлено: ${added.join(', ')}`)
+    if (extended.length) bits.push(`схема к: ${extended.join(', ')}`)
+    if (bits.length) showToast(bits.join('. '), { type: 'success' })
+  }
+
   function saveQuick(rows) {
     const added = []
     const extended = []
+    const pending = []
     rows.forEach((row) => {
       const name = bareDrugName(row.name)
       if (!name) return
-      const analogs = joinNames('', row.analogs)
+      const brandNames = joinNames('', row.brandNames)
+      const group = joinNames('', row.group)
       const regimen = {
         label: (row.note || '').trim(),
         dosage: (row.dosage || '').trim(),
         frequency: (row.frequency || '').trim(),
         duration: (row.duration || '').trim(),
       }
-      const existing =
-        Object.values(store.getDrugInfoAll()).find((d) => bareDrugName(d.name).toLowerCase() === name.toLowerCase()) || null
-      if (existing) {
-        const regimens = regimensFromDrug(existing)
-        const same = regimens.some(
-          (r) =>
-            (r.dosage || '').trim().toLowerCase() === regimen.dosage.toLowerCase() &&
-            (r.frequency || '').trim().toLowerCase() === regimen.frequency.toLowerCase() &&
-            (r.duration || '').trim().toLowerCase() === regimen.duration.toLowerCase() &&
-            (r.label || '').trim().toLowerCase() === regimen.label.toLowerCase(),
-        )
-        const next = same ? regimens : [...regimens, regimen]
-        const primary = next[0] || {}
-        store.saveDrugInfo({
-          ...existing,
-          name: existing.name,
-          brandNames: joinNames(existing.brandNames, analogs),
-          regimens: next,
-          dosage: primary.dosage || '',
-          frequency: primary.frequency || '',
-          duration: primary.duration || '',
-        })
-        if (!same) extended.push(name)
-      } else {
+      const existing = findDrugByName(name)
+      if (!existing) {
         store.saveDrugInfo({
           ...blankForm(),
           name,
-          brandNames: analogs,
+          brandNames,
+          group,
           regimens: [regimen],
           dosage: regimen.dosage,
           frequency: regimen.frequency,
           duration: regimen.duration,
         })
         added.push(name)
+        return
       }
+      const regimens = regimensFromDrug(existing)
+      if (regimens.some((r) => sameRegimen(r, regimen))) {
+        writeExistingDrug(existing, regimen, brandNames, group, false)
+        return
+      }
+      if (!freqDurKnown(regimens, regimen) && (regimen.frequency || regimen.duration)) {
+        pending.push({ name, regimen, brandNames, group })
+        return
+      }
+      if (writeExistingDrug(existing, regimen, brandNames, group, true)) extended.push(name)
     })
     refresh()
-    const bits = []
-    if (added.length) bits.push(`добавлено: ${added.join(', ')}`)
-    if (extended.length) bits.push(`схема к: ${extended.join(', ')}`)
-    if (bits.length) showToast(bits.join('. '), { type: 'success' })
+    if (pending.length) {
+      setSchemeAsk({ items: pending, i: 0, added, extended })
+      return
+    }
+    toastQuick(added, extended)
+  }
+
+  function resolveScheme(append) {
+    if (!schemeAsk) return
+    const item = schemeAsk.items[schemeAsk.i]
+    const existing = item ? findDrugByName(item.name) : null
+    const extended = schemeAsk.extended.slice()
+    if (existing && item && writeExistingDrug(existing, item.regimen, item.brandNames, item.group, append)) {
+      extended.push(item.name)
+    }
+    const i = schemeAsk.i + 1
+    if (i >= schemeAsk.items.length) {
+      const added = schemeAsk.added
+      setSchemeAsk(null)
+      refresh()
+      toastQuick(added, extended)
+      return
+    }
+    setSchemeAsk({ ...schemeAsk, i, extended })
+    refresh()
   }
 
   function remove(name) {
@@ -695,7 +787,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     <div className={editorOnly ? 'mkb-editor-host' : 'settings-tab'}>
       {!editorOnly && (
       <div className="drug-form-actions">
-        <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFormOpen(true); setQuickOpen(false) }}>
+        <button type="button" className="btn-primary" onClick={() => { setForm(blankForm()); setFullForm(false); setFormOpen(true); setQuickOpen(false) }}>
           + Добавить препарат
         </button>
         <button type="button" className="btn-secondary" onClick={() => setQuickOpen((v) => !v)}>
@@ -723,20 +815,48 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
                   <p className="drug-pack-refs">{packRefCaption(form.packRefs, form.name)}</p>
                 )}
               </div>
-              <button type="button" className="modal-close" onClick={() => closeForm()}>×</button>
+              <div className="drug-form-actions">
+                <button type="button" className="btn-secondary btn-small" onClick={() => setFullForm((v) => !v)}>
+                  {fullForm ? 'коротко' : 'ещё поля'}
+                </button>
+                <button type="button" className="modal-close" onClick={() => closeForm()}>×</button>
+              </div>
             </div>
       <form className="drug-form" onSubmit={saveForm}>
         <div className="drug-form-row">
+          <select
+            aria-label="Форма"
+            title="Форма"
+            value={form.form || DEFAULT_DRUG_FORM}
+            onChange={(e) => setForm({ ...form, form: e.target.value })}
+          >
+            {(DRUG_FORMS.includes(form.form) || !form.form ? DRUG_FORMS : [form.form, ...DRUG_FORMS]).map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
           <input
             autoFocus
             className={nameError ? 'input-error' : ''}
-            placeholder="Название (МНН)"
+            placeholder="Действующее вещество"
             value={form.name}
             onChange={(e) => {
               setForm({ ...form, name: e.target.value })
               setNameError(false)
             }}
           />
+        </div>
+        <div className="drug-form-row drug-form-row-brand">
+          <input
+            placeholder="Торговые названия через запятую"
+            value={form.brandNames}
+            onChange={(e) => setForm({ ...form, brandNames: e.target.value })}
+          />
+          <button type="button" className="btn-secondary btn-small" onClick={runBrandNames} disabled={brandLoading}>
+            {brandLoading ? 'Подбираю…' : '🤖 Подобрать (AI)'}
+          </button>
+        </div>
+        {brandError && <div className="ai-error">{brandError}</div>}
+        <div className="drug-form-row">
           <div className="drug-form-groups-field">
             <DrugGroupsInput
               placeholder="Группы через запятую, официальную — в [квадратных скобках]"
@@ -755,28 +875,22 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
             )}
           </div>
         </div>
-        <StudyDepends
-          triggers={form.studyTriggers || []}
-          onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
-        />
         <div className="scenarios-block">
           <div className="scenarios-block-label">
             Схема приёма {form.regimens.length > 1 ? '(несколько — на приёме можно будет выбрать нужную)' : ''}
           </div>
           {form.regimens.map((r, idx) => (
             <div key={idx} className="drug-regimen-row">
-              {form.regimens.length > 1 && (
-                <input
-                  className="drug-regimen-label"
-                  placeholder="Название схемы, напр. «при почечной недостаточности»"
-                  value={r.label}
-                  onChange={(e) => updateRegimen(idx, { label: e.target.value })}
-                />
-              )}
+              <input
+                className="drug-regimen-label"
+                placeholder="Примечание"
+                value={r.label}
+                onChange={(e) => updateRegimen(idx, { label: e.target.value })}
+              />
               <div className="drug-regimen-fields">
                 <input placeholder="Доза, напр. 500 мг" value={r.dosage} onChange={(e) => updateRegimen(idx, { dosage: e.target.value })} />
                 <input placeholder="Кратность, напр. 2 р/сут" value={r.frequency} onChange={(e) => updateRegimen(idx, { frequency: e.target.value })} />
-                <input placeholder="Длительность, напр. 7-10 дней" value={r.duration} onChange={(e) => updateRegimen(idx, { duration: e.target.value })} />
+                <input placeholder="Дней, напр. 7-10 дней" value={r.duration} onChange={(e) => updateRegimen(idx, { duration: e.target.value })} />
                 {form.regimens.length > 1 && (
                   <button type="button" className="remove-btn" onClick={() => removeRegimen(idx)}>×</button>
                 )}
@@ -788,34 +902,18 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
           ))}
           <button type="button" className="btn-secondary btn-small" onClick={addRegimen}>+ Ещё схема приёма</button>
         </div>
-        <div className="drug-form-row drug-form-row-brand">
-          <input
-            placeholder="Торговые названия через запятую"
-            value={form.brandNames}
-            onChange={(e) => setForm({ ...form, brandNames: e.target.value })}
-          />
-          <button type="button" className="btn-secondary btn-small" onClick={runBrandNames} disabled={brandLoading}>
-            {brandLoading ? 'Подбираю…' : '🤖 Подобрать (AI)'}
-          </button>
-        </div>
-        {brandError && <div className="ai-error">{brandError}</div>}
-        <div className="drug-form-row">
-          <select
-            aria-label="Форма"
-            title="Форма"
-            value={form.form || DEFAULT_DRUG_FORM}
-            onChange={(e) => setForm({ ...form, form: e.target.value })}
-          >
-            {(DRUG_FORMS.includes(form.form) || !form.form ? DRUG_FORMS : [form.form, ...DRUG_FORMS]).map((f) => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-          </select>
-          <input
-            placeholder="Состав, если несколько ДВ: пинен + камфен + …"
-            value={form.composition || ''}
-            onChange={(e) => setForm({ ...form, composition: e.target.value })}
-          />
-        </div>
+        <StudyDepends
+          brief
+          triggers={form.studyTriggers || []}
+          onChange={(studyTriggers) => setForm({ ...form, studyTriggers })}
+        />
+        {fullForm && (
+        <>
+        <input
+          placeholder="Состав, если несколько ДВ: пинен + камфен + …"
+          value={form.composition || ''}
+          onChange={(e) => setForm({ ...form, composition: e.target.value })}
+        />
 
         <div className="drug-form-field-with-ai">
           <AutoResizeTextarea
@@ -894,12 +992,37 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
           {extractError && <div className="ai-error">{extractError}</div>}
           {extractNote && !extractError && <p className="empty-hint">{extractNote}</p>}
         </div>
+        </>
+        )}
 
         <div className="drug-form-actions">
           <button type="submit" className="btn-primary">Сохранить препарат</button>
           <button type="button" className="btn-secondary" onClick={() => setForm(blankForm())}>Очистить форму</button>
         </div>
       </form>
+          </div>
+        </div>
+      )}
+
+      {schemeAsk && schemeAsk.items[schemeAsk.i] && (
+        <div className="modal-overlay" style={{ zIndex: 80 }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Новая схема приёма</h3>
+            </div>
+            <p>
+              «{schemeAsk.items[schemeAsk.i].name}» уже есть в базе, но кратность или длительность другие:{' '}
+              {[schemeAsk.items[schemeAsk.i].regimen.dosage, schemeAsk.items[schemeAsk.i].regimen.frequency, schemeAsk.items[schemeAsk.i].regimen.duration].filter(Boolean).join(' · ') || 'без схемы'}
+              {schemeAsk.items[schemeAsk.i].regimen.label ? ` (${schemeAsk.items[schemeAsk.i].regimen.label})` : ''}.
+              Сохранить как новую схему?
+            </p>
+            {schemeAsk.items.length - schemeAsk.i > 1 && (
+              <p className="empty-hint">Ещё {schemeAsk.items.length - schemeAsk.i - 1}</p>
+            )}
+            <div className="drug-form-actions">
+              <button type="button" className="btn-primary" onClick={() => resolveScheme(true)}>сохранить схему</button>
+              <button type="button" className="btn-secondary" onClick={() => resolveScheme(false)}>не сохранять</button>
+            </div>
           </div>
         </div>
       )}
