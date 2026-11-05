@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { store } from '../lib/store'
 import VoiceInputButton from './VoiceInputButton'
 import AutoWidthInput from './AutoWidthInput'
+import AutoResizeTextarea from './AutoResizeTextarea'
 
 // Режим "конструктора" жалобы: клик по базовой карточке (боль и т.п.)
 // подменяет ряд чипов на карточки текущей группы уточнений (локализация,
@@ -28,17 +29,25 @@ function groupByCategory(chips) {
 
 export default function ChipSection({ section, values, onChange }) {
   const [freeInput, setFreeInput] = useState('')
+  const [debouncedFreeInput, setDebouncedFreeInput] = useState('')
   const [builderChip, setBuilderChip] = useState(null)
   const [selections, setSelections] = useState({})
-  const [editIdx, setEditIdx] = useState(null) // индекс в values, который редактируем структурно
-  const [plainEditIdx, setPlainEditIdx] = useState(null) // fallback: обычная текстовая правка
+  const [editIdx, setEditIdx] = useState(null)
+  const [plainEditIdx, setPlainEditIdx] = useState(null)
   const [plainEditText, setPlainEditText] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
+  const [isTextMode, setIsTextMode] = useState(false)
+  const [textModeValue, setTextModeValue] = useState('')
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedFreeInput(freeInput), 250)
+    return () => clearTimeout(t)
+  }, [freeInput])
 
   const suggestions = useMemo(
-    () => (freeInput.trim() ? store.getComplaintSuggestions(freeInput) : []),
-    [freeInput]
+    () => (debouncedFreeInput.trim() ? store.getComplaintSuggestions(debouncedFreeInput) : []),
+    [debouncedFreeInput]
   )
 
   const categorized = useMemo(() => groupByCategory(section.chips || []), [section.chips])
@@ -88,13 +97,6 @@ export default function ChipSection({ section, values, onChange }) {
     setEditIdx(null)
   }
 
-  // Пытаемся распознать "боль внизу живота (острая, поясничная область)"
-  // и восстановить, какой чип и какие опции в каких группах были выбраны.
-  // Клик по уже вставленному чипу — всегда простое текстовое редактирование,
-  // независимо от того, был ли у исходного чипа конструктор с уточнениями.
-  // Конструктор с группами открывается только при выборе НОВОГО чипа
-  // (см. startBuilder) — для правки уже вставленного проще и предсказуемее
-  // редактировать как обычный текст.
   function startEditStructured(idx) {
     setPlainEditIdx(idx)
     setPlainEditText(values[idx])
@@ -140,6 +142,20 @@ export default function ChipSection({ section, values, onChange }) {
     if (clean) replaceValueAt(plainEditIdx, clean)
     setPlainEditIdx(null)
     setPlainEditText('')
+  }
+
+  function enterTextMode() {
+    setTextModeValue(values.join('\n'))
+    setIsTextMode(true)
+  }
+
+  function exitTextMode() {
+    const lines = textModeValue
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    onChange(lines)
+    setIsTextMode(false)
   }
 
   const selectedCountTotal = Object.values(selections).reduce((sum, s) => sum + (s?.size || 0), 0)
@@ -224,7 +240,7 @@ export default function ChipSection({ section, values, onChange }) {
         <input
           type="text"
           value={freeInput}
-          placeholder="Добавить вручную, через запятую…"
+          placeholder="Начать вводить жалобу или статус, через запятую…"
           onChange={(e) => setFreeInput(e.target.value)}
         />
         <button type="submit" className="btn-secondary">
@@ -251,9 +267,14 @@ export default function ChipSection({ section, values, onChange }) {
         </div>
       )}
 
-      {values.length > 0 && (
+      {values.length > 0 && !isTextMode && (
         <div className="selected-values-block">
-          <div className="selected-values-block-label">Уже выбрано (можно перетаскивать)</div>
+          <div className="selected-values-block-label">
+            Уже выбрано (можно перетаскивать)
+            <button type="button" className="btn-secondary btn-small" onClick={enterTextMode} style={{ marginLeft: 8 }}>
+              Редактировать как текст
+            </button>
+          </div>
           <div className="selected-values">
             {values.map((v, idx) =>
               plainEditIdx === idx ? (
@@ -295,7 +316,7 @@ export default function ChipSection({ section, values, onChange }) {
                   }}
                   title="Нажми, чтобы отредактировать · перетащи, чтобы изменить порядок"
                 >
-                  <span className="selected-chip-handle">⠿</span>
+                  <span className="selected-chip-handle">⠟</span>
                   {v}
                   <button
                     type="button"
@@ -311,6 +332,23 @@ export default function ChipSection({ section, values, onChange }) {
               )
             )}
           </div>
+        </div>
+      )}
+
+      {isTextMode && (
+        <div className="selected-values-block">
+          <div className="selected-values-block-label">
+            Редактирование текстом (каждая строка = отдельный чип)
+            <button type="button" className="btn-primary btn-small" onClick={exitTextMode} style={{ marginLeft: 8 }}>
+              Вернуться к чипам
+            </button>
+          </div>
+          <AutoResizeTextarea
+            value={textModeValue}
+            onChange={(e) => setTextModeValue(e.target.value)}
+            placeholder="Каждая строка будет отдельным пунктом статуса…"
+            minRows={4}
+          />
         </div>
       )}
     </div>
