@@ -17,9 +17,13 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
   const existing = store.getDrugInfo(drugName)
   const [form, setForm] = useState({
     name: drugName,
+    form: existing?.form || '',
+    activeIngredient: existing?.activeIngredient || '',
     dosage: existing?.dosage || '',
     frequency: existing?.frequency || '',
     duration: existing?.duration || '',
+    days: existing?.days || '',
+    note: existing?.note || '',
     sideEffects: existing?.sideEffects || '',
     group: existing?.group || '',
     brandNames: existing?.brandNames || '',
@@ -54,7 +58,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
       const brandNames = await suggestBrandNames(form.name)
       setForm((prev) => ({ ...prev, brandNames }))
     } catch {
-      // молча — это необязательное поле, не блокируем сохранение
+      // молча
     } finally {
       setBrandLoading(false)
     }
@@ -82,6 +86,18 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
+            <input
+              placeholder="Лекарственная форма (табл., капс., р-р…)"
+              value={form.form}
+              onChange={(e) => setForm({ ...form, form: e.target.value })}
+            />
+          </div>
+          <div className="drug-form-row">
+            <input
+              placeholder="Действующее вещество (ДВ)"
+              value={form.activeIngredient}
+              onChange={(e) => setForm({ ...form, activeIngredient: e.target.value })}
+            />
             <DrugGroupsInput
               placeholder="Группа из базы"
               value={form.group}
@@ -100,7 +116,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               onChange={(e) => setForm({ ...form, frequency: e.target.value })}
             />
             <input
-              placeholder="Длительность курса"
+              placeholder="Длительность / дней"
               value={form.duration}
               onChange={(e) => setForm({ ...form, duration: e.target.value })}
             />
@@ -115,6 +131,12 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
               {brandLoading ? 'Подбираю…' : '🤖 Подобрать (AI)'}
             </button>
           </div>
+          <textarea
+            placeholder="Примечание к схеме приёма"
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            rows={2}
+          />
           <textarea
             placeholder="Основные побочные эффекты"
             value={form.sideEffects}
@@ -134,7 +156,7 @@ export default function AddDrugToDbModal({ drugName, onClose, onSaved }) {
             rows={2}
           />
           <textarea
-            placeholder="Мониторинг / обследования на фоне приёма"
+            placeholder="Мониторинг / обследования на фоне приёма (кратко)"
             value={form.monitoring}
             onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
             rows={2}
