@@ -161,6 +161,7 @@ function asRegimen(raw) {
     dosage: String(raw?.dosage || '').trim(),
     frequency: String(raw?.frequency || '').trim(),
     duration: String(raw?.duration || '').trim(),
+    caution: String(raw?.caution || '').trim(),
   }
 }
 

@@ -5,13 +5,15 @@ import { useRef, useLayoutEffect } from 'react'
 // 123+), он просто работает без JS и без гонок с рендером/модалками.
 // JS-пересчёт оставлен как фоллбэк для браузеров без field-sizing (Safari/Firefox
 // на момент написания) — не мешает, если браузер уже сам всё разложил.
-export default function AutoResizeTextarea({ value, onChange, className = '', minRows = 2, textareaRef, compact = false, ...rest }) {
+export default function AutoResizeTextarea({ value, onChange, className = '', minRows = 2, textareaRef, compact = false, uncapped = false, style, ...rest }) {
   const ref = useRef(null)
 
   function resize() {
     const el = ref.current
     if (!el) return
-    if (CSS?.supports?.('field-sizing', 'content')) return // браузер уже сам справляется
+    // field-sizing сам растит поле, но в строке лекарств его перебивает max-height,
+    // поэтому высоту считаем явно и не режем.
+    if (!uncapped && CSS?.supports?.('field-sizing', 'content')) return
     el.style.height = '0px'
     el.style.height = `${el.scrollHeight}px`
   }
@@ -34,7 +36,11 @@ export default function AutoResizeTextarea({ value, onChange, className = '', mi
       onChange={onChange}
       onInput={resize}
       rows={minRows}
-      style={compact ? { overflow: 'hidden', resize: 'none' } : { overflow: 'auto', resize: 'vertical' }}
+      style={{
+        ...(compact || uncapped ? { overflow: 'hidden', resize: 'none' } : { overflow: 'auto', resize: 'vertical' }),
+        ...(uncapped ? { maxHeight: 'none', fieldSizing: 'fixed' } : null),
+        ...style,
+      }}
       {...rest}
     />
   )

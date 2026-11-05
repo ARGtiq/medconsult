@@ -1,3 +1,4 @@
+.legacy-surface .settings-tabs { flex-wrap: wrap; }
 .legacy-surface .settings-tabs button {
   border: 1px solid var(--line);
   background: var(--panel);

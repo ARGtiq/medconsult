@@ -51,6 +51,7 @@ declare module "@/legacy/lib/store" {
       evidenceLevel?: string;
     } | null;
     saveDrugInfo: (info: { name: string; form?: string; composition?: string; brandNames?: string; group?: string; extra?: string }) => void;
+    getEmptyDrugEntries: () => { name?: string }[];
     saveCustomGroup: (key: string, group: { label?: string; drugs?: string[] }) => void;
     getGroupMeta: (key: string) => {
       sideEffects?: string;

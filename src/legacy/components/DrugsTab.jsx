@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { store } from '../lib/store'
+import { useEffect, useRef, useState } from 'react'
+import { store, isNameOnlyDrug } from '../lib/store'
 import { STUDIES } from '../../medconsult/data/studies'
 import { extractDrugInfo, suggestBrandNames, shortenText, mergeDrugExtract, drugExtractFilled } from '../lib/openrouter'
 import EvidenceCheckButton from './EvidenceCheckButton'
@@ -38,7 +38,7 @@ function blankForm() {
 }
 
 function blankRegimen() {
-  return { label: '', dosage: '', frequency: '', duration: '' }
+  return { label: '', dosage: '', frequency: '', duration: '', caution: '' }
 }
 
 function regimenPacks(refs, regimen, onlyOne) {
@@ -247,7 +247,7 @@ export function StudyDepends({ triggers, onChange, quiet = false, light = false,
 function regimensFromDrug(d) {
   if (d.regimens?.length) return d.regimens
   if (d.dosage || d.frequency || d.duration) {
-    return [{ label: '', dosage: d.dosage || '', frequency: d.frequency || '', duration: d.duration || '' }]
+    return [{ label: '', dosage: d.dosage || '', frequency: d.frequency || '', duration: d.duration || '', caution: '' }]
   }
   return [blankRegimen()]
 }
@@ -301,7 +301,25 @@ function peelTail(body, open, close) {
   }
 }
 
-/** "действующее вещество" дозировка - кратность, дни (примечание) [торговые] {группы}. Кавычки «» и "" равнозначны. */
+/** "действующее вещество" дозировка - кратность, дни (примечание; побочки и противопоказания) [торговые] {группы}. Кавычки «» и "" равнозначны. */
+function splitNoteInner(inner) {
+  const bits = String(inner || '').split(';').map((s) => s.trim())
+  const note = bits[0] || ''
+  if (bits.length <= 1) return { note, caution: '', sideEffects: '', contraindications: '' }
+  if (bits.length === 2) {
+    const caution = bits[1] || ''
+    return { note, caution, sideEffects: caution, contraindications: '' }
+  }
+  const sideEffects = bits[1] || ''
+  const contraindications = bits.slice(2).join('; ').trim()
+  return {
+    note,
+    caution: [sideEffects, contraindications].filter(Boolean).join('; '),
+    sideEffects,
+    contraindications,
+  }
+}
+
 export function parseQuickDrug(raw) {
   let body = normalizeQuickLine(raw).trim()
   if (!body) return null
@@ -310,9 +328,16 @@ export function parseQuickDrug(raw) {
   const brands = peelTail(body, '[', ']')
   body = brands.body
   let note = ''
+  let caution = ''
+  let sideEffects = ''
+  let contraindications = ''
   const noted = peelTail(body, '(', ')')
   if (noted.inner || noted.body !== body) {
-    note = noted.inner
+    const split = splitNoteInner(noted.inner)
+    note = split.note
+    caution = split.caution
+    sideEffects = split.sideEffects
+    contraindications = split.contraindications
     body = noted.body
   }
   let split = body.split(/\s+-\s+/)
@@ -352,6 +377,9 @@ export function parseQuickDrug(raw) {
     frequency,
     duration,
     note,
+    caution,
+    sideEffects,
+    contraindications,
     brandNames: brands.inner,
     group: groups.inner,
     open,
@@ -367,12 +395,14 @@ function composeQuickDrug(p) {
   const freq = (p.frequency || '').trim()
   const days = (p.duration || '').trim()
   const note = (p.note || '').trim()
+  const caution = (p.caution || '').trim()
+  const inner = caution ? `${note}; ${caution}` : note
   const brands = (p.brandNames || '').trim()
   const groups = (p.group || '').trim()
   return [name, dose].filter(Boolean).join(' ')
     + (freq ? ` - ${freq}` : '')
     + (days ? `, ${days}` : '')
-    + (note ? ` (${note})` : '')
+    + (inner ? ` (${inner})` : '')
     + (brands ? ` [${brands}]` : '')
     + (groups ? ` {${groups}}` : '')
 }
@@ -401,6 +431,19 @@ function sameRegimen(a, b) {
     && normBit(a.label) === normBit(b.label)
 }
 
+function regimenCaption(r) {
+  const bits = [r?.dosage, r?.frequency, r?.duration].map((s) => String(s || '').trim()).filter(Boolean)
+  const core = bits.join(' · ') || 'без схемы'
+  const label = String(r?.label || '').trim()
+  return label ? `${core} (${label})` : core
+}
+
+function knownRegimenCaptions(drug) {
+  return regimensFromDrug(drug)
+    .filter((r) => String(r?.dosage || r?.frequency || r?.duration || r?.label || '').trim())
+    .map(regimenCaption)
+}
+
 function freqDurKnown(regimens, regimen) {
   return regimens.some(
     (r) => normBit(r.frequency) === normBit(regimen.frequency) && normBit(r.duration) === normBit(regimen.duration),
@@ -413,13 +456,21 @@ function findDrugByName(name) {
   return Object.values(store.getDrugInfoAll()).find((d) => bareDrugName(d.name).toLowerCase() === key) || null
 }
 
-function writeExistingDrug(existing, regimen, brandNames, group, append) {
-  const regimens = regimensFromDrug(existing)
-  const same = regimens.some((r) => sameRegimen(r, regimen))
-  const next = append && !same ? [...regimens, regimen] : regimens
+function writeExistingDrug(existing, regimen, brandNames, group, append, safety) {
+  const regimens = regimensFromDrug(existing).map((r) => ({ ...r }))
+  const sameIdx = regimens.findIndex((r) => sameRegimen(r, regimen))
+  let next = regimens
+  if (append && sameIdx < 0) next = [...regimens, regimen]
+  else if (sameIdx >= 0 && regimen.caution) {
+    next = regimens.map((r, i) => (i === sameIdx ? { ...r, caution: regimen.caution } : r))
+  }
   const primary = next[0] || {}
+  const side = String(safety?.sideEffects || '').trim()
+  const contra = String(safety?.contraindications || '').trim()
   store.saveDrugInfo({
     ...existing,
+    sideEffects: side && !String(existing.sideEffects || '').trim() ? side : existing.sideEffects,
+    contraindications: contra && !String(existing.contraindications || '').trim() ? contra : existing.contraindications,
     brandNames: joinNames(existing.brandNames, brandNames),
     group: joinNames(existing.group, group),
     regimens: next,
@@ -427,7 +478,7 @@ function writeExistingDrug(existing, regimen, brandNames, group, append) {
     frequency: primary.frequency || '',
     duration: primary.duration || '',
   })
-  return append && !same
+  return append && sameIdx < 0
 }
 
 function rawIsDup(text, known) {
@@ -448,7 +499,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   const [hint, setHint] = useState('')
   const rawRef = useRef(null)
   const lines = String(raw || '').split('\n')
-  const emptyRow = { name: '', dosage: '', frequency: '', duration: '', note: '', brandNames: '', group: '', open: '"', close: '"' }
+  const emptyRow = { name: '', dosage: '', frequency: '', duration: '', note: '', caution: '', sideEffects: '', contraindications: '', brandNames: '', group: '', open: '"', close: '"' }
 
   function patchLine(index, patch) {
     const next = lines.slice()
@@ -468,7 +519,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
       else left.push(line)
     })
     if (!ready.length) {
-      setHint('Не разобрал. Каждый препарат с новой строки: "действующее вещество" дозировка - кратность, дни (примечание) [торговые] {группы}')
+      setHint('Не разобрал. Каждый препарат с новой строки: "действующее вещество" дозировка - кратность, дни (примечание; побочные эффекты и противопоказания) [торговые] {группы}')
       return
     }
     onSave(ready)
@@ -482,14 +533,15 @@ function QuickDrugAdd({ onSave, onClose, known }) {
   return (
     <div className="drug-quick">
       <p className="drug-quick-hint">
-        Строка на препарат. "действующее вещество" дозировка - кратность, дни (примечание) [торговые названия] {'{группа 1, группа 2}'}
+        Строка на препарат. "действующее вещество" дозировка - кратность, дни (примечание; побочные эффекты и противопоказания) [торговые названия] {'{группа 1, группа 2}'}
       </p>
-      <textarea
-        ref={rawRef}
+      <AutoResizeTextarea
+        textareaRef={rawRef}
         autoFocus
+        minRows={2}
+        uncapped
         className={`drug-quick-input${rawIsDup(raw, known) ? ' is-dup' : ''}`}
-        rows={Math.min(8, Math.max(2, lines.length))}
-        placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды) [Омник, Омник Окас] {альфа-адреноблокаторы}'}
+        placeholder={'"тамсулозин" 0,4 мг - 1 раз в сутки, 30 дней (после еды; головокружение) [Омник, Омник Окас] {альфа-адреноблокаторы}'}
         value={raw}
         onChange={(e) => {
           setRaw(e.target.value)
@@ -519,6 +571,10 @@ function QuickDrugAdd({ onSave, onClose, known }) {
               <span className="drug-quick-punct">(</span>
               <span className="drug-quick-bit note">
                 <input value={row.note} aria-label="примечание" placeholder="примечание" onChange={(e) => patchLine(i, { note: e.target.value })} size={Math.max(String(row.note || '').length, 6)} />
+              </span>
+              <span className="drug-quick-punct">;</span>
+              <span className="drug-quick-bit caution">
+                <input value={row.caution || ''} aria-label="побочные эффекты и противопоказания" placeholder="побочки и противопоказания" onChange={(e) => patchLine(i, { caution: e.target.value })} size={Math.max(String(row.caution || '').length, 8)} />
               </span>
               <span className="drug-quick-punct">)</span>
               <span className="drug-quick-punct">[</span>
@@ -550,7 +606,7 @@ function QuickDrugAdd({ onSave, onClose, known }) {
 }
 
 
-export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
+export default function DrugsTab({ initialItemId, editorOnly, onClose, nameOnly = false, onDrugsChange }) {
   const [drugs, setDrugs] = useState(store.getDrugInfoAll())
   const [form, setForm] = useState(() => {
     const preset = initialItemId ? store.getDrugInfo(initialItemId) : null
@@ -571,8 +627,14 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
   useEscapeToClose(() => closeForm(), formOpen)
 
   function refresh() {
-    setDrugs({ ...store.getDrugInfoAll() })
+    const next = { ...store.getDrugInfoAll() }
+    setDrugs(next)
+    onDrugsChange?.(Object.values(next).filter(isNameOnlyDrug).length)
   }
+
+  useEffect(() => {
+    onDrugsChange?.(Object.values(store.getDrugInfoAll()).filter(isNameOnlyDrug).length)
+  }, [])
 
   const [nameError, setNameError] = useState(false)
   const [shortening, setShortening] = useState(null)
@@ -690,6 +752,11 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         dosage: (row.dosage || '').trim(),
         frequency: (row.frequency || '').trim(),
         duration: (row.duration || '').trim(),
+        caution: (row.caution || '').trim(),
+      }
+      const safety = {
+        sideEffects: (row.sideEffects || '').trim(),
+        contraindications: (row.contraindications || '').trim(),
       }
       const existing = findDrugByName(name)
       if (!existing) {
@@ -698,6 +765,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
           name,
           brandNames,
           group,
+          sideEffects: safety.sideEffects,
+          contraindications: safety.contraindications,
           regimens: [regimen],
           dosage: regimen.dosage,
           frequency: regimen.frequency,
@@ -708,14 +777,14 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
       }
       const regimens = regimensFromDrug(existing)
       if (regimens.some((r) => sameRegimen(r, regimen))) {
-        writeExistingDrug(existing, regimen, brandNames, group, false)
+        writeExistingDrug(existing, regimen, brandNames, group, false, safety)
         return
       }
       if (!freqDurKnown(regimens, regimen) && (regimen.frequency || regimen.duration)) {
-        pending.push({ name, regimen, brandNames, group })
+        pending.push({ name, regimen, brandNames, group, ...safety })
         return
       }
-      if (writeExistingDrug(existing, regimen, brandNames, group, true)) extended.push(name)
+      if (writeExistingDrug(existing, regimen, brandNames, group, true, safety)) extended.push(name)
     })
     refresh()
     if (pending.length) {
@@ -730,7 +799,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
     const item = schemeAsk.items[schemeAsk.i]
     const existing = item ? findDrugByName(item.name) : null
     const extended = schemeAsk.extended.slice()
-    if (existing && item && writeExistingDrug(existing, item.regimen, item.brandNames, item.group, append)) {
+    if (existing && item && writeExistingDrug(existing, item.regimen, item.brandNames, item.group, append, item)) {
       extended.push(item.name)
     }
     const i = schemeAsk.i + 1
@@ -782,6 +851,11 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
       setExtracting(false)
     }
   }
+
+  const schemeItem = schemeAsk?.items?.[schemeAsk.i] || null
+  const schemeExisting = schemeItem ? findDrugByName(schemeItem.name) : null
+  const schemeNow = schemeItem ? regimenCaption(schemeItem.regimen) : ''
+  const schemeBase = schemeExisting ? knownRegimenCaptions(schemeExisting) : []
 
   return (
     <div className={editorOnly ? 'mkb-editor-host' : 'settings-tab'}>
@@ -886,6 +960,12 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
                 placeholder="Примечание"
                 value={r.label}
                 onChange={(e) => updateRegimen(idx, { label: e.target.value })}
+              />
+              <input
+                className="drug-regimen-label"
+                placeholder="Побочки и противопоказания — в скобках протокола, коротко"
+                value={r.caution || ''}
+                onChange={(e) => updateRegimen(idx, { caution: e.target.value })}
               />
               <div className="drug-regimen-fields">
                 <input placeholder="Доза, напр. 500 мг" value={r.dosage} onChange={(e) => updateRegimen(idx, { dosage: e.target.value })} />
@@ -1004,16 +1084,16 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
         </div>
       )}
 
-      {schemeAsk && schemeAsk.items[schemeAsk.i] && (
+      {schemeItem && (
         <div className="modal-overlay" style={{ zIndex: 80 }}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Новая схема приёма</h3>
             </div>
             <p>
-              «{schemeAsk.items[schemeAsk.i].name}» уже есть в базе, но кратность или длительность другие:{' '}
-              {[schemeAsk.items[schemeAsk.i].regimen.dosage, schemeAsk.items[schemeAsk.i].regimen.frequency, schemeAsk.items[schemeAsk.i].regimen.duration].filter(Boolean).join(' · ') || 'без схемы'}
-              {schemeAsk.items[schemeAsk.i].regimen.label ? ` (${schemeAsk.items[schemeAsk.i].regimen.label})` : ''}.
+              «{schemeItem.name}» уже есть в базе, но кратность или длительность другие: сейчас {schemeNow}
+              {' '}
+              (в базе: {schemeBase.length ? schemeBase.join('; ') : 'схема не указана'}).
               Сохранить как новую схему?
             </p>
             {schemeAsk.items.length - schemeAsk.i > 1 && (
@@ -1029,7 +1109,7 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
 
       {!editorOnly && (
       <div className="drug-db-list">
-        <h4>База препаратов ({Object.keys(drugs).length})</h4>
+        <h4>{nameOnly ? `Незаполненные (${Object.values(drugs).filter(isNameOnlyDrug).length})` : `База препаратов (${Object.keys(drugs).length})`}</h4>
         <input
           className="drug-db-search"
           value={drugQuery}
@@ -1058,7 +1138,8 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
               .join(' ')
               .toLowerCase()
             const matchesQuery = !q || blob.includes(q)
-            return matchesGroup && matchesMkb && matchesQuery
+            const matchesTab = !nameOnly || isNameOnlyDrug(d)
+            return matchesGroup && matchesMkb && matchesQuery && matchesTab
           })
 
           return (
@@ -1108,7 +1189,13 @@ export default function DrugsTab({ initialItemId, editorOnly, onClose }) {
               </div>
             </div>
               ))}
-              {filtered.length === 0 && <p className="empty-hint">Ничего не найдено по этому фильтру.</p>}
+              {filtered.length === 0 && (
+                <p className="empty-hint">
+                  {nameOnly && !q && !filterGroup && !filterMkb
+                    ? 'Незаполненных нет — у всех карточек есть что-то кроме названия.'
+                    : 'Ничего не найдено по этому фильтру.'}
+                </p>
+              )}
             </>
           )
         })()}

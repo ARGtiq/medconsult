@@ -678,6 +678,28 @@ function emit(event) {
   ;(listeners[event] || []).forEach((cb) => cb())
 }
 
+function drugField(value) {
+  return String(value || '').trim()
+}
+
+/** В карточке нет ничего, кроме названия: ни схемы, ни торговых, ни группы. */
+export function isNameOnlyDrug(d) {
+  if (!d || !drugField(d.name)) return false
+  const form = drugField(d.form)
+  if (form && form !== 'таб.' && form !== 'таб') return false
+  const flat = [
+    d.dosage, d.frequency, d.duration, d.brandNames, d.group, d.composition,
+    d.sideEffects, d.contraindications, d.interactions, d.monitoring, d.extra,
+    d.mkb10Codes, d.evidenceLevel,
+  ]
+  if (flat.some((v) => drugField(v))) return false
+  if ((d.studyTriggers || []).some((t) => (t?.studyKeys || []).length || (t?.fieldKeys || []).length || drugField(t?.note))) return false
+  if ((d.packRefs || []).length) return false
+  const regs = Array.isArray(d.regimens) ? d.regimens : []
+  if (regs.some((r) => drugField(r?.dosage) || drugField(r?.frequency) || drugField(r?.duration) || drugField(r?.label) || drugField(r?.caution))) return false
+  return true
+}
+
 export const store = {
   get: readAll,
 
@@ -985,9 +1007,7 @@ export const store = {
   // в "принимает сейчас") — есть только название, ни дозы, ни группы. Для
   // напоминания на главной странице.
   getEmptyDrugEntries() {
-    return Object.values(this.getDrugInfoAll()).filter(
-      (d) => !d.dosage && !d.frequency && !d.duration && !d.group
-    )
+    return Object.values(this.getDrugInfoAll()).filter((d) => isNameOnlyDrug(d))
   },
 
   // --- исследования (встроенные + свои) ---
